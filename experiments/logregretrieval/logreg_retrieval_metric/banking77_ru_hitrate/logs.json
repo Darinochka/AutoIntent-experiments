@@ -1,0 +1,182 @@
+{
+    "metrics": {
+        "regexp": [],
+        "embedding": [
+            0.002,
+            0.002,
+            0.002,
+            0.002,
+            0.002,
+            0.002,
+            0.594,
+            0.628,
+            0.7,
+            0.716,
+            0.758,
+            0.766,
+            0.848,
+            0.888
+        ],
+        "scoring": [],
+        "decision": []
+    },
+    "configs": {
+        "regexp": [],
+        "embedding": [
+            {
+                "module_name": "logreg",
+                "module_params": {
+                    "k": 10,
+                    "cv": 3,
+                    "solver": "lbfgs",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.002,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "logreg",
+                "module_params": {
+                    "k": 10,
+                    "cv": 3,
+                    "solver": "lbfgs",
+                    "embedder_name": "infgrad/stella-base-en-v2"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.002,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "logreg",
+                "module_params": {
+                    "k": 10,
+                    "cv": 5,
+                    "solver": "lbfgs",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.002,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "logreg",
+                "module_params": {
+                    "k": 10,
+                    "cv": 5,
+                    "solver": "lbfgs",
+                    "embedder_name": "infgrad/stella-base-en-v2"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.002,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "logreg",
+                "module_params": {
+                    "k": 10,
+                    "cv": 10,
+                    "solver": "lbfgs",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.002,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "logreg",
+                "module_params": {
+                    "k": 10,
+                    "cv": 10,
+                    "solver": "lbfgs",
+                    "embedder_name": "infgrad/stella-base-en-v2"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.002,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "retrieval",
+                "module_params": {
+                    "k": 1,
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.594,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "retrieval",
+                "module_params": {
+                    "k": 1,
+                    "embedder_name": "infgrad/stella-base-en-v2"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.628,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "retrieval",
+                "module_params": {
+                    "k": 2,
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.7,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "retrieval",
+                "module_params": {
+                    "k": 2,
+                    "embedder_name": "infgrad/stella-base-en-v2"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.716,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "retrieval",
+                "module_params": {
+                    "k": 3,
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.758,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "retrieval",
+                "module_params": {
+                    "k": 3,
+                    "embedder_name": "infgrad/stella-base-en-v2"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.766,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "retrieval",
+                "module_params": {
+                    "k": 10,
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.848,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "retrieval",
+                "module_params": {
+                    "k": 10,
+                    "embedder_name": "infgrad/stella-base-en-v2"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.888,
+                "module_dump_dir": null
+            }
+        ],
+        "scoring": [],
+        "decision": []
+    }
+}

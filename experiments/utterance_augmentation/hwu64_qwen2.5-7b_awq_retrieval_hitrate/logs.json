@@ -1,0 +1,302 @@
+{
+    "metrics": {
+        "regexp": [],
+        "embedding": [
+            0.9865921787709497,
+            0.9843575418994414
+        ],
+        "scoring": [
+            0.9622549081619127,
+            0.9622549081619127,
+            0.9625657285743426,
+            0.9842207903140268,
+            0.9843235026893665,
+            0.9840983196198712,
+            0.9882281690079964,
+            0.9883685879523227,
+            0.987963326584667,
+            0.9919934571431736,
+            0.9921727919880963,
+            0.9915916408414072,
+            0.9986875286891732,
+            0.9625065558177317,
+            0.958981433939107,
+            0.954358645445311,
+            0.9561702454192121,
+            0.8035671750295931,
+            0.8277260524479708,
+            0.8322420274047868,
+            0.8344726387928356
+        ],
+        "decision": [
+            0.9118303571428571,
+            0.9397321428571429
+        ]
+    },
+    "configs": {
+        "regexp": [],
+        "embedding": [
+            {
+                "module_name": "retrieval",
+                "module_params": {
+                    "k": 10,
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.9865921787709497,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "retrieval",
+                "module_params": {
+                    "k": 10,
+                    "embedder_name": "infgrad/stella-base-en-v2"
+                },
+                "metric_name": "retrieval_hit_rate",
+                "metric_value": 0.9843575418994414,
+                "module_dump_dir": null
+            }
+        ],
+        "scoring": [
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 1,
+                    "weights": "uniform",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9622549081619127,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 1,
+                    "weights": "distance",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9622549081619127,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 1,
+                    "weights": "closest",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9625657285743426,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 3,
+                    "weights": "uniform",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9842207903140268,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 3,
+                    "weights": "distance",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9843235026893665,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 3,
+                    "weights": "closest",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9840983196198712,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 5,
+                    "weights": "uniform",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9882281690079964,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 5,
+                    "weights": "distance",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9883685879523227,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 5,
+                    "weights": "closest",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.987963326584667,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 10,
+                    "weights": "uniform",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9919934571431736,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 10,
+                    "weights": "distance",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9921727919880963,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "knn",
+                "module_params": {
+                    "k": 10,
+                    "weights": "closest",
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9915916408414072,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "linear",
+                "module_params": {
+                    "embedder_name": "avsolatorio/GIST-small-Embedding-v0"
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9986875286891732,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "dnnc",
+                "module_params": {
+                    "cross_encoder_name": "BAAI/bge-reranker-base",
+                    "k": 1
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9625065558177317,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "dnnc",
+                "module_params": {
+                    "cross_encoder_name": "BAAI/bge-reranker-base",
+                    "k": 3
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.958981433939107,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "dnnc",
+                "module_params": {
+                    "cross_encoder_name": "BAAI/bge-reranker-base",
+                    "k": 5
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.954358645445311,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "dnnc",
+                "module_params": {
+                    "cross_encoder_name": "BAAI/bge-reranker-base",
+                    "k": 10
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.9561702454192121,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "dnnc",
+                "module_params": {
+                    "cross_encoder_name": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                    "k": 1
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.8035671750295931,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "dnnc",
+                "module_params": {
+                    "cross_encoder_name": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                    "k": 3
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.8277260524479708,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "dnnc",
+                "module_params": {
+                    "cross_encoder_name": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                    "k": 5
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.8322420274047868,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "dnnc",
+                "module_params": {
+                    "cross_encoder_name": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                    "k": 10
+                },
+                "metric_name": "scoring_roc_auc",
+                "metric_value": 0.8344726387928356,
+                "module_dump_dir": null
+            }
+        ],
+        "decision": [
+            {
+                "module_name": "threshold",
+                "module_params": {
+                    "thresh": 0.5
+                },
+                "metric_name": "decision_accuracy",
+                "metric_value": 0.9118303571428571,
+                "module_dump_dir": null
+            },
+            {
+                "module_name": "argmax",
+                "module_params": {},
+                "metric_name": "decision_accuracy",
+                "metric_value": 0.9397321428571429,
+                "module_dump_dir": null
+            }
+        ]
+    }
+}

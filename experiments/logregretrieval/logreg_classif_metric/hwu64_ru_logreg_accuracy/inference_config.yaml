@@ -1,0 +1,22 @@
+metadata:
+  embedder_device: cuda
+  multilabel: false
+  n_classes: 54
+  seed: 42
+nodes_configs:
+- load_path: null
+  module_config:
+    cv: 3
+    embedder_name: avsolatorio/GIST-small-Embedding-v0
+    k: 10
+  module_name: logreg
+  node_type: embedding
+- load_path: null
+  module_config:
+    embedder_name: avsolatorio/GIST-small-Embedding-v0
+  module_name: linear
+  node_type: scoring
+- load_path: null
+  module_config: {}
+  module_name: argmax
+  node_type: decision

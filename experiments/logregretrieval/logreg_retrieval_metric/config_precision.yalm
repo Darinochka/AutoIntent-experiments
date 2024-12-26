@@ -1,0 +1,15 @@
+- node_type: embedding
+  metric: retrieval_precision
+  search_space:
+    - module_name: logreg
+      k: [10]
+      cv: [3, 5, 10]
+      solver: ["lbfgs"]
+      embedder_name:
+        - avsolatorio/GIST-small-Embedding-v0
+        - infgrad/stella-base-en-v2
+    - module_name: retrieval
+      k: [1, 2, 3, 10]
+      embedder_name:
+        - avsolatorio/GIST-small-Embedding-v0
+        - infgrad/stella-base-en-v2
