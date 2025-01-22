@@ -1,5 +1,5 @@
 # noqa: INP001
-"""Convert clincq50 dataset to autointent internal format and scheme."""
+"""Convert events dataset to autointent internal format and scheme."""
 
 from datasets import Dataset as HFDataset
 from datasets import load_dataset
@@ -15,53 +15,59 @@ names_to_remove = [
     "department establishment",
 ]
 
-def extract_intents_data(events_dataset: HFDataset) -> tuple[list[Intent], dict[str, int]]:
+def extract_intents_data(events_dataset: HFDataset) -> list[Intent]:
     """Extract intent names and assign ids to them."""
     intent_names = sorted({name for intents in events_dataset["train"]["all_labels"] for name in intents})
     for n in names_to_remove:
         intent_names.remove(n)
-    name_to_id = {name: i for i, name in enumerate(intent_names)}
-    intents_data = [Intent(id=i,name=name) for i, name in enumerate(intent_names)]
-    return intents_data, name_to_id
+    return [Intent(id=i,name=name) for i, name in enumerate(intent_names)]
 
 
-def converting_mapping(example: dict, name_to_id: dict[str, int]) -> dict[str, str | list[int]]:
-    """Extract utterance and label and drop the rest."""
-    return {
+def converting_mapping(example: dict, intents_data: list[Intent]) -> dict[str, str | list[int] | None]:
+    """Extract utterance and OHE label and drop the rest."""
+    res = {
         "utterance": example["content"],
         "label": [
-            name_to_id[intent_name] for intent_name in example["all_labels"] if intent_name not in names_to_remove
-        ],
+            int(intent.name in example["all_labels"]) for intent in intents_data
+        ]
     }
+    if sum(res["label"]) == 0:
+        res["label"] = None
+    return res
 
 
-def convert_events(events_split: HFDataset, name_to_id: dict[str, int]) -> list[Sample]:
+def convert_events(events_split: HFDataset, intents_data: dict[str, int]) -> list[Sample]:
     """Convert one split into desired format."""
     events_split = events_split.map(
         converting_mapping, remove_columns=events_split.features.keys(),
-        fn_kwargs={"name_to_id": name_to_id}
+        fn_kwargs={"intents_data": intents_data}
     )
 
-    in_domain_samples = []
-    oos_samples = []  # actually this dataset doesn't contain oos_samples so this will stay empty
+    samples = []
     for sample in events_split.to_list():
         if sample["utterance"] is None:
             continue
-        if len(sample["label"]) == 0:
-            sample.pop("label")
-            oos_samples.append(sample)
-        else:
-            in_domain_samples.append(sample)
+        samples.append(sample)
 
-    return [Sample(**sample) for sample in in_domain_samples + oos_samples]
+    mask = [sample["label"] is None for sample in samples]
+    n_oos_samples = sum(mask)
+    n_in_domain_samples = len(samples) - n_oos_samples
+    
+    print(f"{n_oos_samples=}")
+    print(f"{n_in_domain_samples=}\n")
+
+    # actually there are too few oos samples to include them, so filter out
+    samples = list(filter(lambda sample: sample["label"] is not None, samples))
+
+    return [Sample(**sample) for sample in samples]
 
 if __name__ == "__main__":
     events_dataset = load_dataset("knowledgator/events_classification_biotech", trust_remote_code=True)
 
-    intents_data, name_to_id = extract_intents_data(events_dataset)
+    intents_data = extract_intents_data(events_dataset)
 
-    train_samples = convert_events(events_dataset["train"], name_to_id)
-    test_samples = convert_events(events_dataset["test"], name_to_id)
+    train_samples = convert_events(events_dataset["train"], intents_data)
+    test_samples = convert_events(events_dataset["test"], intents_data)
 
     events_converted = Dataset.from_dict(
         {"train": train_samples, "test": test_samples, "intents": intents_data}
