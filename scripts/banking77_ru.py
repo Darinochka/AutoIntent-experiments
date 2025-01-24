@@ -1,11 +1,10 @@
-# noqa: INP001
-"""Convert banking77 dataset to autointent internal format and scheme."""
+"""Convert banking77 dataset to autointent internal format and scheme."""  # noqa: INP001
 
 import json
 
 import requests
 from datasets import Dataset as HFDataset
-from datasets import load_dataset
+from datasets import load_from_disk
 
 from autointent import Dataset
 from autointent.schemas import Intent, Sample
@@ -25,7 +24,6 @@ def convert_banking77(
 ) -> list[Sample]:
     """Convert one split into desired format."""
     all_labels = sorted(banking77_split.unique("label"))
-
     n_classes = len(intents_data)
     if all_labels != list(range(n_classes)):
         msg = "Something's wrong"
@@ -34,24 +32,25 @@ def convert_banking77(
     classwise_samples = [[] for _ in range(n_classes)]
 
     for sample in banking77_split:
-        target_list = classwise_samples[sample["label"]]
+        txt, intent_id = sample["text"], sample["label"]
+        target_list = classwise_samples[intent_id]
         if shots_per_intent is not None and len(target_list) >= shots_per_intent:
             continue
-        target_list.append(Sample(utterance=sample["text"], label=sample["label"]))
+        target_list.append({"utterance": txt, "label": intent_id})
 
-    samples = [sample for samples_from_one_class in classwise_samples for sample in samples_from_one_class]
-    print(f"{len(samples)=}")
-    return samples
+    return [Sample(**sample) for samples_from_one_class in classwise_samples for sample in samples_from_one_class]
 
 
 if __name__ == "__main__":
     intents_data = get_intents_data()
-    banking77 = load_dataset("PolyAI/banking77", trust_remote_code=True)
+
+    # load dataset
+    # ! git clone git@github.com:LadaNikitina/RuBanking77 "data/RuBanking77"
+    # ! rm -rf data/RuBanking77/.git
+    banking77 = load_from_disk("data/RuBanking77")
 
     train_samples = convert_banking77(banking77["train"], intents_data=intents_data)
     test_samples = convert_banking77(banking77["test"], intents_data=intents_data)
 
-    banking77_converted = Dataset.from_dict(
-        {"train": train_samples, "test": test_samples, "intents": intents_data}
-    )
-    banking77_converted.to_json("datasets_converted/data/banking77.json")
+    banking77_converted = Dataset.from_dict({"train": train_samples, "test": test_samples, "intents": intents_data})
+    banking77_converted.to_json("datasets_converted/data/banking77_ru.json")
