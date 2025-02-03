@@ -76,7 +76,10 @@ for dataset_subset in datasets_subset:
     dataset = load_dataset(dataset_subset)
     n_before = len(dataset[split])
     output_path = dataset_subset.replace(".json", "_augmented.json") 
-
+    
+    if os.path.isfile(output_path):
+        continue
+    
     generator = UtteranceEvolver(Generator(), evolutions, seed, async_mode=True)
     _ = generator.augment(dataset, split_name=split, n_evolutions=n_evolutions, batch_size=1)
 
