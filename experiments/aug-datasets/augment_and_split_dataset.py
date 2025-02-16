@@ -141,7 +141,11 @@ def main():
     for n, aug_samples in splits.items():
         combined = original_data + aug_samples
 
-        new_dataset = Dataset.from_dict({"intents": dataset.intents, "train": combined})
+        new_dataset = Dataset.from_dict({
+            "intents": dataset.intents,
+            "train": combined,
+            "test": dataset["test"].to_list()
+        })
 
         output_path = Path(args.output_dir) / f"dataset_{n}_examples.json"
         new_dataset.to_json(output_path)
