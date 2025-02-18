@@ -29,6 +29,9 @@ def main() -> None:
     seed(args.seed)
 
     dataset = Dataset.from_hub(args.dataset_name)
+    test_data = []
+    if "test" in dataset:
+        test_data = dataset["test"].to_list()
 
     class_to_examples = defaultdict(list)
     for example in dataset[args.split]:
@@ -44,9 +47,11 @@ def main() -> None:
             [{"utterance": utt, "label": class_id} for utt in selected]
         )
 
-    fewshot_dataset = Dataset.from_dict(
-        {"intents": dataset.intents, args.split: fewshot_examples}
-    )
+    fewshot_dataset = Dataset.from_dict({
+        "intents": dataset.intents,
+        args.split: fewshot_examples,
+        "test": test_data
+    })
 
     fewshot_dataset.to_json(args.output_path)
 
