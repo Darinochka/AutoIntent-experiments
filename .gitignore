@@ -1,0 +1,4 @@
+wandb
+runs*
+*.log.jsonl
+.env
