@@ -6,3 +6,4 @@ wandb_downloads
 .pdm-python
 scoring_results
 all_best_scorers
+experiments-assets
