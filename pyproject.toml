@@ -1,0 +1,15 @@
+[project]
+name = "AutoIntent-experiments"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "voorhs", email = "ilya_alekseev_2016@list.ru"},
+]
+dependencies = ["autointent>=0.1.0", "ipykernel>=6.29.5", "ipywidgets>=8.1.5", "wandb>=0.19.9", "pandas>=2.2.3"]
+requires-python = "==3.12.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false
