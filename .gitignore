@@ -2,3 +2,5 @@ wandb
 runs*
 *.log.jsonl
 .env
+wandb_downloads
+.pdm-python
