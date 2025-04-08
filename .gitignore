@@ -4,3 +4,4 @@ runs*
 .env
 wandb_downloads
 .pdm-python
+scoring_results
