@@ -1,6 +1,5 @@
 from dotenv import load_dotenv
 import os
-import yaml
 from autointent import setup_logging
 from autointent import Dataset, Pipeline
 from autointent.configs import LoggingConfig, EmbedderConfig, DataConfig
@@ -26,8 +25,6 @@ if __name__ == "__main__":
     load_dotenv()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda
 
-    search_space = yaml.safe_load(search_space_raw)
-
     workdir = Path("experiments-assets") / args.experiment_name
 
     setup_logging(level="INFO", log_filename=workdir / "logs")
@@ -52,7 +49,7 @@ if __name__ == "__main__":
                 else:
                     embedder_config = EmbedderConfig(model_name=args.embedder_name)
 
-                pipe = Pipeline.from_preset(preset)
+                pipe = Pipeline.from_preset(preset, seed=seed)
                 pipe.set_config(logging_config)
                 pipe.set_config(embedder_config)
                 pipe.set_config(data_config)
