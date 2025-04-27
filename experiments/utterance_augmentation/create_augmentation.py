@@ -8,10 +8,10 @@ from autointent.generation import Generator
 from autointent.generation.chat_templates import EVOLUTION_MAPPING
 
 
-model_name = "gpt-3.5-turbo-0125"
+model_name = "klusterai/Meta-Llama-3.3-70B-Instruct-Turbo"
 os.environ["OPENAI_MODEL_NAME"] = model_name
-os.environ["OPENAI_BASE_URL"] = 'http://193.187.173.33:8002/api/providers/openai/v1'
-os.environ["OPENAI_API_KEY"] = 'InnPracAutoIntent:Darina_Rustamova:69fb2c7dbd044ede970b02132d5ea9bb'
+os.environ["OPENAI_BASE_URL"] = 'https://api.kluster.ai/v1'
+os.environ["OPENAI_API_KEY"] = 'db2c6fe2-b711-4a69-88f1-62179212bc82'
 
 
 def create_subset(dataset_name: str, max_utterances_per_intent: int = 10):
