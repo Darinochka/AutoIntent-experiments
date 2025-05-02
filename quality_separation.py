@@ -27,8 +27,8 @@ search_space_raw = """
       m: [ 1, 2, 3, 4, 5 ]
     - module_name: sklearn
       clf_name: [RandomForestClassifier]
-      n_estimators: [50, 100, 150]
-      max_depth: [10, 30, 60]
+      n_estimators: [100, 150, 200, 300]
+      max_depth: [30, 60, 100]
       max_features: [sqrt, log2, null]
 - node_type: decision
   target_metric: decision_accuracy
@@ -75,7 +75,6 @@ if __name__ == "__main__":
     parser.add_argument("--experiment-name", type=str, required=True, help="aka name of the wandb project")
     parser.add_argument("--embedder-name", type=str, default=None, help="Name of HF repository. Omit this param to use AutoIntent's default embedder.")
     parser.add_argument("--seeds", nargs="+")
-    parser.add_argument("--validation-scheme", type=str, choices=["ho", "cv"])
     parser.add_argument("--cuda", type=str, default="0")
     args = parser.parse_args()
 
@@ -93,7 +92,7 @@ if __name__ == "__main__":
     for seed in args.seeds:
         for ratio in [None, 0.2, 0.5, 0.7]:
             for dataset in datasets_names:
-                data_config = DataConfig(scheme=args.validation_scheme, separation_ratio=ratio)
+                data_config = DataConfig(scheme="ho", separation_ratio=ratio)
 
                 logging_config = LoggingConfig(
                     run_name=dataset.split("/")[1] + f"[{seed=}]" + f"[{ratio=}]",
@@ -102,16 +101,16 @@ if __name__ == "__main__":
                     report_to=["wandb"],
                     project_dir=workdir
                 )
-                
+
                 if args.embedder_name is None:
-                    embedder_config = EmbedderConfig()
+                    embedder_config = EmbedderConfig(use_cache=True)
                 else:
-                    embedder_config = EmbedderConfig(model_name=args.embedder_name)
+                    embedder_config = EmbedderConfig(model_name=args.embedder_name, use_cache=True)
 
                 pipe = Pipeline.from_search_space(search_space, seed=int(seed))
                 pipe.set_config(logging_config)
                 pipe.set_config(embedder_config)
                 pipe.set_config(data_config)
 
-                pipe.fit(Dataset.from_hub(dataset), incompatible_search_space="filter")
+                pipe.fit(Dataset.from_hub(dataset), refit_after=True, incompatible_search_space="filter")
                 shutil.rmtree(logging_config.dirpath)
