@@ -1,0 +1,10 @@
+decision_accuracy_mean: 0.8838289962825279
+decision_accuracy_std: 0.004615757257048156
+decision_f1_mean: 0.8776373306393594
+decision_f1_std: 0.0019144630012460611
+decision_precision_mean: 0.8798592651287594
+decision_precision_std: 0.0018085583546122196
+decision_recall_mean: 0.8813627603278412
+decision_recall_std: 0.0027434447491188575
+decision_roc_auc_mean: 0.9420592020404136
+decision_roc_auc_std: 0.0036227220167539148
