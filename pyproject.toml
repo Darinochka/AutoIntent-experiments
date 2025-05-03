@@ -5,7 +5,7 @@ description = "Default template for PDM package"
 authors = [
     {name = "voorhs", email = "ilya_alekseev_2016@list.ru"},
 ]
-dependencies = ["autointent>=0.1.0", "ipykernel>=6.29.5", "ipywidgets>=8.1.5", "wandb>=0.19.9", "pandas>=2.2.3"]
+dependencies = ["ipykernel>=6.29.5", "ipywidgets>=8.1.5", "wandb>=0.19.9", "pandas>=2.2.3", "autointent @ git+ssh://git@github.com/DeepPavlov/AutoIntent.git@bfb9f94"]
 requires-python = "==3.12.*"
 readme = "README.md"
 license = {text = "MIT"}
