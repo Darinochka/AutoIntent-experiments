@@ -12,6 +12,7 @@ search_space_raw = """
   metrics: [scoring_roc_auc, scoring_precision, scoring_recall, scoring_f1]
   search_space:
     - module_name: knn
+      n_trials: 2
       k:
         low: 1
         high: 20
@@ -23,18 +24,22 @@ search_space_raw = """
         high: 5
     - module_name: rerank
       k: [30]
-      weights: [uniform]
+      weights: [uniform, distance]
       m: [ 1, 2, 3, 4, 5 ]
+      use_crosencoder_scores: [True, False]
     - module_name: sklearn
+      n_trials: 20
       clf_name: [RandomForestClassifier]
       n_estimators: [200, 300, 500]
       max_depth: [100, 150, 200]
       max_features: [sqrt, log2, null]
     - module_name: bert
+      n_trials: 20
       num_train_epochs: [3]
       batch_size: [8, 16, 32]
       learning_rate: [5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
     - module_name: lora
+      n_trials: 20
       num_train_epochs: [3]
       batch_size: [8, 16, 32]
       learning_rate: [5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
@@ -42,6 +47,7 @@ search_space_raw = """
       lora_dropout: [0.1, 0.2, 0.3]
       r: [8, 16, 32, 64]
     - module_name: ptuning
+      n_trials: 20
       num_train_epochs: [3]
       batch_size: [8, 16, 32]
       learning_rate: [5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
@@ -54,6 +60,7 @@ search_space_raw = """
   target_metric: decision_accuracy
   search_space:
     - module_name: threshold
+      n_trials: 20
       thresh:
         low: 0.1
         high: 0.9
@@ -97,7 +104,7 @@ if __name__ == "__main__":
     parser.add_argument("--seeds", nargs="+")
     parser.add_argument("--validation-scheme", type=str, choices=["ho", "cv"])
     parser.add_argument("--cuda", type=str, default="0")
-    parser.add_argument("--n-shots", type=int, default=10)
+    parser.add_argument("--n-shots", type=int, default=None)
     args = parser.parse_args()
 
     load_dotenv()
@@ -110,10 +117,14 @@ if __name__ == "__main__":
     setup_logging(level="INFO", log_filename=workdir / "logs")
 
     os.environ["WANDB_PROJECT"] = args.experiment_name
+    print(f"n_shots: {args.n_shots}")
 
     for seed in args.seeds:
       for dataset in datasets_names:
-          data_config = DataConfig(scheme=args.validation_scheme, is_few_shot_train=True, examples_per_intent=args.n_shots)
+          if args.n_shots is not None:
+              data_config = DataConfig(scheme=args.validation_scheme, is_few_shot_train=True, examples_per_intent=args.n_shots)
+          else:
+              data_config = DataConfig(scheme=args.validation_scheme)
 
           logging_config = LoggingConfig(
               run_name=dataset.split("/")[1] + f"[{seed=}]",
@@ -133,5 +144,5 @@ if __name__ == "__main__":
           pipe.set_config(embedder_config)
           pipe.set_config(data_config)
 
-          pipe.fit(Dataset.from_hub(dataset), refit_after=True, incompatible_search_space="filter")
+          pipe.fit(Dataset.from_hub(dataset), refit_after=True, sampler="tpe", incompatible_search_space="filter")
           shutil.rmtree(logging_config.dirpath)
