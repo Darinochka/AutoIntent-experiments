@@ -3,7 +3,7 @@ import os
 import yaml
 from autointent import setup_logging
 from autointent import Dataset, Pipeline
-from autointent.configs import LoggingConfig, EmbedderConfig, DataConfig
+from autointent.configs import LoggingConfig, EmbedderConfig, DataConfig, HFModelConfig, TokenizerConfig
 
 
 search_space_raw = """
@@ -143,6 +143,6 @@ if __name__ == "__main__":
           pipe.set_config(logging_config)
           pipe.set_config(embedder_config)
           pipe.set_config(data_config)
-
+          pipe.set_config(HFModelConfig(tokenizer_config=TokenizerConfig(max_length=128)))
           pipe.fit(Dataset.from_hub(dataset), refit_after=True, sampler="tpe", incompatible_search_space="filter")
           shutil.rmtree(logging_config.dirpath)
