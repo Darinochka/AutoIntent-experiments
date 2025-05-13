@@ -3,7 +3,7 @@ import os
 import yaml
 from autointent import setup_logging
 from autointent import Dataset, Pipeline
-from autointent.configs import LoggingConfig, EmbedderConfig, DataConfig
+from autointent.configs import LoggingConfig, EmbedderConfig, DataConfig, HFModelConfig, TokenizerConfig
 
 
 search_space_raw = """
@@ -88,7 +88,7 @@ search_space_raw = """
 #     - module_name: argmax
 # """
 
-datasets_names = ["DeepPavlov/banking77", "DeepPavlov/minds14", "DeepPavlov/hwu64", "DeepPavlov/snips", "DeepPavlov/massive"]
+datasets_names = ["DeepPavlov/banking77", "DeepPavlov/massive"]
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     parser.add_argument("--embedder-name", type=str, default=None, help="Name of HF repository. Omit this param to use AutoIntent's default embedder.")
     parser.add_argument("--seeds", nargs="+")
     parser.add_argument("--cuda", type=str, default="0")
-    parser.add_argument("--n-shots", type=int, default=10)
+    parser.add_argument("--n-shots", type=int, default=None)
     args = parser.parse_args()
 
     load_dotenv()
@@ -118,7 +118,10 @@ if __name__ == "__main__":
     for seed in args.seeds:
         for ratio in [None, 0.2, 0.5, 0.7]:
             for dataset in datasets_names:
-                data_config = DataConfig(scheme="ho", separation_ratio=ratio, examples_per_intent=args.n_shots, is_few_shot_train=True)
+                if args.n_shots is None:
+                    data_config = DataConfig(scheme="ho", separation_ratio=ratio, is_few_shot_train=False)
+                else:
+                    data_config = DataConfig(scheme="ho", separation_ratio=ratio, examples_per_intent=args.n_shots, is_few_shot_train=True)
 
                 logging_config = LoggingConfig(
                     run_name=dataset.split("/")[1] + f"[{seed=}]" + f"[{ratio=}]",
@@ -137,6 +140,7 @@ if __name__ == "__main__":
                 pipe.set_config(logging_config)
                 pipe.set_config(embedder_config)
                 pipe.set_config(data_config)
+                pipe.set_config(HFModelConfig(tokenizer_config=TokenizerConfig(max_length=128)))
 
                 pipe.fit(Dataset.from_hub(dataset), refit_after=True, sampler="tpe", incompatible_search_space="filter")
                 shutil.rmtree(logging_config.dirpath)

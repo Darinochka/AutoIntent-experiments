@@ -12,7 +12,7 @@ search_space_raw = """
   metrics: [scoring_roc_auc, scoring_precision, scoring_recall, scoring_f1]
   search_space:
     - module_name: knn
-      n_trials: 2
+      n_trials: 20
       k:
         low: 1
         high: 20
@@ -34,12 +34,12 @@ search_space_raw = """
       max_depth: [100, 150, 200]
       max_features: [sqrt, log2, null]
     - module_name: bert
-      n_trials: 20
+      n_trials: 40
       num_train_epochs: [3]
       batch_size: [8, 16, 32]
       learning_rate: [5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
     - module_name: lora
-      n_trials: 20
+      n_trials: 40
       num_train_epochs: [3]
       batch_size: [8, 16, 32]
       learning_rate: [5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
@@ -47,7 +47,7 @@ search_space_raw = """
       lora_dropout: [0.1, 0.2, 0.3]
       r: [8, 16, 32, 64]
     - module_name: ptuning
-      n_trials: 20
+      n_trials: 40
       num_train_epochs: [3]
       batch_size: [8, 16, 32]
       learning_rate: [5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
@@ -59,12 +59,6 @@ search_space_raw = """
 - node_type: decision
   target_metric: decision_accuracy
   search_space:
-    - module_name: threshold
-      n_trials: 20
-      thresh:
-        low: 0.1
-        high: 0.9
-        step: 0.1
     - module_name: argmax
 """
 
@@ -96,15 +90,15 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
     import os
     from pathlib import Path
-    import shutil
 
     parser = ArgumentParser(description="This is the script for measuring the quality of AutoIntent using holdout validation. This script runs multiple seeds to get confidence estimations.")
     parser.add_argument("--experiment-name", type=str, required=True, help="aka name of the wandb project")
-    parser.add_argument("--embedder-name", type=str, default=None, help="Name of HF repository. Omit this param to use AutoIntent's default embedder.")
+    parser.add_argument("--embedder-name", type=str, default="mixedbread-ai/mxbai-embed-large-v1", help="Name of HF repository. Omit this param to use AutoIntent's default embedder.")
     parser.add_argument("--seeds", nargs="+")
     parser.add_argument("--validation-scheme", type=str, choices=["ho", "cv"])
     parser.add_argument("--cuda", type=str, default="0")
     parser.add_argument("--n-shots", type=int, default=None)
+    parser.add_argument("--hf-model", type=str, default="microsoft/deberta-v3-small")
     args = parser.parse_args()
 
     load_dotenv()
@@ -143,6 +137,5 @@ if __name__ == "__main__":
           pipe.set_config(logging_config)
           pipe.set_config(embedder_config)
           pipe.set_config(data_config)
-          pipe.set_config(HFModelConfig(tokenizer_config=TokenizerConfig(max_length=128)))
+          pipe.set_config(HFModelConfig(model_name=args.hf_model, tokenizer_config=TokenizerConfig(max_length=128)))
           pipe.fit(Dataset.from_hub(dataset), refit_after=True, sampler="tpe", incompatible_search_space="filter")
-          shutil.rmtree(logging_config.dirpath)

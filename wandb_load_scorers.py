@@ -26,22 +26,17 @@ if __name__ == "__main__":
     for a_project in projects:
         if a_project.name not in args.projects:
             continue
-        project_savedir = savedir / a_project.name
+        project_savepath = savedir / a_project.name / "results.json"
         runs = api.runs(f"ilya_alekseev_2016/{a_project.name}")
-        project_savedir.mkdir(parents=True, exist_ok=True)
-        already_processed = list(
-            directory.name
-            for directory in project_savedir.iterdir()
-            if directory.is_dir()
-        )
-        groupwise_results = defaultdict(list)
+        project_savepath.parent.mkdir(parents=True, exist_ok=True)
+        if project_savepath.exists():
+            logger.info(f"Loading results from {project_savepath}")
+            with project_savepath.open("r") as f:
+                groupwise_results = json.load(f)
+        else:
+            groupwise_results = defaultdict(list)
         for i, run in enumerate(runs):
-            if run.name == "final_metrics":
-                continue
-            if run.group in already_processed:
-                logger.info(
-                    f"Skipping run {run.name} in group {run.group} from experiment {a_project.name} because it has already been processed"
-                )
+            if not run.name.startswith("knn"):
                 continue
 
             logger.info(
@@ -55,7 +50,6 @@ if __name__ == "__main__":
             run_results = {
                 "config": {},
             }
-
 
             with tempfile.TemporaryDirectory() as tempdir:
                 for file_name in files_to_download:
@@ -83,5 +77,5 @@ if __name__ == "__main__":
                     **run_results,
                 }
             )
-            with (project_savedir / "results.json").open("w") as f:
+            with project_savepath.open("w") as f:
                 json.dump(groupwise_results, f, indent=4, ensure_ascii=False)
