@@ -166,13 +166,21 @@ This hierarchical approach ensures efficient optimization while maintaining the 
 
 ## Scoring Modules (light backbone)
 
-we tested all of our scoring models on a range of popular intent classification datasets using lightweight backbone and embedding models. the results are presented in a table below. the models were scored using holdout validation (see dataset statistic in the appendix TODO), HPs were tuned with tpe sampler with maximum 20 trials (see search space used throughout our experiments in the appendix TODO).
+We conducted a comprehensive evaluation of all scoring models across a range of popular intent classification datasets using lightweight backbone and embedding models. The experimental setup employed holdout validation (see dataset statistics in Appendix TODO) and hyperparameter optimization using the TPE sampler with a maximum of 20 trials (see complete search space specifications in Appendix TODO).
 
-we see that logistic regression ("linear" in a table) is the most stable and best performing model in terms of both average accuaracy and the number of times it won all the other models.
+The results, presented in Table 1, reveal several key findings:
 
-we find HPs of bert-based methods are hard to tune, though sometimes they manage to win among the models (we need to investigate if they overfit often or just cannot ne tuned)
+1. Logistic regression ("linear" in the table) demonstrates superior performance in terms of both average accuracy and consistency across datasets, achieving the highest score in three out of five datasets.
+
+2. BERT-based methods exhibit significant variability in performance:
+   - Parameter-efficient approaches (P-tuning and LoRA) show notably lower performance
+   - Full BERT fine-tuning achieves competitive results in one dataset but underperforms in others
+   - This suggests potential challenges in hyperparameter optimization for transformer-based methods
+
+3. Feature-based methods (linear, KNN, random forest) consistently outperform transformer-based approaches, with all three achieving average accuracy above 90%.
 
 ```
+Table 1: Performance of scoring modules with lightweight backbone
 model name  banking77  minds14  hwu64  snips  massive  average  best_count
     ptuning       4.63    11.63   3.65  66.49     8.57    18.99           0
        lora      20.35    12.40  22.40  95.09    41.95    38.44           0
@@ -183,14 +191,20 @@ model name  banking77  minds14  hwu64  snips  massive  average  best_count
      linear      90.51    97.67  89.17  97.45    84.70    91.90           3
 ```
 
+TODO: research the overfitting of bert-based models
+
 ## Scoring Modules (heavy backbone)
 
-we repeat the experiment from the previous section with slightly heavier transformer models
+To investigate the impact of model capacity on performance, we repeated the experiment using heavier transformer models. While the overall ranking by average accuracy remained consistent with the lightweight experiment, the distribution of best-performing models across datasets shifted:
 
-the ranking via average accuracy across datasets is the same as in the previous experiment but the wins countings changed a bit: now the leadership of a logistic regression is not clear and knn and sklearn random forest share the first place of winning statistics with linear scorer. this justifies the presence of not only the linear scorer methods in a library for the cases where the finding of best performing model is crucial 
+1. The dominance of logistic regression became less pronounced, with KNN and random forest achieving comparable performance in terms of dataset-specific wins.
 
-we still find bert-based methods underperform compared to feature-based methods (TODO train on A100 if no overfitting is found)
+2. BERT-based methods continued to underperform relative to feature-based approaches, though full BERT fine-tuning showed improved results in some datasets. This suggests that increased model capacity alone may not address the optimization challenges of transformer-based methods.
+
+3. The competitive performance of multiple feature-based methods justifies the inclusion of diverse scoring modules in the library, particularly for applications where identifying the optimal model is critical.
+
 ```
+Table 2: Performance of scoring modules with heavy backbone
 model name  banking77  minds14  hwu64  snips  massive  average  best_count
     ptuning       5.00    14.73   9.64  91.67    25.87    29.38           0
        lora      13.82     9.30  38.58  99.13    52.06    42.58           0
