@@ -181,7 +181,7 @@ The results, presented in Table 1, reveal several key findings:
 
 ```
 Table 1: Performance of scoring modules with lightweight backbone
-model name  banking77  minds14  hwu64  snips  massive  average  best_count
+ model name  banking77  minds14  hwu64  snips  massive  average  best_count
     ptuning       4.63    11.63   3.65  66.49     8.57    18.99           0
        lora      20.35    12.40  22.40  95.09    41.95    38.44           0
        bert      64.14    69.77  73.40  98.52    76.76    76.52           1
@@ -205,7 +205,7 @@ To investigate the impact of model capacity on performance, we repeated the expe
 
 ```
 Table 2: Performance of scoring modules with heavy backbone
-model name  banking77  minds14  hwu64  snips  massive  average  best_count
+ model name   banking77  minds14  hwu64  snips  massive  average  best_count
     ptuning       5.00    14.73   9.64  91.67    25.87    29.38           0
        lora      13.82     9.30  38.58  99.13    52.06    42.58           0
        bert      85.61    48.06  88.58  99.16    86.36    81.56           1
@@ -218,6 +218,136 @@ model name  banking77  minds14  hwu64  snips  massive  average  best_count
 ## Scoring Modules with different embedding models
 
 ## Evolutionary Augmentations
+
+To evaluate the effectiveness of LLM-based data augmentation in real-world scenarios with limited training data, we conducted our experiments on randomly sampled 10-shot versions of the datasets. This setup simulates common practical situations where end users need to expand their small training splits. We conducted a comprehensive correlation analysis between the number of synthetic samples added and the final classification accuracy. We tested four state-of-the-art LLMs (DeepSeek-V3-0324, GPT-4o-mini, Qwen2.5-7B, and Llama-3.1-8B) across multiple datasets, including English (banking77, snips), Russian (banking77_ru, snips_ru), and out-of-sample (clinc150_ru) datasets.
+
+The correlation analysis revealed several key findings:
+
+**Model-specific Patterns**. Surprisingly, the size and type of the LLM (proprietary vs. open-source) showed no clear correlation with augmentation effectiveness. Both smaller models like Llama-3.1-8B and larger models like DeepSeek-V3-0324 demonstrated similar patterns of effectiveness.
+
+These results suggest that:
+1. The effectiveness of augmentation doesn't vary significantly across different LLMs, but with GPT-4o-mini showing the most consistent positive impact
+2. English datasets generally benefit more from augmentation than their Russian counterparts, likely due to the English-oriented nature of the prompts we used for augmentation
+3. OOS detection performance tends to decrease with increased augmentation, particularly for certain models. This can be attributed to the combination of factors: the Russian language of the dataset, its high granularity (150 classes), and the generic nature of synthetic samples that fail to capture the fine-grained class boundaries
+4. The banking77 dataset shows the most consistent improvement with augmentation across all models
+
+comparison 1:
+```
+Correlation Analysis (r values, non-significant correlations omitted):
+                           Model English Russian    OOS
+                DeepSeek-V3-0324   0.532       - -0.777
+          gpt-4o-mini-2024-07-18   0.500       -  0.884
+         Qwen2.5-7B-Instruct-AWQ       -       - -0.613
+Meta-Llama-3.1-8B-Instruct-Turbo   0.568       - -0.932
+```
+
+comparison 2:
+```
+Dataset-specific correlations across all models:
+     Dataset Correlation
+    snips_ru           -
+       snips       0.459
+ clinc150_ru           -
+banking77_ru       0.315
+   banking77       0.728
+```
+
+To further investigate the impact of augmentation on model performance, we conducted a detailed statistical analysis comparing the accuracy before and after augmentation for each augmentation level (1-10 synthetic samples). We performed paired t-tests to assess the statistical significance of the improvements and calculated effect sizes using Cohen's d to quantify the magnitude of the changes.
+
+The analysis revealed that all augmentation levels resulted in statistically significant improvements (p < 0.01) compared to the baseline (no augmentation). The effect sizes ranged from 0.33 to 0.57, indicating moderate to large practical significance (cohen's d). The mean improvement in accuracy showed a generally increasing trend with the number of augmentations, ranging from 7.1% to 11.7% improvement over the baseline.
+
+These results demonstrate that:
+1. Any amount of augmentation (1-10 samples) leads to statistically significant improvements in model performance
+2. The relationship between the number of augmentations and performance improvement is not strictly linear, with quite early saturation
+3. The improvements are not only statistically significant but also practically meaningful, as indicated by the moderate to large effect sizes
+
+This analysis provides strong empirical support for the effectiveness of LLM-based augmentation in improving classification performance, while also suggesting optimal ranges for the number of synthetic samples to generate.
+
+```
+Before and after analysis results:
+[
+  {
+    "naug": 1,
+    "t_stat": 3.735546060278238,
+    "pval": 0.0018019139464879965,
+    "effect_size": 0.35508506925428296,
+    "mean_improvement": 0.07141329258976314,
+    "n_comparisons": 17
+  },
+  {
+    "naug": 2,
+    "t_stat": 8.398754713510861,
+    "pval": 2.933752247838802e-07,
+    "effect_size": 0.366245426026366,
+    "mean_improvement": 0.07244079449961793,
+    "n_comparisons": 17
+  },
+  {
+    "naug": 3,
+    "t_stat": 3.2798027445708984,
+    "pval": 0.004715696559629987,
+    "effect_size": 0.33069460006391044,
+    "mean_improvement": 0.07844155844155842,
+    "n_comparisons": 17
+  },
+  {
+    "naug": 4,
+    "t_stat": 3.875191988007287,
+    "pval": 0.0013421265922781013,
+    "effect_size": 0.3653368491467401,
+    "mean_improvement": 0.08334606569900682,
+    "n_comparisons": 17
+  },
+  {
+    "naug": 5,
+    "t_stat": 3.2470128092719794,
+    "pval": 0.0050526718294561825,
+    "effect_size": 0.3509996686289342,
+    "mean_improvement": 0.08577158135981666,
+    "n_comparisons": 17
+  },
+  {
+    "naug": 6,
+    "t_stat": 4.990219384905349,
+    "pval": 0.00013347561041411162,
+    "effect_size": 0.4083321024424291,
+    "mean_improvement": 0.08789152024446145,
+    "n_comparisons": 17
+  },
+  {
+    "naug": 7,
+    "t_stat": 6.751435624288144,
+    "pval": 4.651938073069818e-06,
+    "effect_size": 0.4703528563923851,
+    "mean_improvement": 0.10019480519480517,
+    "n_comparisons": 17
+  },
+  {
+    "naug": 8,
+    "t_stat": 7.3885984719419096,
+    "pval": 1.5311770165757748e-06,
+    "effect_size": 0.5670558638421866,
+    "mean_improvement": 0.11709320091673026,
+    "n_comparisons": 17
+  },
+  {
+    "naug": 9,
+    "t_stat": 4.088494005336879,
+    "pval": 0.0008569900951346268,
+    "effect_size": 0.38933898033106124,
+    "mean_improvement": 0.08583651642475154,
+    "n_comparisons": 17
+  },
+  {
+    "naug": 10,
+    "t_stat": 5.632600136036402,
+    "pval": 3.742690319318556e-05,
+    "effect_size": 0.4056996407946527,
+    "mean_improvement": 0.0872650878533231,
+    "n_comparisons": 17
+  }
+]
+```
 
 ## Simple Augmentations
 

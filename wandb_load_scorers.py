@@ -36,7 +36,7 @@ if __name__ == "__main__":
         else:
             groupwise_results = defaultdict(list)
         for i, run in enumerate(runs):
-            if not run.name.startswith("knn"):
+            if run.name == "final_metrics":
                 continue
 
             logger.info(
