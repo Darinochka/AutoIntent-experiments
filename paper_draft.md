@@ -16,7 +16,7 @@ What automl usually looks like, automl for NLP, the limitations of nlp automl fr
 
 ## Structure
 
-AutoIntent is designed to solve generic text classification problems with comprehensive support for multi-label classification and out-of-sample (OOS) detection. The framework's architecture is built around a modular design that enables both standalone usage of individual components and end-to-end automated optimization through the AutoML pipeline.
+AutoIntent is designed to solve generic text classification problems with comprehensive support for multi-label classification and out-of-scope (OOS) detection. The framework's architecture is built around a modular design that enables both standalone usage of individual components and end-to-end automated optimization through the AutoML pipeline.
 
 The framework's key features include:
 
@@ -31,6 +31,23 @@ The framework's key features include:
   - LLM-based augmentation for generating synthetic training examples
   - Evolutionary approach for transforming existing utterances to expand the training set
   - Customizable prompts to fine-tune the augmentation process for your needs
+
+## Separation of Concerns
+
+In AutoIntent, a scoring module is defined as a model that takes a text sample as input and outputs a vector of class probabilities. This definition is crucial as it establishes a clear separation of concerns in the framework's architecture: scoring modules are responsible for probability estimation, while decision modules take these probabilities as input and produce the final classification decisions (single label, multiple labels, or OOS detection).
+
+This separation of concerns provides several key benefits:
+
+1. **Modularity**: Each component can be developed, tested, and optimized independently. Scoring modules focus solely on learning the relationship between text and class probabilities, while decision modules concentrate on the optimal way to convert these probabilities into final predictions.
+
+2. **Flexibility**: The same scoring module can be paired with different decision modules to address various scenarios. For example, a single scoring module can be used with:
+   - A threshold-based decision module for binary classification
+   - An adaptive decision module for multi-label classification
+   - A specialized OOS detection decision module
+
+3. **Reusability**: Probability estimates from scoring modules can be stored and reused with different decision strategies without recomputing the scores, introducing AutoIntent's efficient experimentation with various decision-making approaches.
+
+4. **Interpretability**: The separation allows for better understanding of the model's behavior, as probability estimates can be analyzed independently of the final decision-making process.
 
 ## Scoring Modules
 
@@ -49,11 +66,9 @@ The available scoring modules include:
    - Rerank: A two-stage approach combining retrieval and reranking, both operating on pre-computed embeddings
    - MLKNN: A specialized multi-label KNN implementation with Bayesian background, leveraging the embedding space for similarity calculations
 
-3. **BERT-based Classifiers** (GPU-accelerated):
+3. **BERT-based Classifiers**:
    - Full model fine-tuning
-   - Parameter-efficient approaches (LoRA, P-tuning)
-   - Cross-encoder configurations for improved accuracy
-   These are the only classifiers that require GPU acceleration as they perform end-to-end training.
+   - Parameter-efficient approaches (LoRA, P-tuning).
 
 4. **Generic sklearn Integration**: Support for any sklearn classifier, allowing for easy extension with additional classification algorithms. All sklearn models operate on the embedding vectors as features, maintaining the efficiency benefits of the architecture.
 
@@ -79,7 +94,7 @@ The framework offers three strategies for handling embedding model selection:
 
 1. **Pipeline-level Optimization**: The embedding model is chosen once at the pipeline level, before proceeding to classifier optimization. This approach is more efficient because it avoids the need to refit and reevaluate each scoring module for every candidate embedding model. Users can select from two optimization criteria:
    - **Retrieval-based**: Evaluates embedding models based on their ability to match samples within the same class. Quality is measured using retrieval metrics such as hit rate or NDCG, which can be customized by the user.
-   - **Feature-based**: Assesses embedding models by their performance with a logistic regression classifier. Uses classification metrics like accuracy or ROC AUC, which can also be customized by the user.
+   - **Classification-based**: Assesses embedding models by their performance with a logistic regression classifier. Uses classification metrics like accuracy or ROC AUC, which can also be customized by the user.
 
 2. **Scoring-level Optimization**: Users can opt to optimize the embedding model individually for each scoring module. While this approach might yield better results, it is more time and resource-intensive as it requires refitting and reevaluating each scoring module for every candidate embedding model.
 
@@ -95,32 +110,57 @@ This flexible approach to embedding model selection allows users to balance betw
 
 ## AutoML Pipeline
 
-The AutoML Pipeline orchestrates the optimization of all components in a sequential manner:
+The AutoML Pipeline orchestrates the optimization of all components in a hierarchical manner, with three distinct levels of optimization:
 
-1. **Embedding Optimization**:
-   - Evaluates different transformer models
-   - Optimizes embedding-specific hyperparameters
-   - Uses retrieval hit rate as the optimization metric
+1. **Modules-level Optimization**:
+   - Sequential optimization of embedding, scoring, and decision modules
+   - Each module uses the best model from the previous module's optimization
+   - Example: scoring module uses features from the best embedding model, decision module uses probabilities from the best classifier
+   - This greedy approach prevents combinatorial explosion while maintaining good performance
 
-2. **Scoring Optimization**:
-   - Tests various classification approaches
-   - Tunes classifier-specific parameters
-   - Optimizes based on ROC AUC score
+2. **Model-level Optimization**:
+   - Selection of the best model type for each module
+   - Exhaustive evaluation of all models specified in the search space
+   - Examples:
+     - Embedding module: different transformer models
+     - Scoring module: KNN, Logistic Regression, BERT fine-tuning, sklearn classifiers
+     - Decision module: different threshold strategies
 
-3. **Decision Optimization**:
-   - Configures threshold-based or argmax decision strategies
-   - Optimizes for accuracy or other relevant metrics
+3. **Hyperparameter-level Optimization**:
+   - Tuning of model-specific hyperparameters
+   - Optimization of trainable weights where applicable
+   - Examples:
+     - Tuning: K for KNN, threshold values
+     - Training: feature weights in Logistic Regression
+   - Uses Optuna with three sampling strategies:
+     - Random sampling
+     - Brute force search
+     - Tree-structured Parzen Estimators (TPE)
 
-The pipeline supports multiple hyperparameter optimization strategies:
-- Random sampling
-- Brute force search
-- Tree-structured Parzen Estimators (TPE)
+   It's important to note that AutoIntent makes a clear distinction between tuning and training:
+   - **Tuning** refers to the optimization of hyperparameters that control the model's behavior (e.g., number of neighbors in KNN)
+   - **Training** refers to the optimization of model weights that are learned from the data (e.g., coefficients in Logistic Regression)
+   This distinction is crucial for proper model optimization and evaluation.
 
-All optimization is implemented using Optuna, providing efficient and flexible hyperparameter tuning. The pipeline can be configured through a declarative search space definition, allowing users to specify:
+The pipeline employs careful data handling to prevent target leakage and ensure reliable model selection:
+
+- **Training Data**: Used for training model weights and parameters
+- **Validation Data**: Used for hyperparameter tuning and model selection
+- **Separate Validation Sets**: Scoring and decision modules can use different validation and training splits to prevent target leakage during holdout scoring
+
+The optimization process is configured through a declarative search space definition, allowing users to specify:
 - Available modules for each stage
 - Hyperparameter ranges
 - Optimization metrics
 - Search strategies
+
+The result of the AutoML pipeline is a fully optimized classification system that includes:
+- The best embedding model for the task
+- The optimal scoring module with tuned hyperparameters and trained weights
+- The appropriate decision module with optimized thresholds
+- All necessary configuration for inference using intuitive `save`, `load` and `predict` methods
+
+This hierarchical approach ensures efficient optimization while maintaining the flexibility to explore different model combinations and configurations.
 
 # Experiments
 
