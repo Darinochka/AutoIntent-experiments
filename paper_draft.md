@@ -165,29 +165,40 @@ This hierarchical approach ensures efficient optimization while maintaining the 
 # Experiments
 
 ## Scoring Modules (light backbone)
+
+we tested all of our scoring models on a range of popular intent classification datasets using lightweight backbone and embedding models. the results are presented in a table below. the models were scored using holdout validation (see dataset statistic in the appendix TODO), HPs were tuned with tpe sampler with maximum 20 trials (see search space used throughout our experiments in the appendix TODO).
+
+we see that logistic regression ("linear" in a table) is the most stable and best performing model in terms of both average accuaracy and the number of times it won all the other models.
+
+we find HPs of bert-based methods are hard to tune, though sometimes they manage to win among the models (we need to investigate if they overfit often or just cannot ne tuned)
+
 ```
-module_name  banking77   minds14     hwu64     snips   massive   average  best_count
-    ptuning   0.046287  0.116279  0.036458  0.664884  0.085672  0.189916           0
-       lora   0.203463  0.124031  0.223958  0.950853  0.419498  0.384361           0
-       bert   0.641359  0.697674  0.734003  0.985230  0.767602  0.765174           1
-       dnnc   0.888778  0.976744  0.825149  0.954163  0.786312  0.886229           0
-     rerank   0.890443  0.976744  0.844494  0.965877  0.816839  0.898879           0
-    sklearn   0.898102  0.984496  0.869792  0.951617  0.797308  0.900263           2
-        knn   0.897436  0.976744  0.854167  0.961039  0.816511  0.901179           0
-     linear   0.905095  0.976744  0.891741  0.974535  0.847038  0.919031           3
+model name  banking77  minds14  hwu64  snips  massive  average  best_count
+    ptuning       4.63    11.63   3.65  66.49     8.57    18.99           0
+       lora      20.35    12.40  22.40  95.09    41.95    38.44           0
+       bert      64.14    69.77  73.40  98.52    76.76    76.52           1
+     rerank      89.04    97.67  84.45  96.59    81.68    89.89           0
+ sklearn rf      89.81    98.45  86.98  95.16    79.73    90.03           2
+        knn      89.74    97.67  85.42  96.10    81.65    90.12           0
+     linear      90.51    97.67  89.17  97.45    84.70    91.90           3
 ```
 
 ## Scoring Modules (heavy backbone)
+
+we repeat the experiment from the previous section with slightly heavier transformer models
+
+the ranking via average accuracy across datasets is the same as in the previous experiment but the wins countings changed a bit: now the leadership of a logistic regression is not clear and knn and sklearn random forest share the first place of winning statistics with linear scorer. this justifies the presence of not only the linear scorer methods in a library for the cases where the finding of best performing model is crucial 
+
+we still find bert-based methods underperform compared to feature-based methods (TODO train on A100 if no overfitting is found)
 ```
-module_name  banking77   minds14     hwu64     snips   massive   average  best_count
-    ptuning   0.049950  0.147287  0.096354  0.916730  0.258657  0.293796           0
-       lora   0.138195  0.093023  0.385789  0.991342  0.520597  0.425789           0
-       bert   0.856144  0.480620  0.885789  0.991597  0.863614  0.815553           1
-     rerank   0.902764  0.961240  0.872396  0.973517  0.838667  0.909717           0
-       dnnc   0.913420  0.976744  0.868304  0.963076  0.831774  0.910664           0
-    sklearn   0.915418  0.984496  0.902158  0.966387  0.850812  0.923854           2
-        knn   0.921412  0.984496  0.894345  0.969697  0.854259  0.924842           2
-     linear   0.918082  0.968992  0.917783  0.980647  0.875759  0.932253           2
+model name  banking77  minds14  hwu64  snips  massive  average  best_count
+    ptuning       5.00    14.73   9.64  91.67    25.87    29.38           0
+       lora      13.82     9.30  38.58  99.13    52.06    42.58           0
+       bert      85.61    48.06  88.58  99.16    86.36    81.56           1
+     rerank      90.28    96.12  87.24  97.35    83.87    90.97           0
+ sklearn rf      91.54    98.45  90.22  96.64    85.08    92.39           2
+        knn      92.14    98.45  89.43  96.97    85.43    92.48           2
+     linear      91.81    96.90  91.78  98.06    87.58    93.23           2
 ```
 
 ## Scoring Modules with different embedding models
