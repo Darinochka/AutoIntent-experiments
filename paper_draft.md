@@ -10,7 +10,48 @@ This paper introduces AutoIntent, a novel AutoML framework specifically designed
 
 # Background and other automl frameworks
 
-What automl usually looks like, automl for NLP, the limitations of nlp automl frameworks, intent classification challenges
+AutoML, by definition, is a tool for automating machine learning routines, including data splitting for validation, hyperparameter tuning, model ensembling, and model selection experiments. Different domains of AutoML have their specific challenges and solutions:
+
+- **Tabular AutoML**: Focuses on feature engineering and feature selection
+- **Deep Learning AutoML**: Emphasizes architecture search and occasianally data augmentations
+- **NLP AutoML**: Primarily revolves around training recipes for transformer-based models
+
+Current NLP AutoML frameworks can be categorized based on their approaches:
+
+1. **Transformer-focused Frameworks**: Most existing solutions concentrate on optimizing BERT-like models, often neglecting other aspects of the ML pipeline.
+
+2. **Meta-learning Approaches**: Some frameworks, like Text-Brew, incorporate meta-learning techniques to improve model selection and optimization.
+
+3. **Budget-aware Frameworks**: Advanced solutions include granular optimization budget control, allowing users to balance between performance and computational resources.
+
+However, a critical analysis of existing NLP AutoML frameworks reveals several limitations:
+
+1. **Incomplete Pipeline Coverage**: Most frameworks do not consider the full ML pipeline, particularly:
+   - Data splitting strategies for validation
+   - Threshold tuning for classification
+   - Native support for out-of-scope (OOS) detection
+
+2. **Limited Text Processing Options**: As shown in Table 1, current frameworks offer limited text processing capabilities:
+   - Some rely solely on embeddings
+   - Others use basic TF-IDF approaches
+   - Few support advanced techniques like prompt engineering
+
+3. **Resource Constraints**: Many frameworks are not optimized for:
+   - Small dataset scenarios
+   - Limited computational resources
+   - Efficient hyperparameter optimization
+
+Table 1: Comparison of NLP AutoML frameworks
+| Feature | H2O | LightAutoML | AutoGluon | FEDOT |
+|---------|-----|-------------|-----------|-------|
+| Text Processing | No built-in support | TF-IDF and embeddings | Embeddings only | TF-IDF, embeddings |
+| Small Data Support | Not optimized | Has small data modes | No support | Adaptable to small data |
+| Parameter Configuration | Flexible API | Limited preset configs | Custom configs, poor docs | Limited configuration |
+| External Logging | H2O Flow integration | No support | No support | No support |
+| Encoder Prompts | No support | No support | No support | No support |
+| OOS Detection | No built-in support | No built-in support | No support | No support |
+
+These limitations highlight the need for a more comprehensive NLP AutoML framework that addresses the full spectrum of text classification challenges, from data preprocessing to model deployment, while maintaining flexibility and efficiency across different resource constraints.
 
 # AutoIntent Library and Framework
 
@@ -349,11 +390,116 @@ Before and after analysis results:
 ]
 ```
 
-## Simple Augmentations
 
-# AutoIntent Cookbook
+## computational efficiency 
 
-# Duscussion and Future Research
+time, carbon emissions and integral metrics (for a single trial)
+
+## AutoIntent Cookbook
+
+Based on our extensive experimental analysis, we present a comprehensive guide for selecting and configuring AutoIntent components for different use cases. To facilitate the adoption of these recommendations, we have implemented them as configurable presets in our library.
+
+## Resource-aware Configuration Presets
+
+We have identified three distinct configuration presets that balance performance and computational requirements:
+
+1. **Lightweight Configuration**:
+   - **Components**: KNN-based methods
+   - **Use Case**: 
+     - Scenarios requiring minimal resource consumption
+     - Few-shot learning scenarios with limited training data
+   - **Advantages**:
+     - Fast inference time
+     - Minimal computational requirements for training
+     - Particularly effective in few-shot learning scenarios
+   - **Performance**: 
+     - Achieves competitive accuracy with significantly reduced resource usage
+     - Demonstrates strong performance on small datasets, often outperforming more complex models in few-shot settings
+     - Maintains consistent performance across different data sizes
+
+2. **Moderate Configuration**:
+   - **Components**: Linear scorer, cross-encoder based methods, and all lightweight methods
+   - **Use Case**: Applications requiring consistent, high-quality performance
+   - **Advantages**:
+     - Balanced performance and resource usage
+     - Robust across different datasets
+     - Suitable for production environments
+   - **Performance**: Provides reliable accuracy with moderate computational overhead
+
+3. **Heavy Configuration**:
+   - **Components**: BERT-based models, along with all moderate and lightweight methods
+   - **Use Case**: High-performance scenarios with access to professional-grade GPUs
+   - **Requirements**:
+     - High-performance GPU with substantial VRAM
+     - Extended training time
+     - Higher computational budget
+     - Large dataset
+   - **Performance**: Potential for superior accuracy with heavy backbones and longer training
+
+## Selection Guidelines
+
+When choosing a configuration preset, consider the following factors:
+
+1. **Resource Constraints**:
+   - Available computational resources
+   - Inference time requirements
+   - Memory limitations
+
+2. **Performance Requirements**:
+   - Required accuracy
+   - Latency constraints
+   - Scalability needs
+
+3. **Dataset Characteristics**:
+   - Size of the training data
+   - Complexity of the classification task
+   - Language and domain specifics
+
+## Implementation Notes
+
+Each preset is implemented as a configurable template in the library, allowing users to:
+- Start with recommended configurations
+- Customize parameters based on specific needs
+- Gradually scale up from lightweight to heavy configurations as requirements evolve
+
+This cookbook approach enables users to quickly deploy effective solutions while maintaining the flexibility to adapt to changing requirements and resource constraints.
+
+# Future Research
+
+Our experimental analysis and framework development have revealed several promising directions for future research:
+
+1. **Framework Evaluation Extensions**:
+   - Comprehensive evaluation of module data separation strategies
+   - In-depth analysis of multi-label classification performance
+   - Systematic assessment of out-of-scope (OOS) detection capabilities
+   - Investigation of cross-lingual transfer capabilities
+
+2. **Augmentation Method Improvements**:
+   - Development of more sophisticated prompt engineering techniques
+   - Integration of domain-specific knowledge into augmentation strategies
+   - Exploration of hybrid approaches combining LLM-based and traditional augmentation methods
+   - Investigation of augmentation quality control mechanisms
+   - Research into language-specific augmentation strategies
+
+3. **BERT-based Methods Enhancement**:
+   - Evaluation of transformer models on high-performance GPUs (e.g., A100)
+   - Investigation of potential overfitting issues in current implementations
+   - Development of more efficient fine-tuning strategies
+   - Exploration of model compression techniques for deployment
+
+4. **Pipeline Optimization**:
+   - Development of more sophisticated module selection strategies
+   - Investigation of joint optimization approaches
+   - Research into adaptive resource allocation during training
+   - Exploration of automated pipeline configuration based on dataset characteristics
+
+5. **Deployment and Scalability**:
+   - Research into efficient model serving strategies
+   - Investigation of distributed training approaches
+   - Development of automated scaling mechanisms
+   - Exploration of edge deployment capabilities
+
+These research directions aim to address current limitations and expand the framework's capabilities, making it more robust and adaptable to various real-world scenarios.
 
 # Limitations
 
