@@ -11,5 +11,18 @@ readme = "README.md"
 license = {text = "MIT"}
 
 
+[project.optional-dependencies]
+fedot = [
+    "fedot>=0.7.5",
+]
+h2o = [
+    "h2o>=3.46.0.7",
+]
+lama = [
+    "lightautoml[nlp]>=0.4.1",
+]
+gluon = [
+    "autogluon>=1.3.0",
+]
 [tool.pdm]
 distribution = false
