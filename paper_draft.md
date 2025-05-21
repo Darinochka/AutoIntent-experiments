@@ -246,7 +246,7 @@ To investigate the impact of model capacity on performance, we repeated the expe
 
 ```
 Table 2: Performance of scoring modules with heavy backbone
- model name   banking77  minds14  hwu64  snips  massive  average  best_count
+ model name   banking77 minds14  hwu64  snips  massive  average  best_count
     ptuning       5.00    14.73   9.64  91.67    25.87    29.38           0
        lora      13.82     9.30  38.58  99.13    52.06    42.58           0
        bert      85.61    48.06  88.58  99.16    86.36    81.56           1
@@ -430,6 +430,32 @@ Before and after analysis results:
   }
 ]
 ```
+
+## Baselines
+
+we have tested some opensource automl nlp frameworks as a baselines;
+
+- h2o peforms tabular automl methods over word2vec embeddings
+- lightautoml (lama) and fedot perform automl over tf-idf, though lama can use feature of one of three predefined transformers 
+- autogluon trains deberta-v3-small using pytorch lightning
+
+```
+framework  banking77  clinc150   hwu64  massive  minds14  snips  average
+autointent     92.86             90.83    87.13    95.68  98.19
+autogluon      93.28     87.35   91.17    88.92    97.22  99.07    92.83
+     h2o       75.32     66.31   77.32    75.30    76.85  98.36    78.24
+   fedot        1.30     18.18    1.77     7.28    12.04  15.14     9.28
+    lama        1.30     18.18    1.77     7.04     8.33  14.50     8.52
+```
+
+autointent results are taken from experiment on scoring modules with heavy backbone
+
+the results are that two of four frameworks completely failed to train a model. it marks their drawback to adapt to given data. most probably it is explained by the fact that they do not tune hyperparameters. the most obvious drawbacks of the frameworks are the following:
+- gluon does not tune hyperparameters and it uses fixed training recipe
+- h2o and fedot doesnt support features from transformer 
+- lama do support features from transformer but it doesnt allow to set any transformer from hugging face hub you want
+- gluon always outputs fixed inference time model while autointent can choose lighter model is its perform on par or better that heavy fine-tune-based approaches
+- (?) we didnt find mature deployment features; in contrast autointent provides straightforward method to save to disk and load models
 
 ## AutoIntent Cookbook
 
