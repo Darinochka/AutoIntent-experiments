@@ -258,6 +258,47 @@ Table 2: Performance of scoring modules with heavy backbone
 
 ## Scoring Modules with different embedding models
 
+## Computational Efficiency
+
+To quantify the computational requirements of different scoring modules, we conducted a comprehensive analysis using the Code Carbon library. This analysis measured various aspects of computational resource consumption for a single trial (training and evaluation of a single model configuration). The results, presented in Table 3, reveal significant variations in resource usage across different approaches.
+
+Table 3: Computational resource consumption for different scoring modules. The experiments are conducted on banking77 dataset with mixedbread-ai/mxbai-embed-large-v1, system with AMD Ryzen 7 5800H, NVIDIA RTX 3060 Laptop. Median values of 10 trials are displayed. Embeddings were pre-computed.
+
+Measurements:
+- emissions: CO2 in grams
+- runtime: seconds
+- energy_consumed, gpu_energy, cpu_energy, ram_energy: watt-hours
+- emissions_rate: CO2 grams per second
+
+```
+scorer_name  emissions   runtime  energy_consumed    gpu_energy  cpu_energy  ram_energy  emissions_rate
+        bert      1.382   103.911            3.133         2.198       0.774   1.615e-01           0.014
+     ptuning      1.118    83.455            2.535         1.785       0.620   1.295e-01           0.014
+        lora      0.863    65.157            1.957         1.372       0.484   1.009e-01           0.013
+      linear      0.428    73.393            0.971         0.312       0.545   1.138e-01           0.006
+      rerank      0.270    29.040            0.613         0.355       0.213   4.436e-02           0.010
+        dnnc      0.122    10.000            0.276         0.192       0.070   1.455e-02           0.013
+ rand forest      0.073    11.367            0.166         0.074       0.080   1.664e-02           0.007
+         knn      0.009     1.281            0.019         0.014       0.004   9.044e-04           0.012
+```
+
+Key findings from the analysis:
+
+1. **Resource Efficiency Ranking**:
+   - KNN-based methods demonstrate exceptional efficiency, with minimal emissions and runtime
+   - Logistic regression shows moderate resource consumption, correlating with its high performance
+   - BERT-based methods exhibit the highest resource requirements
+
+2. **Energy Consumption Patterns**:
+   - GPU utilization varies significantly across methods:
+     - BERT-based methods maintain high GPU power (76-77W)
+     - Linear methods show lower GPU usage (15.46W)
+     - KNN methods, despite low total energy, show high GPU power utilization
+   - CPU power remains consistent across all methods (27W)
+   - RAM energy consumption is highest for BERT-based methods
+
+These findings highlight the trade-off between computational efficiency and model performance, providing valuable insights for resource-constrained deployment scenarios.
+
 ## Evolutionary Augmentations
 
 To evaluate the effectiveness of LLM-based data augmentation in real-world scenarios with limited training data, we conducted our experiments on randomly sampled 10-shot versions of the datasets. This setup simulates common practical situations where end users need to expand their small training splits. We conducted a comprehensive correlation analysis between the number of synthetic samples added and the final classification accuracy. We tested four state-of-the-art LLMs (DeepSeek-V3-0324, GPT-4o-mini, Qwen2.5-7B, and Llama-3.1-8B) across multiple datasets, including English (banking77, snips), Russian (banking77_ru, snips_ru), and out-of-sample (clinc150_ru) datasets.
@@ -389,11 +430,6 @@ Before and after analysis results:
   }
 ]
 ```
-
-
-## computational efficiency 
-
-time, carbon emissions and integral metrics (for a single trial)
 
 ## AutoIntent Cookbook
 
