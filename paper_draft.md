@@ -472,17 +472,13 @@ To evaluate AutoIntent's out-of-scope (OOS) detection capabilities, we conducted
 
 Table 5: Performance comparison on OOS detection task
 ```
-framework  in_domain_acc  oos_precision  oos_recall
-autointent
-autogluon          95.76          98.47        32.2
-       h2o          85.22          82.57        27.0
-     fedot           0.00          18.18       100.0
-      lama           0.00          18.18       100.0
+ framework  in_domain_acc  oos_precision  oos_recall
+autointent         96.13          91.92        65.93
+ autogluon         95.76          98.47        32.20
+       h2o         85.22          82.57        27.00
+     fedot          0.00          18.18        100.0
+      lama          0.00          18.18        100.0
 ```
-
-TODO:
-- add autointent
-- elaborate analysis
 
 ## Embedding Models
 

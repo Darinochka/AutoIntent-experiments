@@ -72,5 +72,5 @@ if __name__ == "__main__":
             "out_of_domain_precision": out_of_domain_precision
         })
 
-    with open(workdir / "results.json", "w") as f:
+    with open("clincresults.json", "w") as f:
         json.dump(res, f, indent=4, ensure_ascii=False)
