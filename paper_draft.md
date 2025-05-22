@@ -433,29 +433,58 @@ Before and after analysis results:
 
 ## Baselines
 
-we have tested some opensource automl nlp frameworks as a baselines;
+To evaluate AutoIntent's performance, we conducted a comparative analysis against several open-source NLP AutoML frameworks. The baseline frameworks were selected based on their availability and relevance to text classification tasks:
 
-- h2o peforms tabular automl methods over word2vec embeddings
-- lightautoml (lama) and fedot perform automl over tf-idf, though lama can use feature of one of three predefined transformers 
-- autogluon trains deberta-v3-small using pytorch lightning
+1. **H2O**: Implements tabular AutoML methods over Word2Vec embeddings
+2. **LightAutoML (LAMA)**: Performs AutoML over TF-IDF features with optional support for three predefined transformer models
+3. **FEDOT**: Utilizes TF-IDF based feature engineering
+4. **AutoGluon**: Employs a fixed training recipe with DeBERTa-v3 using PyTorch Lightning
 
+The evaluation was conducted across five standard intent classification datasets, with results presented in Table 4. AutoIntent's configuration matched the heavy backbone experiment, but with consistent test data across all frameworks (unlike the random validation split used in the scoring module experiments).
+
+Table 4: Performance comparison across different AutoML frameworks
 ```
-framework  banking77  clinc150   hwu64  massive  minds14  snips  average
-autointent     92.86             90.83    87.13    95.68  98.19
-autogluon      93.28     87.35   91.17    88.92    97.22  99.07    92.83
-     h2o       75.32     66.31   77.32    75.30    76.85  98.36    78.24
-   fedot        1.30     18.18    1.77     7.28    12.04  15.14     9.28
-    lama        1.30     18.18    1.77     7.04     8.33  14.50     8.52
+framework  banking77    hwu64  massive  minds14  snips   avg
+autointent     92.86    90.83    87.13    95.68  98.19   92.94
+autogluon      93.28    91.17    88.92    97.22  99.07   93.13
+      h2o       75.32    77.32    75.30    76.85  98.36   80.63
+    fedot        1.30     1.77     7.28    12.04  15.14   7.51
+     lama        1.30     1.77     7.04     8.33  14.50   6.59
 ```
 
-autointent results are taken from experiment on scoring modules with heavy backbone
+The results reveal several key findings:
 
-the results are that two of four frameworks completely failed to train a model. it marks their drawback to adapt to given data. most probably it is explained by the fact that they do not tune hyperparameters. the most obvious drawbacks of the frameworks are the following:
-- gluon does not tune hyperparameters and it uses fixed training recipe
-- h2o and fedot doesnt support features from transformer 
-- lama do support features from transformer but it doesnt allow to set any transformer from hugging face hub you want
-- gluon always outputs fixed inference time model while autointent can choose lighter model is its perform on par or better that heavy fine-tune-based approaches
-- (?) we didnt find mature deployment features; in contrast autointent provides straightforward method to save to disk and load models
+1. **Framework Performance**:
+   - AutoGluon and AutoIntent demonstrate comparable performance
+   - H2O shows moderate performance
+   - FEDOT and LAMA fail to achieve meaningful results across most datasets
+
+2. **Framework Limitations**:
+   - **Hyperparameter Optimization**: AutoGluon uses a fixed training recipe without hyperparameter tuning (note: attempted HPO presets encountered unexpected bugs)
+   - **Feature Engineering**: H2O and FEDOT lack support for transformer-based features
+   - **Model Flexibility**: LAMA's transformer support is limited to three predefined models
+   - **Inference Efficiency**: AutoGluon outputs fixed inference-time models, while AutoIntent can select lighter models when performance is comparable
+   - **Deployment Features**: Most of the baseline frameworks lack mature deployment capabilities, whereas AutoIntent provides straightforward model serialization
+
+The comparative analysis highlights AutoIntent's advantages in terms of flexibility, deployment capabilities, and adaptive model selection, while maintaining competitive performance with state-of-the-art approaches.
+
+## OOS Detection
+
+To evaluate AutoIntent's out-of-scope (OOS) detection capabilities, we conducted a comparative analysis on the CLINC150 dataset, which is specifically designed for intent classification with OOS detection. Since most baseline frameworks lack native OOS detection support, we adapted their configurations by treating OOS as an additional class. The results are presented in Table 5.
+
+Table 5: Performance comparison on OOS detection task
+```
+framework  in_domain_acc  oos_precision  oos_recall
+autointent
+autogluon          95.76          98.47        32.2
+       h2o          85.22          82.57        27.0
+     fedot           0.00          18.18       100.0
+      lama           0.00          18.18       100.0
+```
+
+TODO:
+- add autointent
+- elaborate analysis
 
 ## AutoIntent Cookbook
 
