@@ -256,8 +256,6 @@ Table 2: Performance of scoring modules with heavy backbone
      linear      91.81    96.90  91.78  98.06    87.58    93.23           2
 ```
 
-## Scoring Modules with different embedding models
-
 ## Computational Efficiency
 
 To quantify the computational requirements of different scoring modules, we conducted a comprehensive analysis using the Code Carbon library. This analysis measured various aspects of computational resource consumption for a single trial (training and evaluation of a single model configuration). The results, presented in Table 3, reveal significant variations in resource usage across different approaches.
