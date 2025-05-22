@@ -33,6 +33,7 @@ search_space_raw = """
       n_estimators: [200, 300, 500]
       max_depth: [100, 150, 200]
       max_features: [sqrt, log2, null]
+      n_jobs: [8]
     - module_name: bert
       n_trials: 40
       num_train_epochs: [3]
@@ -60,6 +61,12 @@ search_space_raw = """
   target_metric: decision_accuracy
   search_space:
     - module_name: argmax
+    - module_name: threshold
+      thresh:
+        low: 0.1
+        high: 0.9
+        step: 0.1
+    - module_name: jinoos
 """
 
 # search_space_raw = """
@@ -84,7 +91,8 @@ search_space_raw = """
 #     - module_name: argmax
 # """
 
-datasets_names = ["DeepPavlov/banking77", "DeepPavlov/minds14", "DeepPavlov/hwu64", "DeepPavlov/snips", "DeepPavlov/massive"]
+# datasets_names = ["DeepPavlov/banking77", "DeepPavlov/minds14", "DeepPavlov/hwu64", "DeepPavlov/snips", "DeepPavlov/massive"]
+datasets_names = ["DeepPavlov/clinc150"]
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
