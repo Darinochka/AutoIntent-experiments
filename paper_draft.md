@@ -484,6 +484,24 @@ TODO:
 - add autointent
 - elaborate analysis
 
+## Embedding Models
+
+The quality one can obtain via using AutoIntent with different embedding models as features source:
+```
+                                    encoder  M parameters  DeepPavlov/clinc150  DeepPavlov/hwu64  DeepPavlov/massive  DeepPavlov/minds14  DeepPavlov/snips  average
+               NovaSearch/stella_en_400M_v5           435                91.80             92.19               89.22               96.30             98.50    93.60
+    intfloat/multilingual-e5-large-instruct           560                78.98             90.99               87.13               98.15             98.36    90.72
+             intfloat/multilingual-e5-large           560                78.71             91.36               87.47               92.59             98.36    89.70
+HIT-TMG/KaLM-embedding-multilingual-mini-v1           494                78.85             88.66               83.59               95.37             97.43    88.78
+             nomic-ai/nomic-embed-text-v1.5           137                75.53             83.83               80.69               97.22             97.36    86.93
+```
+
+Experimenting in such way is time and resource consuming as it requires to retrain the whole pipeline. Thus the autointent's feature to select best encoder based on proxy-evaluation on feature-aimed or retrieval-aimed embedding module tuning. If we use autointent, it chooses the following models for each dataset:
+```
+
+```
+as we see these proxy selection works well
+
 ## AutoIntent Cookbook
 
 Based on our extensive experimental analysis, we present a comprehensive guide for selecting and configuring AutoIntent components for different use cases. To facilitate the adoption of these recommendations, we have implemented them as configurable presets in our library.

@@ -27,12 +27,22 @@ if __name__ == "__main__":
         if a_project.name not in args.projects:
             continue
         project_savepath = savedir / a_project.name / "results.json"
-        runs = api.runs(f"ilya_alekseev_2016/{a_project.name}")
+        runs = api.runs(
+            f"ilya_alekseev_2016/{a_project.name}",
+            filters={
+                "$or": [
+                    {"group": "clinc150[seed='42']"},
+                    {"group": "clinc150[seed='43']"},
+                    {"group": "clinc150[seed='44']"},
+                ]
+            },
+        )
         project_savepath.parent.mkdir(parents=True, exist_ok=True)
         if project_savepath.exists():
             logger.info(f"Loading results from {project_savepath}")
             with project_savepath.open("r") as f:
-                groupwise_results = json.load(f)
+                loaded_data = json.load(f)
+                groupwise_results = defaultdict(list, loaded_data)
         else:
             groupwise_results = defaultdict(list)
         for i, run in enumerate(runs):
@@ -71,11 +81,6 @@ if __name__ == "__main__":
                         loaded = json.load(wrapper)
                     run_results[file_name.split(".")[0]] = loaded
 
-            groupwise_results[run.group].append(
-                {
-                    "module_name": run.name,
-                    **run_results,
-                }
-            )
+            groupwise_results[run.group].append(run_results["wandb-summary"])
             with project_savepath.open("w") as f:
                 json.dump(groupwise_results, f, indent=4, ensure_ascii=False)

@@ -19,22 +19,18 @@ if __name__ == "__main__":
 
     api = wandb.Api()
 
-    projects = api.projects()
+    projects = api.projects(entity="samoed-roman")
 
-    savedir = Path("wandb_final_scorers")
+    savedir = Path("wandb_encoders")
 
     for a_project in projects:
         if a_project.name not in args.projects:
             continue
         project_savepath = savedir / a_project.name / "results.json"
-        runs = api.runs(f"ilya_alekseev_2016/{a_project.name}", filters={"displayName": "final_metrics"})
+        runs = api.runs(f"samoed-roman/{a_project.name}", filters={"displayName": "final_metrics"})
+
         project_savepath.parent.mkdir(parents=True, exist_ok=True)
-        if project_savepath.exists():
-            logger.info(f"Loading results from {project_savepath}")
-            with project_savepath.open("r") as f:
-                groupwise_results = json.load(f)
-        else:
-            groupwise_results = defaultdict(list)
+        cur_res = []
         for i, run in enumerate(runs):
             if run.name != "final_metrics":
                 continue
@@ -44,7 +40,7 @@ if __name__ == "__main__":
             )
 
             # retrieve config and metrics summary
-            files_to_download = ["config.yaml"]
+            files_to_download = [ "wandb-summary.json"]
 
             # config may be not present, i.e. no hyperparameters were passed
             run_results = {
@@ -65,16 +61,24 @@ if __name__ == "__main__":
                         root=str(Path(tempdir) / file_name)
                     )
                     if file_name == "config.yaml":
-                        loaded = yaml.safe_load(wrapper)["pipeline_metrics"]
+                        loaded = yaml.safe_load(wrapper)
                     else:
-                        loaded = json.load(wrapper)
+                        loaded = json.load(wrapper)["pipeline_metrics"]
                     run_results[file_name.split(".")[0]] = loaded
-
-            groupwise_results[run.group].append(
-                {
-                    "module_name": run.name,
-                    **run_results,
-                }
-            )
+            try:
+                parts = run.group.split("_")
+                dataset = parts[0]
+                encoder = "_".join(parts[1:-1])
+                if parts[-1] == "True":
+                    continue
+            except ValueError:
+                logger.warning(f"Failed to parse group {run.group}")
+                raise
+            res = {
+                "dataset": dataset,
+                "encoder": encoder,
+                "metrics": run_results["wandb-summary"],
+            }
+            cur_res.append(res)
             with project_savepath.open("w") as f:
-                json.dump(groupwise_results, f, indent=4, ensure_ascii=False)
+                json.dump(cur_res, f, indent=4, ensure_ascii=False)
