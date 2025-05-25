@@ -6,13 +6,13 @@
 
 Text classification remains a fundamental task in natural language processing, with applications ranging from intent detection in conversational systems \cite{weld2021surveyjointintentdetection} to content categorization and sentiment analysis \cite{TAHA2024100664}. Modern NLP has been revolutionized by transformer-based embedding models \cite{xiao2024cpackpackedresourcesgeneral}, which provide rich contextual representations of text. However, effectively utilizing these models for classification tasks requires careful consideration of multiple components: the choice of embedding model, the selection of appropriate classification algorithms, and the optimization of their hyperparameters.
 
-Traditional machine learning approaches often require manual tuning of these components, which can be time-consuming and requires significant expertise. While automated machine learning frameworks \cite{baratchi2024automated} have emerged to automate this process, existing solutions for NLP tasks often lack comprehensive support for the full spectrum of hyperparameter optimization (for instance, choosing best embedding model) and tuning confidence thresholds for handling multi-label classification and out-of-scope (OOS) detection \cite{larson-etal-2019-evaluation}.
+Traditional machine learning approaches often require manual tuning of these components, which can be time-consuming and requires significant expertise. While automated machine learning (AutoML) frameworks \cite{baratchi2024automated} have emerged to automate this process, existing solutions for NLP tasks often lack comprehensive support for the full spectrum of hyperparameter optimization (for instance, choosing best embedding model) and tuning confidence thresholds for handling multi-label classification and out-of-scope (OOS) detection \cite{larson-etal-2019-evaluation}.
 
-This technical report introduces AutoIntent \footnote{\url{https://github.com/DeepPavlov/AutoIntent}}, a novel AutoML framework specifically designed for text classification tasks. AutoIntent addresses these limitations by providing an end-to-end pipeline that automatically optimizes all aspects of the classification process, from embedding model selection to machine learning model choice and threshold tuning. The framework offers a sklearn-like interface \cite{pedregosa2018scikitlearnmachinelearningpython} for ease of use while supporting dialog systems-related features such as multi-label classification and OOS handling.
+This technical report introduces AutoIntent \footnote{\url{https://github.com/DeepPavlov/AutoIntent}}, a novel AutoML framework specifically designed for text classification tasks. AutoIntent addresses these limitations by providing an end-to-end pipeline that automatically optimizes all aspects of the classification process, from embedding model selection to machine learning model choice and threshold tuning. The framework offers a sklearn-like interface \cite{pedregosa2018scikitlearnmachinelearningpython} for ease of use. AutoIntent supports features such as multi-label classification and OOS detection, bridging the gap between AutoML and conversation systems.
 
 \section{Background}
 
-Automated machine learning, by definition, is a tool for automating routines like data splitting for validation, hyperparameter tuning, model ensembling, and model selection. The AutoML is highly relevant in the scenarios when machine learning tasks need to be solved by non-experts and in conjunction with no-code ML which is sometimes called <<ML as a service>> \cite{bisong2019overview,barga2015predictive,liberty2020elastic,ledell2020h2o,carney2020teachable,acito2023predictive}. The applications include sentiment analysis, robotics, healthcare, business analysis \cite{yuan2024automated,salehin2024automl}. 
+Automated machine learning, by definition, is a tool for automating routines like data splitting for validation, hyperparameter tuning, model ensembling, and model selection. The AutoML is highly relevant in the scenarios when machine learning tasks need to be solved by non-experts and in conjunction with no-code ML which is sometimes called <<ML as a service>> \cite{bisong2019overview,barga2015predictive,liberty2020elastic,ledell2020h2o,carney2020teachable,acito2023predictive}. The applications include sentiment analysis, robotics, healthcare, business analysis \cite{yuan2024automated,salehin2024automl}.
 
 Tabular AutoML focuses on feature engineering, feature selection and model ensembling \cite{feurer2022autosklearn20handsfreeautoml, vakhrushev2022lightautomlautomlsolutionlarge, erickson2020autogluontabularrobustaccurateautoml, ledell2020h2o, nikitin2021automated}. Usually, they employ classical machine learning methods like GBMs \cite{chen2016xgboost,prokhorenkova2018catboost,ke2017lightgbm} and linear models, fast hyperparameter tuning methods with budget-aware strategies \cite{akiba2019optuna}, and ensembling strategies like stacking, blending and voting. Such frameworks sometimes can supersede exploratory data analysis and extensive research with just a running preset training recipe. It is not rare to see AutoML frameworks winning machine learning contests, but the open source solutions often are not transferable to production-ready systems as the resulting pipeline is an ensemble of a numerous amount of models without clear guides for deployment.
 
@@ -24,7 +24,70 @@ In AutoML frameworks, the model selection can be implemented with three ways. Th
 
 \section{AutoIntent}
 
-We formulate the design of AutoIntent. First, it should follow modular design where each component can be used both within AutoML pipeline and independently for better deployment and maintenance, clear and transparent structure of the framework. Second, not only modern DL models should be included, but also classic ML models over transformer embeddings to provide end users options based on their hardware settings. Third, it should follow best open source development practices like clear documentation with both user guides and API reference, static type checking, automated unit tests, unified code style with linters and formatters. One common downside is that AutoML frameworks implementations lack type annotation and comprehensive documentation making them hard to use. Fourth, it should provide both HPO and non-HPO presets and, moreover, a flexible way to customize the search space -- all of this is to provide users more options to choose based on their hardware settings. Fifth, because of our focus on conversational systems, it should support multi-label classification, out-of-scope detection and few-shot learning. Note, that conversational systems utilize text classification for the task of intent detection, which often requires multiple intents detection via multi-label classification and out-of-scope detection (detecting the intents that are not supported by the conversation system). Seventh, it should support using models from public repositories like Hugging Face. Eighth, we do not need feature engineering or feature selection stage because we can use embeddings from transformers which are quite informative for any popular task \cite{enevoldsen2025mmtebmassivemultilingualtext}. Nineth, because of our focus on conversational systems we aim to build only intent classification framework for now, without extensions to other tasks like response generation and slot filling, especially we do not want to cover all the variaty of machine learning and deep learning fields like time series forecasting or object detection.
+\subsection{Design Principles}
+
+The design of AutoIntent is guided by several key principles that address the limitations of existing NLP AutoML frameworks \ref{tab:frameworks}.
+
+\begin{enumerate}
+    \item \textbf{Modular Architecture}: The framework is designed with a clear separation of concerns, where each component can function both independently and as part of the AutoML pipeline. This modularity facilitates:
+    \begin{itemize}
+        \item Independent development and testing of components
+        \item Flexible deployment configurations
+        \item Simplified maintenance and updates
+        \item Clear and transparent framework structure
+    \end{itemize}
+
+    \item \textbf{Model Diversity}: To accommodate varying hardware constraints and performance requirements, the framework incorporates:
+    \begin{itemize}
+        \item Modern deep learning models for high-performance scenarios
+        \item Classical machine learning models operating on transformer embeddings for resource-constrained environments
+        \item A unified interface for all model types, ensuring consistent usage patterns
+    \end{itemize}
+
+    \item \textbf{Software Engineering Best Practices}: The framework adheres to established software development standards:
+    \begin{itemize}
+        \item Comprehensive documentation with user guides and API references
+        \item Static type checking for improved code reliability
+        \item Automated unit testing for robust quality assurance
+        \item Unified code style enforced through linters and formatters
+    \end{itemize}
+
+    \item \textbf{Flexible Optimization Strategies}: The framework provides multiple approaches to model optimization:
+    \begin{itemize}
+        \item Hyperparameter optimization (HPO) presets for different computational budgets
+        \item Non-HPO presets with generalizing HP configurations 
+        \item Customizable search spaces for fine-grained control
+    \end{itemize}
+
+    \item \textbf{Conversational System Support}: The framework includes specialized features for dialog systems:
+    \begin{itemize}
+        \item Native support for multi-label classification
+        \item Built-in out-of-scope (OOS) detection capabilities
+        \item Few-shot learning optimizations
+    \end{itemize}
+
+    \item \textbf{Model Repository Integration}: The framework integrates HuggingFace model and datasets repository:
+    \begin{itemize}
+        \item Easy adoption of either the last SOTA pre-trained transformers or custom fine-tuned ones
+        \item Version control for models
+    \end{itemize}
+
+    \item \textbf{Embedding-centric Design}: The framework adopts a transformer-based embedding approach:
+    \begin{itemize}
+        \item Elimination of traditional feature engineering stages as current embeddings are quite informative across variety of tasks \cite{enevoldsen2025mmtebmassivemultilingualtext}
+        \item Utilization of pre-trained transformer embeddings in zero-shot manner
+        \item Ability to select most appropriate source of features from HuggingFace repository
+    \end{itemize}
+
+    \item \textbf{Task Specialization}: The framework maintains a focused scope:
+    \begin{itemize}
+        \item Primary focus on intent classification
+        \item Exclusion of unrelated tasks (e.g., computer vision, time series)
+        \item Optimization for classification-specific challenges
+    \end{itemize}
+\end{enumerate}
+
+These design principles ensure practical usability and maintainability. The modular architecture enables independent component development and testing, while the diverse model support accommodates various hardware constraints. The framework's adherence to software engineering best practices ensures reliability and maintainability, while its specialized features for conversational systems address the specific needs of intent classification tasks.
 
 \begin{table}[h]
 \centering
@@ -33,7 +96,7 @@ We formulate the design of AutoIntent. First, it should follow modular design wh
 \hline
  & H2O & LightAutoML & AutoGluon & FEDOT \\
 \hline
-Approach & AutoML over Word2Vec & BERT fine-tuning & BERT fine-tuning & AutoML over TF-IDF \\
+Approach & AutoML \& Word2Vec & BERT fine-tuning & BERT fine-tuning & AutoML \& TF-IDF \\
 Scarce train data & $\times$ & Has small data modes & $\times$ & Adaptable \\
 Custom search space & Flexible API & HP presets & \checkmark & HP presets \\
 Experiments tracking & H2O Flow integration & $\times$ & $\times$ & $\times$ \\
@@ -46,31 +109,82 @@ OOS detection & $\times$ & $\times$ & $\times$ & $\times$ \\
 
 \subsection{Structure}
 
-AutoIntent is designed to solve generic text classification problems with comprehensive support for multi-label classification and out-of-scope (OOS) detection. The framework's architecture is built around a modular design that enables both standalone usage of individual components and end-to-end automated optimization through the AutoML pipeline.
+AutoIntent is designed to solve generic text classification problems with comprehensive support for multi-label classification and OOS detection. The framework's architecture is built around a modular design that enables both standalone usage of individual components and end-to-end automated optimization through the AutoML pipeline (fig. \ref{fig:autointent_pipeline}).
+
+\begin{figure}[htbp]
+    \centering
+    \begin{minted}[
+        frame=lines,
+        framesep=2mm,
+        baselinestretch=1.2,
+        bgcolor=white,
+        fontsize=\footnotesize,
+        linenos,
+        numbersep=5pt
+    ]{python}
+from autointent import Pipeline, Dataset
+
+dataset = Dataset.from_json(path_to_json)
+pipeline = Pipeline.from_preset("light")
+pipeline.fit(dataset)
+pipeline.predict(["show me my latest transactions"])
+    \end{minted}
+    \caption{Example usage of AutoIntent pipeline.}
+    \label{fig:autointent_pipeline}
+\end{figure}
 
 The framework's key features include:
 
 \begin{itemize}
-    \item \textbf{Sklearn-like Interface}: All components follow the familiar sklearn estimator interface, making the framework accessible to users familiar with standard machine learning workflows. This includes consistent fit/predict methods and compatibility with sklearn's cross-validation and evaluation tools.
+    \item \textbf{Sklearn-like Interface}: All components follow the familiar sklearn estimator interface \cite{pedregosa2018scikitlearnmachinelearningpython}, making the framework accessible to users familiar with standard machine learning workflows.
     
-    \item \textbf{AutoML Pipeline}: The core of AutoIntent is its automated optimization pipeline, which sequentially optimizes three main components:
+    \item \textbf{AutoML Pipeline}: The core of AutoIntent is its automated machine learning pipeline, which sequentially optimizes three main components:
     \begin{enumerate}
         \item Embedding Module: Selects and optimizes the most appropriate transformer model from Hugging Face for the given task
         \item Scoring Module: Identifies and tunes the best performing classifier for the task
         \item Decision Module: Optimizes classification thresholds for multi-label scenarios and OOS detection
     \end{enumerate}
+    It is implemented with the use of Sentence Transformers library \cite{reimers-2019-sentence-bert}.
     
-    \item \textbf{Augmentation Modules}: The framework includes advanced data augmentation capabilities:
+    \item \textbf{Augmentation Modules}: The framework includes data augmentation capabilities:
     \begin{itemize}
         \item LLM-based augmentation for generating synthetic training examples
         \item Evolutionary approach for transforming existing utterances to expand the training set
         \item Customizable prompts to fine-tune the augmentation process for your needs
     \end{itemize}
+    This functionality implemented to be compatible with any LLM via OpenAI completions API \cite{openai_api}.
 \end{itemize}
 
 \subsection{Separation of Concerns}
 
-In AutoIntent, a scoring module is defined as a model that takes a text sample as input and outputs a vector of class probabilities. This definition is crucial as it establishes a clear separation of concerns in the framework's architecture: scoring modules are responsible for probability estimation, while decision modules take these probabilities as input and produce the final classification decisions (single label, multiple labels, or OOS detection).
+In AutoIntent, a scoring module is defined as a model that takes a text sample as input and outputs a vector of class probabilities (fig. \ref{fig:knnscorer}). This definition is crucial as it establishes a clear separation of concerns in the framework's architecture: scoring modules are responsible for probability estimation, while decision modules take these probabilities as input and produce the final classification decisions (single label, multiple labels, or OOS detection).
+
+\begin{figure}[htbp]
+    \centering
+    \begin{minted}[
+        frame=lines,
+        framesep=2mm,
+        baselinestretch=1.2,
+        bgcolor=white,
+        fontsize=\footnotesize,
+        linenos,
+        numbersep=5pt
+    ]{python}
+from autointent.modules.scoring import KNNScorer
+
+utterances = ["hello", "how are you?"]
+labels = [0, 1]
+scorer = KNNScorer(
+    embedder_config="sergeyzh/rubert-tiny-turbo",
+    k=5,
+)
+scorer.fit(utterances, labels)
+test_utterances = ["hi", "what's up?"]
+probabilities = scorer.predict(test_utterances)
+    \end{minted}
+    \caption{Illustration of modular approach. Python code snippet for KNNScorer.}
+    \label{fig:knnscorer}
+\end{figure}
 
 This separation of concerns provides several key benefits:
 
@@ -102,20 +216,16 @@ AutoIntent offers a diverse set of scoring modules, each implementing different 
 The available scoring modules include:
 
 \begin{enumerate}
-    \item \textbf{Linear Classifier}: Utilizes sklearn's LogisticRegressionCV for efficient linear classification with built-in cross-validation. The linear model operates directly on the embedding vectors, providing fast training and inference times.
+    \item \textbf{Linear Classifier}: Utilizes sklearn's \texttt{LogisticRegressionCV} \cite{pedregosa2018scikitlearnmachinelearningpython} for efficient linear classification with built-in cross-validation. The linear model operates directly on the embedding vectors, providing fast training and inference times.
     
     \item \textbf{KNN-based Approaches}:
     \begin{itemize}
-        \item Standard KNN with FAISS for efficient nearest neighbor search in the embedding space
-        \item Rerank: A two-stage approach combining retrieval and reranking, both operating on pre-computed embeddings
-        \item MLKNN: A specialized multi-label KNN implementation with Bayesian background, leveraging the embedding space for similarity calculations
+        \item KNN with FAISS \cite{douze2024faiss} for efficient nearest neighbor search in the embedding space
+        \item Rerank: A two-stage approach, essentialy it is a KNN wrapped with cross-encoder reranking and optional cutting off.
+        \item MLKNN \cite{zhang2007ml}: A specialized multi-label KNN implementation with Bayesian background, leveraging the embedding space for similarity calculations
     \end{itemize}
     
-    \item \textbf{BERT-based Classifiers}:
-    \begin{itemize}
-        \item Full model fine-tuning
-        \item Parameter-efficient approaches (LoRA, P-tuning).
-    \end{itemize}
+    \item \textbf{BERT-based Classifiers}: full model fine-tuning \cite{devlin2019bertpretrainingdeepbidirectional} and parameter-efficient approaches \cite{hu2021loralowrankadaptationlarge,liu2023gptunderstands}.
     
     \item \textbf{Generic sklearn Integration}: Support for any sklearn classifier, allowing for easy extension with additional classification algorithms. All sklearn models operate on the embedding vectors as features, maintaining the efficiency benefits of the architecture.
 \end{enumerate}
@@ -127,18 +237,18 @@ Each scoring module follows a consistent interface, providing both standard pred
 The Decision Module handles the final classification decisions, particularly crucial for multi-label scenarios and out-of-sample detection. It processes the probability scores from the Scoring Module to produce the final set of predicted labels. AutoIntent provides several specialized decision strategies:
 
 \begin{enumerate}
-    \item \textbf{AdaptiveDecision}: A sample-specific thresholding approach that calculates thresholds tailored for each text sample based on the minimum and maximum class scores. This method is specifically designed for multi-label classification scenarios, where it can better handle the varying confidence levels across different samples. However, it does not support out-of-sample detection.
+    \item \textbf{AdaptiveDecision} \cite{hou2020fewshotlearningmultilabelintent}: A sample-specific thresholding approach that calculates thresholds tailored for each text sample based on the minimum and maximum class scores. This method is specifically designed for multi-label classification scenarios, where it can better handle the varying confidence levels across different samples. However, it does not support out-of-sample detection.
     
-    \item \textbf{JinoosDecision}: A specialized approach for handling out-of-sample (OOS) detection, adapted from the DNNc framework. This method finds a universal threshold that balances between in-domain and out-of-domain accuracy, making it particularly suitable for applications where detecting unknown intents is crucial.
+    \item \textbf{JinoosDecision} \cite{zhang2020discriminativenearestneighborfewshot}: A specialized approach for handling out-of-sample (OOS) detection, adapted from the DNNc framework. This method finds a universal threshold that balances between in-domain and out-of-domain accuracy, making it particularly suitable for applications where detecting unknown intents is crucial.
     
     \item \textbf{ThresholdDecision}: A simple but effective approach using a fixed threshold specified during model initialization. This method provides a straightforward way to control the classification confidence level and can be useful in scenarios where consistent decision boundaries are required. Also this module is handy to use within AutoML pipeline with optuna samplers, which we will discuss later.
     
-    \item \textbf{TunableDecision}: An automated threshold optimization approach that uses Optuna to find the optimal threshold value by maximizing the F1 score on the given data. This method is particularly useful when the optimal threshold is not known in advance and needs to be determined empirically.
+    \item \textbf{TunableDecision}: An automated threshold optimization approach that uses Optuna \cite{akiba2019optuna} to find the optimal threshold value by maximizing the F1 score on the given data. This method is particularly useful when the optimal threshold is not known in advance and needs to be determined empirically.
 \end{enumerate}
 
 \subsection{Embedding Modules}
 
-The Embedding Module is responsible for converting text inputs into vector representations using transformer models. AutoIntent leverages the sentence-transformers library, providing access to a wide range of pre-trained transformer models from Hugging Face. While the module can be used standalone, its primary role is within the AutoML pipeline, where it serves as a single-time optimization step to select the most appropriate embedding model for the task.
+AutoIntent leverages the sentence-transformers library, providing access to a wide range of pre-trained transformer models from Hugging Face. While the embedding module can be used standalone, its primary role is within the AutoML pipeline, where it serves as a single-time selection step of the most appropriate embedding model for the task.
 
 The framework offers three strategies for handling embedding model selection:
 
@@ -149,24 +259,16 @@ The framework offers three strategies for handling embedding model selection:
         \item \textbf{Classification-based}: Assesses embedding models by their performance with a logistic regression classifier. Uses classification metrics like accuracy or ROC AUC, which can also be customized by the user.
     \end{itemize}
     
-    \item \textbf{Scoring-level Optimization}: Users can opt to optimize the embedding model individually for each scoring module. While this approach might yield better results, it is more time and resource-intensive as it requires refitting and reevaluating each scoring module for every candidate embedding model.
+    \item \textbf{Scoring-level Optimization}: Users can opt to optimize the embedding model individually for each scoring module. While this approach might yield better results, it is the most time and resource-intensive as it requires refitting and reevaluating each scoring module for every candidate embedding model.
     
     \item \textbf{Fixed Embedding}: Users can specify a default embedding model and skip the optimization process entirely, which is useful when the optimal model is known in advance or when computational resources are limited.
 \end{enumerate}
-
-The embedding process itself is optimized for efficiency with configurable parameters:
-\begin{itemize}
-    \item Batch size for processing multiple texts
-    \item Maximum sequence length for truncation
-    \item Device selection for GPU acceleration
-    \item Model-specific hyperparameters
-\end{itemize}
 
 This flexible approach to embedding model selection allows users to balance between optimization quality and computational efficiency based on their specific needs and resource constraints.
 
 \subsection{AutoML Pipeline}
 
-The AutoML Pipeline orchestrates the optimization of all components in a hierarchical manner, with three distinct levels of optimization:
+The AutoML Pipeline orchestrates the optimization of all components hierarchically, with three distinct levels of optimization:
 
 \begin{enumerate}
     \item \textbf{Modules-level Optimization}:
