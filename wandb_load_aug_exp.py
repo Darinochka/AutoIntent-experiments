@@ -1,6 +1,3 @@
-from cycler import V
-
-
 def parse_group_name(name: str):
     parts = name.split("_")
     llm_name = parts[0]
