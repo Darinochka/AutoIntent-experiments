@@ -4,78 +4,45 @@
 
 \section{Introduction}
 
-Text classification remains a fundamental task in natural language processing, with applications ranging from intent detection in conversational systems to content categorization and sentiment analysis. Modern NLP has been revolutionized by transformer-based embedding models, which provide rich contextual representations of text. However, effectively utilizing these models for classification tasks requires careful consideration of multiple components: the choice of embedding model, the selection of appropriate classification algorithms, and the optimization of their hyperparameters.
+Text classification remains a fundamental task in natural language processing, with applications ranging from intent detection in conversational systems \cite{weld2021surveyjointintentdetection} to content categorization and sentiment analysis \cite{TAHA2024100664}. Modern NLP has been revolutionized by transformer-based embedding models \cite{xiao2024cpackpackedresourcesgeneral}, which provide rich contextual representations of text. However, effectively utilizing these models for classification tasks requires careful consideration of multiple components: the choice of embedding model, the selection of appropriate classification algorithms, and the optimization of their hyperparameters.
 
-Traditional machine learning approaches often require manual tuning of these components, which can be time-consuming and requires significant expertise. While AutoML frameworks have emerged to automate this process, existing solutions for NLP tasks often lack comprehensive support for the full spectrum of hyperparameter optimization, particularly choosing best embedding model and handling multi-label classification and out-of-sample (OOS) detection.
+Traditional machine learning approaches often require manual tuning of these components, which can be time-consuming and requires significant expertise. While automated machine learning frameworks \cite{baratchi2024automated} have emerged to automate this process, existing solutions for NLP tasks often lack comprehensive support for the full spectrum of hyperparameter optimization (for instance, choosing best embedding model) and tuning confidence thresholds for handling multi-label classification and out-of-scope (OOS) detection \cite{larson-etal-2019-evaluation}.
 
-This paper introduces AutoIntent, a novel AutoML framework specifically designed for text classification tasks. AutoIntent addresses these limitations by providing an end-to-end pipeline that automatically optimizes all aspects of the classification process, from embedding model selection to classifier choice and threshold tuning. The framework offers a sklearn-like interface for ease of use while supporting dialog systems-related features such as multi-label classification and OOS handling.
+This technical report introduces AutoIntent \footnote{\url{https://github.com/DeepPavlov/AutoIntent}}, a novel AutoML framework specifically designed for text classification tasks. AutoIntent addresses these limitations by providing an end-to-end pipeline that automatically optimizes all aspects of the classification process, from embedding model selection to machine learning model choice and threshold tuning. The framework offers a sklearn-like interface \cite{pedregosa2018scikitlearnmachinelearningpython} for ease of use while supporting dialog systems-related features such as multi-label classification and OOS handling.
 
-\section{Background and other automl frameworks}
+\section{Background}
 
-AutoML, by definition, is a tool for automating machine learning routines, including data splitting for validation, hyperparameter tuning, model ensembling, and model selection experiments. Different domains of AutoML have their specific challenges and solutions:
+Automated machine learning, by definition, is a tool for automating routines like data splitting for validation, hyperparameter tuning, model ensembling, and model selection. The AutoML is highly relevant in the scenarios when machine learning tasks need to be solved by non-experts and in conjunction with no-code ML which is sometimes called <<ML as a service>> \cite{bisong2019overview,barga2015predictive,liberty2020elastic,ledell2020h2o,carney2020teachable,acito2023predictive}. The applications include sentiment analysis, robotics, healthcare, business analysis \cite{yuan2024automated,salehin2024automl}. 
 
-\begin{itemize}
-    \item \textbf{Tabular AutoML}: Focuses on feature engineering and feature selection
-    \item \textbf{Deep Learning AutoML}: Emphasizes architecture search and occasianally data augmentations
-    \item \textbf{NLP AutoML}: Primarily revolves around training recipes for transformer-based models
-\end{itemize}
+Tabular AutoML focuses on feature engineering, feature selection and model ensembling \cite{feurer2022autosklearn20handsfreeautoml, vakhrushev2022lightautomlautomlsolutionlarge, erickson2020autogluontabularrobustaccurateautoml, ledell2020h2o, nikitin2021automated}. Usually, they employ classical machine learning methods like GBMs \cite{chen2016xgboost,prokhorenkova2018catboost,ke2017lightgbm} and linear models, fast hyperparameter tuning methods with budget-aware strategies \cite{akiba2019optuna}, and ensembling strategies like stacking, blending and voting. Such frameworks sometimes can supersede exploratory data analysis and extensive research with just a running preset training recipe. It is not rare to see AutoML frameworks winning machine learning contests, but the open source solutions often are not transferable to production-ready systems as the resulting pipeline is an ensemble of a numerous amount of models without clear guides for deployment.
 
-Current NLP AutoML frameworks can be categorized based on their approaches:
+Neural architecture search can be viewed as automation in the field of deep learning \cite{salehin2024automl}. It emphasizes finding optimal computational graph using approaches like cell-based and hierarchical search spaces \cite{zoph2018learningtransferablearchitecturesscalable,real2019regularizedevolutionimageclassifier} or using scaling laws \cite{tan2020efficientnetrethinkingmodelscaling}. It cannot be treated as full-fledged AutoML, as it designed to address only the model selection problem. Though, it can be a part of an AutoML pipeline \cite{autokeras}.
 
-\begin{enumerate}
-    \item \textbf{Transformer-focused Frameworks}: Most existing solutions concentrate on optimizing BERT-like models, often neglecting other aspects of the ML pipeline.
-    
-    \item \textbf{Meta-learning Approaches}: Some frameworks, like Text-Brew, incorporate meta-learning techniques to improve model selection and optimization.
-    
-    \item \textbf{Budget-aware Frameworks}: Advanced solutions include granular optimization budget control, allowing users to balance between performance and computational resources.
-\end{enumerate}
+NLP AutoML primarily stands out from other AutoML by native support of text inputs \cite{tang2024autogluonmultimodalautommsuperchargingmultimodal,vakhrushev2022lightautomlautomlsolutionlarge}. This is extra important for use by non-experts, as it removes the requirement of manual tokenization and vectorization. Though some frameworks provide auxiliary tools for text feature extraction \cite{ledell2020h2o}. The next peculiarity about text AutoML frameworks is their usage of transformer-based backbones, which is explainable, as this is the state-of-the-art in the field of NLP. Note that NLP AutoML primarily focuses on simple tasks like classification and regression, ignoring text generation and named entity recognition, for instance.
 
-However, a critical analysis of existing NLP AutoML frameworks reveals several limitations:
+In AutoML frameworks, the model selection can be implemented with three ways. The first and most straightforward is to use hyperparameter tuning tools like optuna \cite{akiba2019optuna} or genetic algorithms \cite{feurer2022autosklearn20handsfreeautoml} with preset search spaces. Usually, these presets differ in how much time and computational resources they require to reach acceptable quality. The variety of presets is provided to cover all possible use cases and hardware settings. Another option is not to tune hyperparameters but use some generic hyperparameters that reach balance between the final quality and the generalization across different tasks. These hyperparameters can be obtained empirically \cite{tang2024autogluonmultimodalautommsuperchargingmultimodal}. The compromise between freezing hyperparameters and tuning all them is the meta-learning \cite{Desai2022,feurer2022autosklearn20handsfreeautoml,wang2021meta,tian2022meta,huisman2021survey}. In such approaches, there is a metamodel that takes a dataset as input and predicts hyperparameters for a machine learning model.
 
-\begin{enumerate}
-    \item \textbf{Incomplete Pipeline Coverage}: Most frameworks do not consider the full ML pipeline, particularly:
-    \begin{itemize}
-        \item Data splitting strategies for validation
-        \item Threshold tuning for classification
-        \item Native support for out-of-scope (OOS) detection
-    \end{itemize}
-    
-    \item \textbf{Limited Text Processing Options}: As shown in Table \ref{tab:frameworks}, current frameworks offer limited text processing capabilities:
-    \begin{itemize}
-        \item Some rely solely on embeddings
-        \item Others use basic TF-IDF approaches
-        \item Few support advanced techniques like prompt engineering
-    \end{itemize}
-    
-    \item \textbf{Resource Constraints}: Many frameworks are not optimized for:
-    \begin{itemize}
-        \item Small dataset scenarios
-        \item Limited computational resources
-        \item Efficient hyperparameter optimization
-    \end{itemize}
-\end{enumerate}
+\section{AutoIntent}
+
+We formulate the design of AutoIntent. First, it should follow modular design where each component can be used both within AutoML pipeline and independently for better deployment and maintenance, clear and transparent structure of the framework. Second, not only modern DL models should be included, but also classic ML models over transformer embeddings to provide end users options based on their hardware settings. Third, it should follow best open source development practices like clear documentation with both user guides and API reference, static type checking, automated unit tests, unified code style with linters and formatters. One common downside is that AutoML frameworks implementations lack type annotation and comprehensive documentation making them hard to use. Fourth, it should provide both HPO and non-HPO presets and, moreover, a flexible way to customize the search space -- all of this is to provide users more options to choose based on their hardware settings. Fifth, because of our focus on conversational systems, it should support multi-label classification, out-of-scope detection and few-shot learning. Note, that conversational systems utilize text classification for the task of intent detection, which often requires multiple intents detection via multi-label classification and out-of-scope detection (detecting the intents that are not supported by the conversation system). Seventh, it should support using models from public repositories like Hugging Face. Eighth, we do not need feature engineering or feature selection stage because we can use embeddings from transformers which are quite informative for any popular task \cite{enevoldsen2025mmtebmassivemultilingualtext}. Nineth, because of our focus on conversational systems we aim to build only intent classification framework for now, without extensions to other tasks like response generation and slot filling, especially we do not want to cover all the variaty of machine learning and deep learning fields like time series forecasting or object detection.
 
 \begin{table}[h]
 \centering
-\caption{Comparison of NLP AutoML frameworks}
 \label{tab:frameworks}
 \begin{tabular}{|l|c|c|c|c|}
 \hline
-Feature & H2O & LightAutoML & AutoGluon & FEDOT \\
+ & H2O & LightAutoML & AutoGluon & FEDOT \\
 \hline
-Text Processing & No built-in support & TF-IDF and embeddings & Embeddings only & TF-IDF, embeddings \\
-Small Data Support & Not optimized & Has small data modes & No support & Adaptable to small data \\
-Parameter Configuration & Flexible API & Limited preset configs & Custom configs, poor docs & Limited configuration \\
-External Logging & H2O Flow integration & No support & No support & No support \\
-Encoder Prompts & No support & No support & No support & No support \\
-OOS Detection & No built-in support & No built-in support & No support & No support \\
+Approach & AutoML over Word2Vec & BERT fine-tuning & BERT fine-tuning & AutoML over TF-IDF \\
+Scarce train data & $\times$ & Has small data modes & $\times$ & Adaptable \\
+Custom search space & Flexible API & HP presets & \checkmark & HP presets \\
+Experiments tracking & H2O Flow integration & $\times$ & $\times$ & $\times$ \\
+Embedding prompts & $\times$ & $\times$ & $\times$ & $\times$ \\
+OOS detection & $\times$ & $\times$ & $\times$ & $\times$ \\
 \hline
 \end{tabular}
+\caption{Comparison of NLP AutoML frameworks}
 \end{table}
-
-These limitations highlight the need for a more comprehensive NLP AutoML framework that addresses the full spectrum of text classification challenges, from data preprocessing to model deployment, while maintaining flexibility and efficiency across different resource constraints.
-
-\section{AutoIntent Library and Framework}
 
 \subsection{Structure}
 
@@ -738,7 +705,9 @@ Our experimental analysis and framework development have revealed several promis
 
 These research directions aim to address current limitations and expand the framework's capabilities, making it more robust and adaptable to various real-world scenarios.
 
-\section{Limitations}
+\section{Limitations and Future Research}
+
+- include module name into search space, because current implementation tunes each module without pruning even if it performs bad
 
 \section{Conclusion}
 
