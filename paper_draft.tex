@@ -1,12 +1,21 @@
 \begin{document}
+\maketitle
 
-\section*{Abstract}
+
+\begin{abstract}
+This report introduces AutoIntent, a novel AutoML framework tailored for text classification tasks. Unlike existing solutions, AutoIntent offers end-to-end automation, encompassing embedding model selection, classifier optimization, and decision threshold tuning, all within a modular, sklearn-like interface. The framework is designed to support multi-label classification and out-of-scope detection, with built-in augmentation tools leveraging large language models. Through extensive experimentation across multiple benchmarks, AutoIntent demonstrates competitive performance. Its support for various transformer backbones, lightweight models, and configurable presets enables users to balance accuracy and resource consumption effectively. This work positions AutoIntent as a promising practical solution for NLP applications.
+\end{abstract}
+
+
+% keywords can be removed
+\keywords{automated machine learning \and text classifiction \and text augmentation}
+
 
 \section{Introduction}
 
 Text classification remains a fundamental task in natural language processing, with applications ranging from intent detection in conversational systems \cite{weld2021surveyjointintentdetection} to content categorization and sentiment analysis \cite{TAHA2024100664}. Modern NLP has been revolutionized by transformer-based embedding models \cite{xiao2024cpackpackedresourcesgeneral}, which provide rich contextual representations of text. However, effectively utilizing these models for classification tasks requires careful consideration of multiple components: the choice of embedding model, the selection of appropriate classification algorithms, and the optimization of their hyperparameters.
 
-Traditional machine learning approaches often require manual tuning of these components, which can be time-consuming and requires significant expertise. While automated machine learning (AutoML) frameworks \cite{baratchi2024automated} have emerged to automate this process, existing solutions for NLP tasks often lack comprehensive support for the full spectrum of hyperparameter optimization (for instance, choosing best embedding model) and tuning confidence thresholds for handling multi-label classification and out-of-scope (OOS) detection \cite{larson-etal-2019-evaluation}.
+Traditional machine learning approaches often require manual tuning of these components, which can be time-consuming and requires significant expertise. While automated machine learning (AutoML) frameworks \cite{baratchi2024automated} have emerged to automate this process, existing solutions for NLP tasks often lack comprehensive support for the full spectrum of hyperparameter optimization (for instance, choosing best embedding model) and tuning confidence thresholds for handling multi-label classification and out-of-scope (OOS) detection \cite{clinc150}.
 
 This technical report introduces AutoIntent \footnote{\url{https://github.com/DeepPavlov/AutoIntent}}, a novel AutoML framework specifically designed for text classification tasks. AutoIntent addresses these limitations by providing an end-to-end pipeline that automatically optimizes all aspects of the classification process, from embedding model selection to machine learning model choice and threshold tuning. The framework offers a sklearn-like interface \cite{pedregosa2018scikitlearnmachinelearningpython} for ease of use. AutoIntent supports features such as multi-label classification and OOS detection, bridging the gap between AutoML and conversation systems.
 
@@ -26,7 +35,7 @@ In AutoML frameworks, the model selection can be implemented with three ways. Th
 
 \subsection{Design Principles}
 
-The design of AutoIntent is guided by several key principles that address the limitations of existing NLP AutoML frameworks \ref{tab:frameworks}.
+The design of AutoIntent is guided by several key principles that address the limitations of existing NLP AutoML frameworks \ref{tab:frameworks} ensuring practical usability and maintainability.
 
 \begin{enumerate}
     \item \textbf{Modular Architecture}: The framework is designed with a clear separation of concerns, where each component can function both independently and as part of the AutoML pipeline. This modularity facilitates:
@@ -87,24 +96,22 @@ The design of AutoIntent is guided by several key principles that address the li
     \end{itemize}
 \end{enumerate}
 
-These design principles ensure practical usability and maintainability. The modular architecture enables independent component development and testing, while the diverse model support accommodates various hardware constraints. The framework's adherence to software engineering best practices ensures reliability and maintainability, while its specialized features for conversational systems address the specific needs of intent classification tasks.
-
-\begin{table}[h]
+\begin{table}[!htb]
 \centering
-\label{tab:frameworks}
-\begin{tabular}{|l|c|c|c|c|}
-\hline
+\begin{tabular}{l|cccc}
+\toprule
  & H2O & LightAutoML & AutoGluon & FEDOT \\
-\hline
-Approach & AutoML \& Word2Vec & BERT fine-tuning & BERT fine-tuning & AutoML \& TF-IDF \\
+\midrule
+Approach & TAML \& Word2Vec & TAML \& emb. & BERT fine-tuning & TAML \& TF-IDF \\
 Scarce train data & $\times$ & Has small data modes & $\times$ & Adaptable \\
 Custom search space & Flexible API & HP presets & \checkmark & HP presets \\
 Experiments tracking & H2O Flow integration & $\times$ & $\times$ & $\times$ \\
 Embedding prompts & $\times$ & $\times$ & $\times$ & $\times$ \\
 OOS detection & $\times$ & $\times$ & $\times$ & $\times$ \\
-\hline
+\bottomrule
 \end{tabular}
-\caption{Comparison of NLP AutoML frameworks}
+\caption{Comparison of NLP functionality in AutoML frameworks. HP stands for hyperparameters, TAML stands for tabular AutoML.}
+\label{tab:frameworks}
 \end{table}
 
 \subsection{Structure}
@@ -113,24 +120,51 @@ AutoIntent is designed to solve generic text classification problems with compre
 
 \begin{figure}[htbp]
     \centering
-    \begin{minted}[
-        frame=lines,
-        framesep=2mm,
-        baselinestretch=1.2,
-        bgcolor=white,
-        fontsize=\footnotesize,
-        linenos,
-        numbersep=5pt
-    ]{python}
+    \begin{minipage}{0.45\textwidth}  % First column
+        \begin{minted}[
+            frame=lines,
+            framesep=2mm,
+            baselinestretch=1.2,
+            bgcolor=white,
+            fontsize=\footnotesize,
+            linenos,
+            numbersep=5pt
+        ]{python}
 from autointent import Pipeline, Dataset
 
 dataset = Dataset.from_json(path_to_json)
 pipeline = Pipeline.from_preset("light")
 pipeline.fit(dataset)
-pipeline.predict(["show me my latest transactions"])
-    \end{minted}
-    \caption{Example usage of AutoIntent pipeline.}
-    \label{fig:autointent_pipeline}
+pipeline.predict(
+  ["show me my latest transactions"]
+)
+        \end{minted}
+        \caption{Example usage of AutoIntent pipeline.}
+        \label{fig:autointent_pipeline}
+    \end{minipage}%
+    \hfill
+    \begin{minipage}{0.45\textwidth}  % Second column
+        \begin{minted}[
+            frame=lines,
+            framesep=2mm,
+            baselinestretch=1.2,
+            bgcolor=white,
+            fontsize=\footnotesize,
+            linenos,
+            numbersep=5pt
+        ]{python}
+from autointent.modules import KNNScorer
+
+scorer = KNNScorer(
+  embedder_config="sergeyzh/rubert-tiny-turbo",
+  k=5,
+)
+scorer.fit(["hello", "how are you?"], [0, 1])
+scorer.predict(["hi", "what's up?"])
+        \end{minted}
+        \caption{AutoIntent's modular approach.}
+        \label{fig:knnscorer}
+    \end{minipage}
 \end{figure}
 
 The framework's key features include:
@@ -159,33 +193,6 @@ The framework's key features include:
 
 In AutoIntent, a scoring module is defined as a model that takes a text sample as input and outputs a vector of class probabilities (fig. \ref{fig:knnscorer}). This definition is crucial as it establishes a clear separation of concerns in the framework's architecture: scoring modules are responsible for probability estimation, while decision modules take these probabilities as input and produce the final classification decisions (single label, multiple labels, or OOS detection).
 
-\begin{figure}[htbp]
-    \centering
-    \begin{minted}[
-        frame=lines,
-        framesep=2mm,
-        baselinestretch=1.2,
-        bgcolor=white,
-        fontsize=\footnotesize,
-        linenos,
-        numbersep=5pt
-    ]{python}
-from autointent.modules.scoring import KNNScorer
-
-utterances = ["hello", "how are you?"]
-labels = [0, 1]
-scorer = KNNScorer(
-    embedder_config="sergeyzh/rubert-tiny-turbo",
-    k=5,
-)
-scorer.fit(utterances, labels)
-test_utterances = ["hi", "what's up?"]
-probabilities = scorer.predict(test_utterances)
-    \end{minted}
-    \caption{Illustration of modular approach. Python code snippet for KNNScorer.}
-    \label{fig:knnscorer}
-\end{figure}
-
 This separation of concerns provides several key benefits:
 
 \begin{enumerate}
@@ -200,39 +207,37 @@ This separation of concerns provides several key benefits:
     
     \item \textbf{Reusability}: Probability estimates from scoring modules can be stored and reused with different decision strategies without recomputing the scores, introducing AutoIntent's efficient experimentation with various decision-making approaches.
     
-    \item \textbf{Interpretability}: The separation allows for better understanding of the model's behavior, as probability estimates can be analyzed independently of the final decision-making process.
+    \item \textbf{Interpretability}: The separation allows for better understanding of the pipeline's behavior, as probability estimates can be analyzed independently of the final decision-making process.
 \end{enumerate}
 
-\subsection{Scoring Modules}
+\subsection{Scoring Module}
 
-AutoIntent offers a diverse set of scoring modules, each implementing different classification approaches. A key architectural feature of the framework is that all classifiers (except BERT-based ones) operate on pre-computed embeddings as features. This design choice provides several advantages:
+AutoIntent offers a diverse set of scoring models, each implementing different classification approaches. A key architectural feature of the framework is that all classifiers (except BERT-based ones) operate on pre-computed embeddings as features. This design choice provides several advantages.
 
-\begin{enumerate}
-    \item \textbf{Efficiency}: By separating the computationally intensive embedding computation from classification, the framework achieves a fine balance between effectiveness and computational efficiency. The embedding vectors serve as rich, pre-computed features that capture the semantic meaning of the text, while the classifiers themselves are lightweight and fast to train and deploy.
+\textbf{Efficiency}: By separating the computationally intensive embedding computation from classification, the framework achieves a fine balance between effectiveness and computational efficiency. The embedding vectors serve as rich, pre-computed features that capture the semantic meaning of the text, while the classifiers themselves are lightweight and fast to train and deploy.
     
-    \item \textbf{Hardware Flexibility}: This architecture allows the framework to be deployed on a broad range of machines, even without GPU acceleration. The embedding computation can be done once and cached, while the classification models can run efficiently on CPU-only systems.
-\end{enumerate}
+\textbf{Hardware Flexibility}: This architecture allows the framework to be deployed on a broad range of machines, even without GPU acceleration. The embedding computation can be done once and cached, while the classification models can run efficiently on CPU-only systems. This is extremely important for hyperparameter optimization.
 
 The available scoring modules include:
 
 \begin{enumerate}
-    \item \textbf{Linear Classifier}: Utilizes sklearn's \texttt{LogisticRegressionCV} \cite{pedregosa2018scikitlearnmachinelearningpython} for efficient linear classification with built-in cross-validation. The linear model operates directly on the embedding vectors, providing fast training and inference times.
+    \item \textbf{Linear classifier}: Utilizes sklearn's \texttt{LogisticRegressionCV} \cite{pedregosa2018scikitlearnmachinelearningpython} for efficient linear classification with built-in cross-validation. The linear model operates directly on the embedding vectors, providing fast training and inference times.
     
-    \item \textbf{KNN-based Approaches}:
+    \item \textbf{KNN-based approaches}:
     \begin{itemize}
         \item KNN with FAISS \cite{douze2024faiss} for efficient nearest neighbor search in the embedding space
         \item Rerank: A two-stage approach, essentialy it is a KNN wrapped with cross-encoder reranking and optional cutting off.
         \item MLKNN \cite{zhang2007ml}: A specialized multi-label KNN implementation with Bayesian background, leveraging the embedding space for similarity calculations
     \end{itemize}
     
-    \item \textbf{BERT-based Classifiers}: full model fine-tuning \cite{devlin2019bertpretrainingdeepbidirectional} and parameter-efficient approaches \cite{hu2021loralowrankadaptationlarge,liu2023gptunderstands}.
+    \item \textbf{BERT-based classifiers}: full model fine-tuning \cite{devlin2019bertpretrainingdeepbidirectional} and parameter-efficient approaches \cite{hu2021loralowrankadaptationlarge,liu2023gptunderstands}.
     
-    \item \textbf{Generic sklearn Integration}: Support for any sklearn classifier, allowing for easy extension with additional classification algorithms. All sklearn models operate on the embedding vectors as features, maintaining the efficiency benefits of the architecture.
+    \item \textbf{Generic sklearn integration}: Support for any sklearn classifier, allowing for easy extension with additional classification algorithms. All sklearn models operate on the embedding vectors as features, maintaining the efficiency benefits of the architecture.
 \end{enumerate}
 
 Each scoring module follows a consistent interface, providing both standard prediction methods and rich output options for detailed analysis and debugging.
 
-\subsection{Decision Modules}
+\subsection{Decision Module}
 
 The Decision Module handles the final classification decisions, particularly crucial for multi-label scenarios and out-of-sample detection. It processes the probability scores from the Scoring Module to produce the final set of predicted labels. AutoIntent provides several specialized decision strategies:
 
@@ -246,9 +251,9 @@ The Decision Module handles the final classification decisions, particularly cru
     \item \textbf{TunableDecision}: An automated threshold optimization approach that uses Optuna \cite{akiba2019optuna} to find the optimal threshold value by maximizing the F1 score on the given data. This method is particularly useful when the optimal threshold is not known in advance and needs to be determined empirically.
 \end{enumerate}
 
-\subsection{Embedding Modules}
+\subsection{Embedding Module}\label{sec:embedding}
 
-AutoIntent leverages the sentence-transformers library, providing access to a wide range of pre-trained transformer models from Hugging Face. While the embedding module can be used standalone, its primary role is within the AutoML pipeline, where it serves as a single-time selection step of the most appropriate embedding model for the task.
+AutoIntent leverages the sentence-transformers library, providing access to a wide range of pre-trained transformer models from Hugging Face Hub \cite{wolf2020huggingfacestransformersstateoftheartnatural}. While the embedding module can be used standalone, its primary role is within the AutoML pipeline, where it serves as a single-time selection step of the most appropriate embedding model for the task.
 
 The framework offers three strategies for handling embedding model selection:
 
@@ -268,182 +273,83 @@ This flexible approach to embedding model selection allows users to balance betw
 
 \subsection{AutoML Pipeline}
 
-The AutoML Pipeline orchestrates the optimization of all components hierarchically, with three distinct levels of optimization:
+The AutoML Pipeline includes main functionalities: data splitting for hold-out or cross-validation, hyperparameters optimization, models training and saving to disk, classification metrics tracking and logging.
 
-\begin{enumerate}
-    \item \textbf{Modules-level Optimization}:
-    \begin{itemize}
-        \item Sequential optimization of embedding, scoring, and decision modules
-        \item Each module uses the best model from the previous module's optimization
-        \item Example: scoring module uses features from the best embedding model, decision module uses probabilities from the best classifier
-        \item This greedy approach prevents combinatorial explosion while maintaining good performance
-    \end{itemize}
-    
-    \item \textbf{Model-level Optimization}:
-    \begin{itemize}
-        \item Selection of the best model type for each module
-        \item Exhaustive evaluation of all models specified in the search space
-        \item Examples:
-        \begin{itemize}
-            \item Embedding module: different transformer models
-            \item Scoring module: KNN, Logistic Regression, BERT fine-tuning, sklearn classifiers
-            \item Decision module: different threshold strategies
-        \end{itemize}
-    \end{itemize}
-    
-    \item \textbf{Hyperparameter-level Optimization}:
-    \begin{itemize}
-        \item Tuning of model-specific hyperparameters
-        \item Optimization of trainable weights where applicable
-        \item Examples:
-        \begin{itemize}
-            \item Tuning: K for KNN, threshold values
-            \item Training: feature weights in Logistic Regression
-        \end{itemize}
-        \item Uses Optuna with three sampling strategies:
-        \begin{itemize}
-            \item Random sampling
-            \item Brute force search
-            \item Tree-structured Parzen Estimators (TPE)
-        \end{itemize}
-    \end{itemize}
-\end{enumerate}
+AutoIntent orchestrates the optimization of all components hierarchically (fig. \ref{fig:autointent_pipeline}), with three distinct levels of optimization. At the highest level, the pipeline performs module-level optimization, where it sequentially optimizes the embedding, scoring, and decision modules. Each module builds upon the best model from the previous module's optimization, creating a cohesive pipeline. For instance, the scoring module utilizes features from the best embedding model, while the decision module processes probabilities from the best classifier. This greedy approach effectively prevents combinatorial explosion while maintaining strong performance.
 
-It's important to note that AutoIntent makes a clear distinction between tuning and training:
-\begin{itemize}
-    \item \textbf{Tuning} refers to the optimization of hyperparameters that control the model's behavior (e.g., number of neighbors in KNN)
-    \item \textbf{Training} refers to the optimization of model weights that are learned from the data (e.g., coefficients in Logistic Regression)
-\end{itemize}
-This distinction is crucial for proper model optimization and evaluation.
+\begin{figure}[!htb]
+    \centering
+    \includegraphics[width=0.98\linewidth]{pics/autointent_hpo.drawio.pdf}
+    \caption{\textbf{(Left)} AutoIntent's three levels of hyperparameter optimization: at the module level, the embedding, scoring, and decision models are optimized sequentially; at the model level, each classification approach is tested against each other to select the best one; at the instance level, hyperparameters for each model is tuned individually with optuna samplers. \textbf{(Right)} Inference pipeline as a result of AutoIntent's hyperparameter optimization.}
+    \label{fig:autointent_hpo}
+\end{figure}
 
-The pipeline employs careful data handling to prevent target leakage and ensure reliable model selection:
+The second level focuses on model-level optimization, where the pipeline exhaustively evaluates all specified models for each module. This includes various transformer models for the embedding module, different classification approaches (KNN, Logistic Regression, BERT fine-tuning, and sklearn classifiers) for the scoring module, and multiple threshold strategies for the decision module. This comprehensive evaluation ensures that the best model type is selected for each specific task.
 
-\begin{itemize}
-    \item \textbf{Training Data}: Used for training model weights and parameters
-    \item \textbf{Validation Data}: Used for hyperparameter tuning and model selection
-    \item \textbf{Separate Validation Sets}: Scoring and decision modules can use different validation and training splits to prevent target leakage during holdout scoring
-\end{itemize}
+At the most granular level, the pipeline performs instance-level optimization. This involves tuning model-specific hyperparameters and optimizing trainable weights where applicable. For example, it tunes parameters such as the number of neighbors in KNN and threshold values, while also training feature weights in Logistic Regression. The optimization process employs Optuna's sampling strategies: random sampling, brute force search, and Tree-structured Parzen Estimators \cite{watanabe2023treestructuredparzenestimatorunderstanding}.
 
-The optimization process is configured through a declarative search space definition, allowing users to specify:
-\begin{itemize}
-    \item Available modules for each stage
-    \item Hyperparameter ranges
-    \item Optimization metrics
-    \item Search strategies
-\end{itemize}
+A crucial aspect of the pipeline is its clear distinction between tuning and training. We refer to tuning as the optimization of hyperparameters that control the model's behavior (e.g., number of neighbors in KNN), while training refers to the optimization of model weights learned from the data (e.g., coefficients in Logistic Regression). This distinction is essential for proper model optimization and evaluation. The pipeline implements careful data handling to prevent target leakage and ensure reliable model selection. It maintains separate datasets for different purposes: training data for model weights and parameters, validation data for hyperparameter tuning and model selection, and distinct validation sets for scoring and decision modules to prevent target leakage during holdout scoring. Cross-validation is implemented with the classic approach to an ensemble of stacked models, it utilizes out-of-fold probabilities from the previous layer of models as the data for the next layer of models.
 
-The result of the AutoML pipeline is a fully optimized classification system that includes:
-\begin{itemize}
-    \item The best embedding model for the task
-    \item The optimal scoring module with tuned hyperparameters and trained weights
-    \item The appropriate decision module with optimized thresholds
-    \item All necessary configuration for inference using intuitive \texttt{save}, \texttt{load} and \texttt{predict} methods
-\end{itemize}
-
-This hierarchical approach ensures efficient optimization while maintaining the flexibility to explore different model combinations and configurations.
+The optimization process is configured through a declarative search space definition, allowing users to specify available modules for each stage, hyperparameter ranges, optimization metrics, and search strategies. The result is a fully optimized classification system that includes the best embedding model for the task, the optimal scoring module with tuned hyperparameters and trained weights, and the appropriate decision module with optimized thresholds. All necessary configuration for inference is provided through intuitive \texttt{save}, \texttt{load}, and \texttt{predict} methods.
 
 \section{Experiments}
 
-\subsection{Scoring Modules (light backbone)}
+\subsection{Scoring Modules}\label{sec:scoring_experiments}
 
-We conducted a comprehensive evaluation of all scoring models across a range of popular intent classification datasets using lightweight backbone and embedding models. The experimental setup employed holdout validation (see dataset statistics in Appendix TODO) and hyperparameter optimization using the TPE sampler with a maximum of 20 trials (see complete search space specifications in Appendix TODO).
+We conducted a comprehensive evaluation of all scoring models across a range of popular intent classification datasets \cite{banking77,minds14,hwu64,snips,massive} using lightweight backbone \cite{he2021debertav3} and embedding models \cite{reimers-2019-sentence-bert}. The experimental setup employed holdout validation and hyperparameter optimization using the TPE sampler \cite{watanabe2023treestructuredparzenestimatorunderstanding} with a maximum of 20 trials per model (see complete search space specifications in Appendix \ref{app:search_spaces}).
 
-The results, presented in Table \ref{tab:scoring_light}, reveal several key findings:
-
-\begin{enumerate}
-    \item Logistic regression ("linear" in the table) demonstrates superior performance in terms of both average accuracy and consistency across datasets, achieving the highest score in three out of five datasets.
-    
-    \item BERT-based methods exhibit significant variability in performance:
-    \begin{itemize}
-        \item Parameter-efficient approaches (P-tuning and LoRA) show notably lower performance
-        \item Full BERT fine-tuning achieves competitive results in one dataset but underperforms in others
-        \item This suggests potential challenges in hyperparameter optimization for transformer-based methods
-    \end{itemize}
-    
-    \item Feature-based methods (linear, KNN, random forest) consistently outperform transformer-based approaches, with all three achieving average accuracy above 90\%.
-\end{enumerate}
+The results, presented in Table \ref{tab:scoring_light}, reveal several key findings. Logistic regression over transformer embeddings (<<linear>> in the table) demonstrates superior performance in terms of both average accuracy and consistency across datasets, achieving the highest score in three out of five datasets. BERT-based methods exhibit significant variability in performance: parameter-efficient approaches (P-tuning and LoRA) show notably lower performance, full BERT fine-tuning achieves competitive results in one dataset but underperforms in others. This suggests potential challenges in hyperparameter optimization for fine-tune-based methods. Zero-shot-based methods (linear, KNN, random forest) consistently outperform transformer-based approaches, with all three achieving average accuracy above 90\%.
 
 \begin{table}[h]
+\begin{tabular}{l|rrrrr|r}
+\toprule
+model name & banking77 & minds14 & hwu64 & snips & massive & average \\
+\midrule
+ptuning & 4.63 & 11.63 & 3.65 & 66.49 & 8.57 & 18.99 \\
+lora & 20.35 & 12.40 & 22.40 & 95.09 & 41.95 & 38.44 \\
+bert & 64.14 & 69.77 & 73.40 & \textbf{98.52} & 76.76 & 76.52 \\
+rerank & 89.04 & \textbf{97.67} & 84.45 & 96.59 & 81.68 & 89.89 \\
+random forest & 89.81 & 98.45 & 86.98 & 95.16 & 79.73 & 90.03 \\
+knn & 89.74 & \textbf{97.67} & 85.42 & 96.10 & 81.65 & 90.12 \\
+linear & \textbf{90.51} & \textbf{97.67} & \textbf{89.17} & 97.45 & \textbf{84.70} & \textbf{91.90} \\
+\bottomrule
+\end{tabular}
 \centering
-\caption{Performance of scoring modules with lightweight backbone}
+\caption{Accuracy of scoring modules with lightweight backbone. BERT-based methods (bert, lora, ptuning) utilize \texttt{prajjwal1/bert-tiny}, \cite{bhargava2021generalization,tinybert} as a backbone. The rest of methods use embeddings from \texttt{sentence-transformers/all-MiniLM-L6-v2} \cite{reimers-2019-sentence-bert}. Each metric value is obtained via averaging three runs with different seeds with random validation split formed from fixed training data.}
 \label{tab:scoring_light}
-\begin{tabular}{|l|c|c|c|c|c|c|c|}
-\hline
-model name & banking77 & minds14 & hwu64 & snips & massive & average & best\_count \\
-\hline
-ptuning & 4.63 & 11.63 & 3.65 & 66.49 & 8.57 & 18.99 & 0 \\
-lora & 20.35 & 12.40 & 22.40 & 95.09 & 41.95 & 38.44 & 0 \\
-bert & 64.14 & 69.77 & 73.40 & 98.52 & 76.76 & 76.52 & 1 \\
-rerank & 89.04 & 97.67 & 84.45 & 96.59 & 81.68 & 89.89 & 0 \\
-sklearn rf & 89.81 & 98.45 & 86.98 & 95.16 & 79.73 & 90.03 & 2 \\
-knn & 89.74 & 97.67 & 85.42 & 96.10 & 81.65 & 90.12 & 0 \\
-linear & 90.51 & 97.67 & 89.17 & 97.45 & 84.70 & 91.90 & 3 \\
-\hline
-\end{tabular}
 \end{table}
 
-\subsection{Scoring Modules (heavy backbone)}
-
-To investigate the impact of model capacity on performance, we repeated the experiment using heavier transformer models. While the overall ranking by average accuracy remained consistent with the lightweight experiment, the distribution of best-performing models across datasets shifted:
-
-\begin{enumerate}
-    \item The dominance of logistic regression became less pronounced, with KNN and random forest achieving comparable performance in terms of dataset-specific wins.
-    
-    \item BERT-based methods continued to underperform relative to feature-based approaches, though full BERT fine-tuning showed improved results in some datasets. This suggests that increased model capacity alone may not address the optimization challenges of transformer-based methods.
-    
-    \item The competitive performance of multiple feature-based methods justifies the inclusion of diverse scoring modules in the library, particularly for applications where identifying the optimal model is critical.
-\end{enumerate}
+To investigate the impact of model capacity on performance, we repeated the experiment using heavier transformer models. While the overall ranking by average accuracy remained consistent with the lightweight experiment, the distribution of best-performing models across datasets shifted. The dominance of logistic regression became less pronounced, with KNN and random forest achieving comparable performance in terms of dataset-specific wins. BERT-based methods continued to underperform relative to feature-based approaches, though full BERT fine-tuning showed improved results in some datasets. This suggests that increased model capacity alone may not address the optimization challenges of transformer-based methods. The competitive performance of multiple feature-based methods justifies the inclusion of diverse scoring modules in the library, particularly for applications where identifying the optimal model is critical.
 
 \begin{table}[h]
 \centering
-\caption{Performance of scoring modules with heavy backbone}
 \label{tab:scoring_heavy}
-\begin{tabular}{|l|c|c|c|c|c|c|c|}
-\hline
-model name & banking77 & minds14 & hwu64 & snips & massive & average & best\_count \\
-\hline
-ptuning & 5.00 & 14.73 & 9.64 & 91.67 & 25.87 & 29.38 & 0 \\
-lora & 13.82 & 9.30 & 38.58 & 99.13 & 52.06 & 42.58 & 0 \\
-bert & 85.61 & 48.06 & 88.58 & 99.16 & 86.36 & 81.56 & 1 \\
-rerank & 90.28 & 96.12 & 87.24 & 97.35 & 83.87 & 90.97 & 0 \\
-sklearn rf & 91.54 & 98.45 & 90.22 & 96.64 & 85.08 & 92.39 & 2 \\
-knn & 92.14 & 98.45 & 89.43 & 96.97 & 85.43 & 92.48 & 2 \\
-linear & 91.81 & 96.90 & 91.78 & 98.06 & 87.58 & 93.23 & 2 \\
-\hline
+\begin{tabular}{l|rrrrr|r}
+\toprule
+model name & banking77 & minds14 & hwu64 & snips & massive & average \\
+\midrule
+ptuning & 5.00 & 14.73 & 9.64 & 91.67 & 25.87 & 29.38 \\
+lora & 13.82 & 9.30 & 38.58 & 99.13 & 52.06 & 42.58 \\
+bert & 85.61 & 48.06 & 88.58 & \textbf{99.16} & 86.36 & 81.56 \\
+rerank & 90.28 & 96.12 & 87.24 & 97.35 & 83.87 & 90.97 \\
+random forest & 91.54 & \textbf{98.45} & 90.22 & 96.64 & 85.08 & 92.39 \\
+knn & \textbf{92.14} & \textbf{98.45} & 89.43 & 96.97 & 85.43 & 92.48 \\
+linear & 91.81 & 96.90 & \textbf{91.78} & 98.06 & \textbf{87.58} & \textbf{93.23} \\
+\bottomrule
 \end{tabular}
-\end{table}
-
-\subsection{BERT-based Scoring Modules}
-
-We evaluated bert-based methods with deberta-v3-large backbone:
-
-\begin{table}[h]
-\centering
-\caption{Performance of BERT-based scoring modules}
-\label{tab:bert_scoring}
-\begin{tabular}{|l|c|c|c|c|c|}
-\hline
-module\_name & minds14 & snips & massive & average & best\_count \\
-\hline
-ptuning & 13.95 & 94.88 & 22.60 & 43.81 & 0 \\
-lora & 51.16 & 99.24 & 86.56 & 78.99 & 1 \\
-bert & 90.70 & 98.93 & 88.13 & 92.59 & 2 \\
-\hline
-\end{tabular}
+\caption{Accuracy of scoring modules with lightweight backbone. BERT-based methods (bert, lora, ptuning) utilize \texttt{microsoft/deberta-v3-small}, \cite{he2021debertav3} as a backbone. The rest of methods use embeddings from \texttt{mixedbread-ai/mxbai-embed-large-v1} \cite{emb2024mxbai,li2023angle}. Each metric value is obtained via averaging three runs with different seeds with random validation split formed from fixed training data.}
 \end{table}
 
 \subsection{Computational Efficiency}
 
-To quantify the computational requirements of different scoring modules, we conducted a comprehensive analysis using the Code Carbon library. This analysis measured various aspects of computational resource consumption for a single trial (training and evaluation of a single model configuration). The results, presented in Table \ref{tab:computational}, reveal significant variations in resource usage across different approaches.
+To quantify the computational requirements of different scoring modules, we conducted a comprehensive analysis using the Code Carbon library \cite{benoit_courty_2024_11171501}. This analysis measured various aspects of computational resource consumption for a single trial (training and evaluation of a single model configuration). The results, presented in Table \ref{tab:computational}, reveal significant variations in resource usage across different approaches.
 
 \begin{table}[h]
 \centering
-\caption{Computational resource consumption for different scoring modules. The experiments are conducted on banking77 dataset with mixedbread-ai/mxbai-embed-large-v1, system with AMD Ryzen 7 5800H, NVIDIA RTX 3060 Laptop. Median values of 10 trials are displayed. Embeddings were pre-computed.}
-\label{tab:computational}
-\begin{tabular}{|l|c|c|c|c|c|c|c|}
-\hline
-scorer\_name & emissions & runtime & energy\_consumed & gpu\_energy & cpu\_energy & ram\_energy & emissions\_rate \\
-\hline
+\begin{tabular}{l|ccccccc}
+\toprule
+model & emissions & runtime & energy & gpu & cpu & ram & rate \\
+\midrule
 bert & 1.382 & 103.911 & 3.133 & 2.198 & 0.774 & 1.615e-01 & 0.014 \\
 ptuning & 1.118 & 83.455 & 2.535 & 1.785 & 0.620 & 1.295e-01 & 0.014 \\
 lora & 0.863 & 65.157 & 1.957 & 1.372 & 0.484 & 1.009e-01 & 0.013 \\
@@ -452,147 +358,103 @@ rerank & 0.270 & 29.040 & 0.613 & 0.355 & 0.213 & 4.436e-02 & 0.010 \\
 dnnc & 0.122 & 10.000 & 0.276 & 0.192 & 0.070 & 1.455e-02 & 0.013 \\
 rand forest & 0.073 & 11.367 & 0.166 & 0.074 & 0.080 & 1.664e-02 & 0.007 \\
 knn & 0.009 & 1.281 & 0.019 & 0.014 & 0.004 & 9.044e-04 & 0.012 \\
-\hline
+\midrule
+units & grams & sec & Wh & Wh & Wh & Wh & grams/sec \\
+\bottomrule
 \end{tabular}
+\caption{Computational resource consumption for different scoring modules. The experiments are conducted on banking77 dataset with \texttt{mixedbread-ai/mxbai-embed-large-v1} \cite{emb2024mxbai,li2023angle}, system with AMD Ryzen 7 5800H, NVIDIA RTX 3060 Laptop. Median values of 10 trials are displayed. Embeddings were pre-computed.}
+\label{tab:computational}
 \end{table}
 
-Key findings from the analysis:
+The analysis revealed significant variations in resource efficiency across different scoring methods. KNN-based methods demonstrated exceptional efficiency, with minimal emissions and runtime, making them particularly suitable for resource-constrained environments. Logistic regression showed moderate resource consumption while maintaining high performance, representing a balanced trade-off between computational cost and effectiveness. In contrast, BERT-based methods exhibited the highest resource requirements, necessitating substantial computational infrastructure. These findings provide valuable insights for deployment scenarios with varying resource constraints and for building AutoIntent's presets.
 
-\begin{enumerate}
-    \item \textbf{Resource Efficiency Ranking}:
-    \begin{itemize}
-        \item KNN-based methods demonstrate exceptional efficiency, with minimal emissions and runtime
-        \item Logistic regression shows moderate resource consumption, correlating with its high performance
-        \item BERT-based methods exhibit the highest resource requirements
-    \end{itemize}
-    
-    \item \textbf{Energy Consumption Patterns}:
-    \begin{itemize}
-        \item GPU utilization varies significantly across methods:
-        \begin{itemize}
-            \item BERT-based methods maintain high GPU power (76-77W)
-            \item Linear methods show lower GPU usage (15.46W)
-            \item KNN methods, despite low total energy, show high GPU power utilization
-        \end{itemize}
-        \item CPU power remains consistent across all methods (27W)
-        \item RAM energy consumption is highest for BERT-based methods
-    \end{itemize}
-\end{enumerate}
+\subsection{Evolutionary Augmentations}\label{sec:augmentations}
 
-These findings highlight the trade-off between computational efficiency and model performance, providing valuable insights for resource-constrained deployment scenarios.
-
-\subsection{Evolutionary Augmentations}
-
-To evaluate the effectiveness of LLM-based data augmentation in real-world scenarios with limited training data, we conducted our experiments on randomly sampled 10-shot versions of the datasets. This setup simulates common practical situations where end users need to expand their small training splits. We conducted a comprehensive correlation analysis between the number of synthetic samples added and the final classification accuracy. We tested four state-of-the-art LLMs (DeepSeek-V3-0324, GPT-4o-mini, Qwen2.5-7B, and Llama-3.1-8B) across multiple datasets, including English (banking77, snips), Russian (banking77\_ru, snips\_ru), and out-of-sample (clinc150\_ru) datasets.
-
-The correlation analysis revealed several key findings:
+To evaluate the effectiveness of LLM-based data augmentation in real-world scenarios with limited training data, we conducted our experiments on randomly sampled 10-shot versions of the datasets. This setup simulates common practical situations where end users need to expand their small training splits. We conducted a comprehensive correlation analysis between the number of synthetic samples added and the final classification accuracy. We tested four state-of-the-art LLMs (\texttt{DeepSeek-V3-0324} \cite{deepseekai2025deepseekv3technicalreport}, \texttt{GPT-4o-mini} \cite{gpt4o_blog}, \texttt{Qwen2.5-7B} \cite{qwen2025qwen25technicalreport}, and \texttt{Llama-3.1-8B} \cite{llama31_blog}) across multiple datasets. The correlation analysis (tab. \ref{tab:correlation}, \ref{tab:dataset_correlation}) revealed several key findings.
 
 \textbf{Model-specific Patterns}. Surprisingly, the size and type of the LLM (proprietary vs. open-source) showed no clear correlation with augmentation effectiveness. Both smaller models like Llama-3.1-8B and larger models like DeepSeek-V3-0324 demonstrated similar patterns of effectiveness.
 
-These results suggest that:
-\begin{enumerate}
-    \item The effectiveness of augmentation doesn't vary significantly across different LLMs, but with GPT-4o-mini showing the most consistent positive impact
-    \item English datasets generally benefit more from augmentation than their Russian counterparts, likely due to the English-oriented nature of the prompts we used for augmentation
-    \item OOS detection performance tends to decrease with increased augmentation, particularly for certain models. This can be attributed to the combination of factors: the Russian language of the dataset, its high granularity (150 classes), and the generic nature of synthetic samples that fail to capture the fine-grained class boundaries
-    \item The banking77 dataset shows the most consistent improvement with augmentation across all models
-\end{enumerate}
+These results suggest that the effectiveness of augmentation doesn't vary significantly across different LLMs, but with GPT-4o-mini showing the most consistent positive impact. English datasets generally benefit more from augmentation than their Russian counterparts, likely due to the English-oriented nature of the prompts we used for augmentation. OOS detection performance tends to decrease with increased augmentation, particularly for certain models. This can be attributed to the combination of factors: the Russian language of the dataset, its high granularity (150 classes), and the generic nature of synthetic samples that fail to capture the fine-grained class boundaries. The banking77 dataset shows the most consistent improvement with augmentation across all models
 
 \begin{table}[h]
 \centering
-\caption{Correlation Analysis (r values, non-significant correlations omitted)}
+\begin{minipage}{0.6\textwidth}
+\centering
+\begin{tabular}{l|rrr}
+\toprule
+                           Model & English & Russian  &  OOS \\
+                           \midrule 
+                DeepSeek-V3-0324 &  $0.532$  &     -  & $-0.777$ \\
+          gpt-4o-mini-2024-07-18 &  $0.500$  &     -  & $0.884$ \\
+         Qwen2.5-7B-Instruct-AWQ &      -  &     -  & $-0.613$ \\
+Meta-Llama-3.1-8B-Instruct-Turbo &  $0.568$  &     -  & $-0.932$ \\
+\bottomrule
+\end{tabular}
+\caption{Correlation Analysis (Spearman r values, non-significant correlations are replaced with dash). The support for calculating each value in <<English>> and <<Russian>> columns is 22 points both, for <<OOS>> it is 11. English datasets: banking77 \cite{banking77}, snips \cite{snips}; Russian datasets banking77, snips (manually translated by us); OOS datasets: clinc150 \cite{clinc150} translated into Russian. See Appendix \ref{app:detailed_aug_metrics} for detailed metrics report.}
 \label{tab:correlation}
-\begin{tabular}{|l|c|c|c|}
-\hline
-Model & English & Russian & OOS \\
-\hline
-DeepSeek-V3-0324 & 0.532 & - & -0.777 \\
-gpt-4o-mini-2024-07-18 & 0.500 & - & 0.884 \\
-Qwen2.5-7B-Instruct-AWQ & - & - & -0.613 \\
-Meta-Llama-3.1-8B-Instruct-Turbo & 0.568 & - & -0.932 \\
-\hline
-\end{tabular}
-\end{table}
-
-\begin{table}[h]
+\end{minipage}
+\hfill
+\begin{minipage}{0.35\textwidth}
 \centering
-\caption{Dataset-specific correlations across all models}
-\label{tab:dataset_correlation}
-\begin{tabular}{|l|c|}
-\hline
-Dataset & Correlation \\
-\hline
-snips\_ru & - \\
-snips & 0.459 \\
-clinc150\_ru & - \\
-banking77\_ru & 0.315 \\
-banking77 & 0.728 \\
-\hline
+\begin{tabular}{l|r}
+\toprule
+     Dataset & Correlation \\
+    \midrule
+   banking77 \cite{banking77} &      $0.710$ \\
+   snips \cite{snips} &      $0.459$ \\
+banking77\_ru &          - \\
+    snips\_ru &          - \\   
+ clinc150\_ru &          - \\
+\bottomrule
 \end{tabular}
+\caption{Dataset-specific correlations across all models (Spearman r values, non-significant correlations are replaced with dash). The support for calculating each value is 44.}
+\label{tab:dataset_correlation}
+\end{minipage}
 \end{table}
 
-To further investigate the impact of augmentation on model performance, we conducted a detailed statistical analysis comparing the accuracy before and after augmentation for each augmentation level (1-10 synthetic samples). We performed paired t-tests to assess the statistical significance of the improvements and calculated effect sizes using Cohen's d to quantify the magnitude of the changes.
+\begin{wrapfigure}[22]{r}{0.45\textwidth}
+    \centering
+    \includegraphics[width=1\linewidth]{pics/mean_improvement.pdf}
+    \caption{Mean accuracy improvement compared to number of synthetic examples added to 10-shot versions of datasets: banking77 \cite{banking77}, snips \cite{snips} and their Russian translations. The support for calculating each value in this figure is 16 points.}
+    \label{fig:augmentation_analysis}
+\end{wrapfigure}
 
-The analysis revealed that all augmentation levels resulted in statistically significant improvements (p < 0.01) compared to the baseline (no augmentation). The effect sizes ranged from 0.33 to 0.57, indicating moderate to large practical significance (cohen's d). The mean improvement in accuracy showed a generally increasing trend with the number of augmentations, ranging from 7.1\% to 11.7\% improvement over the baseline.
+To further investigate the impact of augmentation on model performance, we conducted a detailed statistical analysis comparing the accuracy before and after augmentation for each augmentation level (1-10 synthetic samples added to train set). We performed paired t-tests to assess the statistical significance of the improvements and calculated effect sizes using Cohen's d to quantify the magnitude of the changes (fig. \ref{fig:augmentation_analysis}).
 
-These results demonstrate that:
-\begin{enumerate}
-    \item Any amount of augmentation (1-10 samples) leads to statistically significant improvements in model performance
-    \item The relationship between the number of augmentations and performance improvement is not strictly linear, with quite early saturation
-    \item The improvements are not only statistically significant but also practically meaningful, as indicated by the moderate to large effect sizes
-\end{enumerate}
+The analysis revealed that all augmentation levels resulted in statistically significant improvements ($p \leq 0.002$) compared to the baseline (no augmentation). The effect sizes (Cohen's d) ranged from $0.35$ to $0.62$, indicating moderate to large practical significance. The mean improvement in accuracy showed a generally increasing trend with the number of augmentations, ranging from 7.1\% to 11.7\% improvement over the baseline.
+
+These results demonstrate the following. First, any amount of augmentation (1-10 samples) leads to statistically significant improvements in model performance. Second, the relationship between the number of augmentations and performance improvement is not strictly linear, with quite early saturation. Third, the improvements are not only statistically significant but also practically meaningful, as indicated by the moderate to large effect sizes.
 
 This analysis provides strong empirical support for the effectiveness of LLM-based augmentation in improving classification performance, while also suggesting optimal ranges for the number of synthetic samples to generate.
 
-\begin{table}[h]
-\centering
-\caption{Before and after analysis results}
-\label{tab:augmentation_analysis}
-\begin{tabular}{|l|c|c|c|c|c|}
-\hline
-naug & t\_stat & pval & effect\_size & mean\_improvement & n\_comparisons \\
-\hline
-1 & 3.736 & 0.002 & 0.355 & 0.071 & 17 \\
-2 & 8.399 & 2.934e-07 & 0.366 & 0.072 & 17 \\
-3 & 3.280 & 0.005 & 0.331 & 0.078 & 17 \\
-4 & 3.875 & 0.001 & 0.365 & 0.083 & 17 \\
-5 & 3.247 & 0.005 & 0.351 & 0.086 & 17 \\
-6 & 4.990 & 0.000 & 0.408 & 0.088 & 17 \\
-7 & 6.751 & 4.652e-06 & 0.470 & 0.100 & 17 \\
-8 & 7.389 & 1.531e-06 & 0.567 & 0.117 & 17 \\
-9 & 4.088 & 0.001 & 0.389 & 0.086 & 17 \\
-10 & 5.633 & 3.743e-05 & 0.406 & 0.087 & 17 \\
-\hline
-\end{tabular}
-\end{table}
-
-\subsection{Baselines}
+\subsection{Baselines}\label{sec:baselines_exps}
 
 To evaluate AutoIntent's performance, we conducted a comparative analysis against several open-source NLP AutoML frameworks. The baseline frameworks were selected based on their availability and relevance to text classification tasks:
 
 \begin{enumerate}
-    \item \textbf{H2O}: Implements tabular AutoML methods over Word2Vec embeddings
-    \item \textbf{LightAutoML (LAMA)}: Performs AutoML over TF-IDF features with optional support for three predefined transformer models
-    \item \textbf{FEDOT}: Utilizes TF-IDF based feature engineering
-    \item \textbf{AutoGluon}: Employs a fixed training recipe with DeBERTa-v3 using PyTorch Lightning
+    \item \textbf{H2O} \cite{ledell2020h2o}: Implements tabular AutoML methods over Word2Vec embeddings;
+    \item \textbf{LightAutoML (LAMA)} \cite{vakhrushev2022lightautomlautomlsolutionlarge}: Performs AutoML over TF-IDF features with optional support for three predefined transformer models;
+    \item \textbf{FEDOT} \cite{nikitin2021automated}: Utilizes TF-IDF based feature engineering;
+    \item \textbf{AutoGluon} \cite{tang2024autogluonmultimodalautommsuperchargingmultimodal}: Employs a fixed training recipe with DeBERTa-v3 \cite{he2021debertav3} using PyTorch Lightning.
 \end{enumerate}
 
-The evaluation was conducted across five standard intent classification datasets, with results presented in Table \ref{tab:baselines}. AutoIntent's configuration matched the heavy backbone experiment, but with consistent test data across all frameworks (unlike the random validation split used in the scoring module experiments).
+The evaluation was conducted across five standard intent classification datasets, with results presented in Table \ref{tab:baselines}. AutoIntent's configuration matched the heavy backbone experiment, but with consistent test data across all frameworks.
 
 \begin{table}[h]
 \centering
-\caption{Performance comparison across different AutoML frameworks}
-\label{tab:baselines}
-\begin{tabular}{|l|c|c|c|c|c|c|}
-\hline
+\begin{tabular}{l|rrrrr|r}
+\toprule
 framework & banking77 & hwu64 & massive & minds14 & snips & avg \\
-\hline
+\midrule
+autogluon & \textbf{93.28} & \textbf{91.17} & \textbf{88.92} & \textbf{97.22} & \textbf{99.07} & \textbf{93.13} \\
 autointent & 92.86 & 90.83 & 87.13 & 95.68 & 98.19 & 92.94 \\
-autogluon & 93.28 & 91.17 & 88.92 & 97.22 & 99.07 & 93.13 \\
 h2o & 75.32 & 77.32 & 75.30 & 76.85 & 98.36 & 80.63 \\
 fedot & 1.30 & 1.77 & 7.28 & 12.04 & 15.14 & 7.51 \\
 lama & 1.30 & 1.77 & 7.04 & 8.33 & 14.50 & 6.59 \\
-\hline
+\bottomrule
 \end{tabular}
+\caption{Performance comparison across different AutoML frameworks.}
+\label{tab:baselines}
 \end{table}
 
 The results reveal several key findings:
@@ -617,49 +479,67 @@ The results reveal several key findings:
 
 The comparative analysis highlights AutoIntent's advantages in terms of flexibility, deployment capabilities, and adaptive model selection, while maintaining competitive performance with state-of-the-art approaches.
 
-\subsection{OOS Detection}
+\subsection{OOS Detection}\label{sec:oos_detection}
 
-To evaluate AutoIntent's out-of-scope (OOS) detection capabilities, we conducted a comparative analysis on the CLINC150 dataset, which is specifically designed for intent classification with OOS detection. Since most baseline frameworks lack native OOS detection support, we adapted their configurations by treating OOS as an additional class. The results are presented in Table \ref{tab:oos}.
+To evaluate AutoIntent's out-of-scope (OOS) detection capabilities, we conducted a comparative analysis on the CLINC150 dataset \cite{clinc150}, which is specifically designed for intent classification with OOS detection. Since all the baseline frameworks lack native OOS detection support, we adapted their configurations by treating OOS as an additional class. The results are presented in Table \ref{tab:oos}.
 
 \begin{table}[h]
 \centering
-\caption{Performance comparison on OOS detection task}
+\begin{tabular}{l|ccc}
+\toprule
+framework & in domain acc & OOS precision & OOS recall \\
+\midrule
+autointent & \textbf{96.13} & 91.92 & \textbf{65.93} \\
+autogluon \cite{tang2024autogluonmultimodalautommsuperchargingmultimodal} & 95.76 & \textbf{98.47} & 32.20 \\
+h2o \cite{ledell2020h2o} & 85.22 & 82.57 & 27.00 \\
+fedot \cite{nikitin2021automated} & 0.00 & 18.18 & 100.0 \\
+lama \cite{vakhrushev2022lightautomlautomlsolutionlarge} & 0.00 & 18.18 & 100.0 \\
+\bottomrule
+\end{tabular}
+\caption{Performance comparison on OOS detection task.}
 \label{tab:oos}
-\begin{tabular}{|l|c|c|c|}
-\hline
-framework & in\_domain\_acc & oos\_precision & oos\_recall \\
-\hline
-autointent & 96.13 & 91.92 & 65.93 \\
-autogluon & 95.76 & 98.47 & 32.20 \\
-h2o & 85.22 & 82.57 & 27.00 \\
-fedot & 0.00 & 18.18 & 100.0 \\
-lama & 0.00 & 18.18 & 100.0 \\
-\hline
-\end{tabular}
 \end{table}
 
-\subsection{Embedding Models}
+These results demonstrate the superiority of AutoIntent in solving the OOS detection problem due to the implementation of the threshold tuning stage.
 
-The quality one can obtain via using AutoIntent with different embedding models as features source:
+\subsection{Embedding Module Effectiveness}
 
-\begin{table}[h]
+We evaluated the effectiveness of AutoIntent's feature of selecting embedding model via optimizing embedding module as it was described in Section \ref{sec:embedding}. Figures \ref{tab:encoder_ranking},\ref{fig:encoder_ranking} contain results for two scenarios of evaluation to select best embedding model: the first is to run the whole AutoML pipeline and measure final accuracy, the second is to use our embedding module to optimize NDCG of retrieval quality. These results show the imperfection of the approximate embedding model selection, which is expected as it is done on a subset of a data and without full pipeline training. However, the general ranking is quite close and the best model (\texttt{stella\_en\_400M\_v5}) is chosen correctly, so the optimizing embedding module reaches good balance between the computation resources spent and the correctness of the final result obtained.
+
+\begin{figure}[h]
 \centering
-\caption{Performance of different embedding models}
-\label{tab:embeddings}
-\begin{tabular}{|l|c|c|c|c|c|c|c|}
-\hline
-encoder & M parameters & DeepPavlov/clinc150 & DeepPavlov/hwu64 & DeepPavlov/massive & DeepPavlov/minds14 & DeepPavlov/snips & average \\
-\hline
-NovaSearch/stella\_en\_400M\_v5 & 435 & 91.80 & 92.19 & 89.22 & 96.30 & 98.50 & 93.60 \\
-intfloat/multilingual-e5-large-instruct & 560 & 78.98 & 90.99 & 87.13 & 98.15 & 98.36 & 90.72 \\
-intfloat/multilingual-e5-large & 560 & 78.71 & 91.36 & 87.47 & 92.59 & 98.36 & 89.70 \\
-HIT-TMG/KaLM-embedding-multilingual-mini-v1 & 494 & 78.85 & 88.66 & 83.59 & 95.37 & 97.43 & 88.78 \\
-nomic-ai/nomic-embed-text-v1.5 & 137 & 75.53 & 83.83 & 80.69 & 97.22 & 97.36 & 86.93 \\
-\hline
+\begin{minipage}[t]{0.5\textwidth}
+\vspace{0pt}
+\begin{tabular}{l|cc}
+\toprule
+\textbf{Model} & \textbf{Accuracy} & \textbf{NDCG} \\
+\midrule
+stella\_en\_400M\_v5 & 94.28 & 93.83 \\
+multilingual-e5-large-instruct & 93.65 & 92.97 \\
+GIST-large-Embedding-v0 & 93.51 & 93.32 \\
+UAE-Large-V1 & 92.89 & 93.25 \\
+bge-m3 & 92.69 & 92.49 \\
+multilingual-e5-large & 91.41 & 92.45 \\
+LaBSE & 90.47 & 89.51 \\
+KaLM-embedding-* & 89.65 & 92.88 \\
+nomic-embed-text-v1.5 & 87.24 & 89.63 \\
+deberta-v3-small & 81.15 & 67.20 \\
+deberta-v3-large & 75.39 & 59.59 \\
+deberta-v3-base & 75.00 & 59.28 \\
+\bottomrule
 \end{tabular}
-\end{table}
-
-Experimenting in such way is time and resource consuming as it requires to retrain the whole pipeline. Thus the autointent's feature to select best encoder based on proxy-evaluation on feature-aimed or retrieval-aimed embedding module tuning. If we use autointent, it chooses the following models for each dataset:
+\caption{Embedding models performance averaged over hwu64 \cite{hwu64}, massive \cite{massive}, minds14 \cite{minds14}, snips \cite{snips}. $^*$multilingual-mini-instruct-v1.5. Hugging Face Hub organizations in the corresponding order: NovaSearch/, intfloat/, avsolatorio/, WhereIsAI/, BAAI/, intfloat/, sentence-transformers/, HIT-TMG/, nomic-ai/, microsoft/, microsoft/, microsoft/.}
+\label{tab:encoder_ranking}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.45\textwidth}
+\vspace{0pt}
+\centering
+\includegraphics[width=1\linewidth]{pics/encoders_ranking.pdf}
+\caption{Encoders ranking: (\textbf{Left}) precise ranking obtained via training full AutoML pipeline with only this model, (\textbf{Right}) approximate ranking based on retrieval quality (NDCG).}
+\label{fig:encoder_ranking}
+\end{minipage}
+\end{figure}
 
 \section{AutoIntent Cookbook}
 
@@ -773,33 +653,30 @@ Our experimental analysis and framework development have revealed several promis
     
     \item \textbf{Augmentation Method Improvements}:
     \begin{itemize}
-        \item Development of more sophisticated prompt engineering techniques
-        \item Integration of domain-specific knowledge into augmentation strategies
+        \item Development of more appropriate prompt engineering techniques
+        \item Integration of domain-specific knowledge into augmentation
         \item Exploration of hybrid approaches combining LLM-based and traditional augmentation methods
         \item Investigation of augmentation quality control mechanisms
         \item Research into language-specific augmentation strategies
+        \item Research on RL-style augmentations with actor and critic
     \end{itemize}
     
     \item \textbf{BERT-based Methods Enhancement}:
     \begin{itemize}
         \item Evaluation of transformer models on high-performance GPUs (e.g., A100)
         \item Investigation of potential overfitting issues in current implementations
-        \item Development of more efficient fine-tuning strategies
-        \item Exploration of model compression techniques for deployment
     \end{itemize}
     
     \item \textbf{Pipeline Optimization}:
     \begin{itemize}
-        \item Development of more sophisticated module selection strategies
-        \item Investigation of joint optimization approaches
-        \item Research into adaptive resource allocation during training
-        \item Exploration of automated pipeline configuration based on dataset characteristics
+        \item Development of more optimized module selection strategies
+        \item Investigation of distributed HPO approaches
     \end{itemize}
     
     \item \textbf{Deployment and Scalability}:
     \begin{itemize}
         \item Research into efficient model serving strategies
-        \item Investigation of distributed training approaches
+        \item Investigation of distributed HPO approaches
         \item Development of automated scaling mechanisms
         \item Exploration of edge deployment capabilities
     \end{itemize}
@@ -807,10 +684,107 @@ Our experimental analysis and framework development have revealed several promis
 
 These research directions aim to address current limitations and expand the framework's capabilities, making it more robust and adaptable to various real-world scenarios.
 
-\section{Limitations and Future Research}
-
-- include module name into search space, because current implementation tunes each module without pruning even if it performs bad
+\section{Limitations}
 
 \section{Conclusion}
+
+In this report, we presented AutoIntent, an end-to-end AutoML framework designed specifically for text classification. By integrating transformer-based embeddings, a variety of scoring and decision modules, and robust hyperparameter optimization strategies, AutoIntent addresses key limitations of existing NLP AutoML solutions. The framework emphasizes modularity, extensibility, and ease of deployment, supporting use cases from lightweight inference scenarios to high-performance model training.
+
+Our extensive experimental evaluation demonstrates that AutoIntent achieves competitive or superior classification performance across a range of benchmark datasets, while also offering enhanced support for multi-label classification and out-of-scope (OOS) detection. Moreover, its compatibility with large language models for data augmentation and its resource-aware configuration presets make it adaptable to a wide spectrum of real-world scenarios.
+
+AutoIntent combines practical usability with advanced optimization strategies, bridging the gap between research-grade experimentation and production-ready deployment. With its scalable architecture and support for continuous improvement, it provides a solid foundation for future work in automated text classification and conversational AI.
+
+
+\bibliographystyle{unsrt}  
+\bibliography{references} 
+
+\begin{appendices}
+
+\section{Search Spaces}\label{app:search_spaces}
+
+The most clear way to set custom search space within AutoIntent is with yaml configuration. In the sections \ref{sec:scoring_experiments}, \ref{sec:baselines_exps} we used the following search space:
+\begin{verbatim}
+- node_type: scoring
+  target_metric: scoring_accuracy
+  search_space:
+    - module_name: knn
+      n_trials: 20
+      k:
+        low: 1
+        high: 20
+      weights: [uniform, distance, closest]
+    - module_name: linear
+    - module_name: dnnc
+      k:
+        low: 1
+        high: 5
+    - module_name: rerank
+      k: [30]
+      weights: [uniform, distance]
+      m: [ 1, 2, 3, 4, 5 ]
+      use_crosencoder_scores: [True, False]
+    - module_name: sklearn
+      n_trials: 20
+      clf_name: [RandomForestClassifier]
+      n_estimators: [200, 300, 500]
+      max_depth: [100, 150, 200]
+      max_features: [sqrt, log2, null]
+      n_jobs: [8]
+    - module_name: bert
+      n_trials: 20
+      num_train_epochs: [3]
+      batch_size: [8, 16, 32]
+      learning_rate: [5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
+    - module_name: lora
+      n_trials: 20
+      num_train_epochs: [3]
+      batch_size: [8, 16, 32]
+      learning_rate: [5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
+      lora_alpha: [16, 32, 64]
+      lora_dropout: [0.1, 0.2, 0.3]
+      r: [8, 16, 32, 64]
+    - module_name: ptuning
+      n_trials: 20
+      num_train_epochs: [3]
+      batch_size: [8, 16, 32]
+      learning_rate: [5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
+      num_virtual_tokens: [10, 30, 50]
+      encoder_dropout: [0.1, 0.2, 0.3]
+      encoder_hidden_size: [128, 256, 512]
+      encoder_reparameterization_type: [MLP, LSTM]
+      encoder_num_layers: [1, 2, 3]
+- node_type: decision
+  target_metric: decision_accuracy
+  search_space:
+    - module_name: argmax
+\end{verbatim}
+
+In the section \ref{sec:oos_detection} we used the same search space for scoring module and the following for decision module:
+\begin{verbatim}
+- node_type: decision
+  target_metric: decision_accuracy
+  search_space:
+    - module_name: argmax
+    - module_name: threshold
+      thresh:
+        low: 0.1
+        high: 0.9
+        step: 0.1
+    - module_name: jinoos
+\end{verbatim}
+
+
+\section{Augmentation Experiment} \label{app:detailed_aug_metrics}
+
+We report metrics for each dataset-LLM pair from section \ref{sec:augmentations} in figure \ref{fig:detailed_aug_metrics}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.95\linewidth]{pics/augmented_models_performance.pdf}
+    \caption{Detailed metrics for each dataset-LLM pair.}
+    \label{fig:detailed_aug_metrics}
+\end{figure}
+
+\end{appendices}
 
 \end{document} 
