@@ -4,6 +4,17 @@ from typing import Dict, Tuple, List
 import json
 
 
+english_datasets = ["banking77", "snips"]
+russian_datasets = ["banking77_ru", "snips_ru"]
+oos_datasets = ["clinc150_ru"]
+
+models = [
+    "DeepSeek-V3-0324",
+    "gpt-4o-mini-2024-07-18",
+    "Qwen2.5-7B-Instruct-AWQ",
+    "Meta-Llama-3.1-8B-Instruct-Turbo",
+]
+
 def load_results(file_path: str) -> Dict:
     """Load results from a JSON file."""
     with open(file_path, "r") as f:
@@ -16,8 +27,10 @@ def prepare_correlation_data(
     """Convert nested dictionary to DataFrame for correlation analysis."""
     data = []
 
-    for model in results:
+    for model in models:
         for dataset in results[model]:
+            if dataset not in english_datasets + russian_datasets + oos_datasets:
+                continue
             for naug in results[model][dataset]:
                 data.append(
                     {
@@ -64,6 +77,7 @@ def get_model_correlations(
             model_english, "naug", "decision_accuracy"
         )
         row_data["English"] = format_correlation(corr, pval, n)
+        print("english support:", n)
     else:
         row_data["English"] = "-"
     
@@ -75,6 +89,8 @@ def get_model_correlations(
         corr, pval, n = calculate_correlation(
             model_russian, "naug", "decision_accuracy"
         )
+        print("russian support:", n)
+
         row_data["Russian"] = format_correlation(corr, pval, n)
     else:
         row_data["Russian"] = "-"
@@ -84,6 +100,8 @@ def get_model_correlations(
     if len(model_oos) >= 2:
         corr, pval, n = calculate_correlation(model_oos, "naug", "decision_accuracy")
         row_data["OOS"] = format_correlation(corr, pval, n)
+        print("oos support:", n)
+
     else:
         row_data["OOS"] = "-"
     
@@ -100,13 +118,13 @@ def get_dataset_correlations(df: pd.DataFrame) -> List[Dict]:
             dataset_correlations.append({
                 "Dataset": dataset,
                 "Correlation": format_correlation(corr, pval, n),
-                # "Support": n
+                "Support": n
             })
         else:
             dataset_correlations.append({
                 "Dataset": dataset,
                 "Correlation": "-",
-                # "Support": n
+                "Support": n
             })
     return dataset_correlations
 
@@ -171,7 +189,7 @@ def get_group_correlations(
     return group_correlations
 
 
-def analyze_before_after(df: pd.DataFrame) -> List[Dict]:
+def analyze_before_after(df: pd.DataFrame) -> pd.DataFrame:
     """Analyze before and after effects for each augmentation level.
     
     Returns:
@@ -221,11 +239,11 @@ def analyze_before_after(df: pd.DataFrame) -> List[Dict]:
             "mean_improvement": float(
                 merged_data["decision_accuracy_current"].mean() - 
                 merged_data["decision_accuracy_baseline"].mean()
-            ),
+            ) * 100,
             "n_comparisons": len(merged_data)
         })
     
-    return results
+    return pd.DataFrame(results)
 
 
 def analyze_correlations(results: Dict):
@@ -233,16 +251,7 @@ def analyze_correlations(results: Dict):
     df = prepare_correlation_data(results)
     
     # Define dataset groups
-    english_datasets = ["banking77", "snips"]
-    russian_datasets = ["banking77_ru", "snips_ru"]
-    oos_datasets = ["clinc150_ru"]
-
-    models = [
-        "DeepSeek-V3-0324",
-        "gpt-4o-mini-2024-07-18",
-        "Qwen2.5-7B-Instruct-AWQ",
-        "Meta-Llama-3.1-8B-Instruct-Turbo",
-    ]
+    
 
     # Prepare and display main correlation table
     correlation_data = [
@@ -270,7 +279,9 @@ def analyze_correlations(results: Dict):
     # Analyze before and after effects
     before_after_results = analyze_before_after(df[df["dataset"] != "clinc150_ru"])
     print("\nBefore and after analysis results:")
-    print(json.dumps(before_after_results, indent=2))
+    print(before_after_results.to_string(index=False))
+    before_after_results.to_json("before_after.json", index=False)
+    # print(json.dumps(before_after_results, indent=2))
 
 
 if __name__ == "__main__":
