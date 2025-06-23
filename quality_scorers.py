@@ -99,7 +99,7 @@ if __name__ == "__main__":
 
     parser = ArgumentParser(description="This is the script for measuring the quality of AutoIntent using holdout validation. This script runs multiple seeds to get confidence estimations.")
     parser.add_argument("--experiment-name", type=str, required=True, help="aka name of the wandb project")
-    parser.add_argument("--embedder-name", type=str, default="mixedbread-ai/mxbai-embed-large-v1", help="Name of HF repository. Omit this param to use AutoIntent's default embedder.")
+    parser.add_argument("--embedder-name", type=str, default="NovaSearch/stella_en_400M_v5", help="Name of HF repository. Omit this param to use AutoIntent's default embedder.")
     parser.add_argument("--seeds", nargs="+")
     parser.add_argument("--validation-scheme", type=str, choices=["ho", "cv"])
     parser.add_argument("--cuda", type=str, default="0")
@@ -137,16 +137,16 @@ if __name__ == "__main__":
           )
           
           if args.embedder_name is None:
-              embedder_config = EmbedderConfig(use_cache=True)
+              embedder_config = EmbedderConfig(use_cache=True, trust_remote_code=True)
           else:
-              embedder_config = EmbedderConfig(model_name=args.embedder_name, use_cache=True)
+              embedder_config = EmbedderConfig(model_name=args.embedder_name, use_cache=True, trust_remote_code=True)
 
           pipe = Pipeline.from_search_space(search_space, seed=int(seed))
           pipe.set_config(logging_config)
           pipe.set_config(embedder_config)
           pipe.set_config(data_config)
-          pipe.set_config(HPOConfig(n_trials=128, sampler="tpe")) # TODO try constant liar
+          pipe.set_config(HPOConfig(n_trials=128, n_startup_trials=20, sampler="tpe")) # TODO try constant liar
           pipe.set_config(CrossEncoderConfig(model_name=args.cross_encoder, trust_remote_code=True))
           pipe.set_config(HFModelConfig(model_name=args.hf_model, tokenizer_config=TokenizerConfig(max_length=128)))
-          pipe.fit(Dataset.from_hub(dataset), refit_after=True, incompatible_search_space="filter")
+          pipe.fit(Dataset.from_hub(dataset, intent_subset_name="intentsqwen3-32b"), refit_after=True, incompatible_search_space="filter")
           # pipe.dump(workdir / run_name / "pipe")
