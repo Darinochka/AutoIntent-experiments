@@ -89,7 +89,7 @@ search_space_raw = """
 #     - module_name: argmax
 # """
 
-datasets_names = ["DeepPavlov/minds14", "DeepPavlov/banking77", "DeepPavlov/hwu64", "DeepPavlov/snips", "DeepPavlov/massive"]
+datasets_names = ["DeepPavlov/minds14", "DeepPavlov/snips", "DeepPavlov/hwu64", "DeepPavlov/massive", "DeepPavlov/banking77"]
 # datasets_names = ["DeepPavlov/clinc150"]
 
 if __name__ == "__main__":
@@ -132,7 +132,7 @@ if __name__ == "__main__":
               run_name=run_name,
               clear_ram=True,
               dump_modules=True,
-              report_to=["wandb"],
+              report_to=["wandb", "codecarbon"],
               project_dir=workdir
           )
           
@@ -145,8 +145,9 @@ if __name__ == "__main__":
           pipe.set_config(logging_config)
           pipe.set_config(embedder_config)
           pipe.set_config(data_config)
-          pipe.set_config(HPOConfig(n_trials=128, n_startup_trials=20, sampler="tpe")) # TODO try constant liar
+          pipe.set_config(HPOConfig(n_trials=50, n_startup_trials=20, sampler="tpe"))
           pipe.set_config(CrossEncoderConfig(model_name=args.cross_encoder, trust_remote_code=True))
           pipe.set_config(HFModelConfig(model_name=args.hf_model, tokenizer_config=TokenizerConfig(max_length=128)))
-          pipe.fit(Dataset.from_hub(dataset, intent_subset_name="intentsqwen3-32b"), refit_after=True, incompatible_search_space="filter")
+          intents_name = "intentsqwen3-32b" if dataset != "DeepPavlov/banking77" else "intents"
+          pipe.fit(Dataset.from_hub(dataset, intent_subset_name=intents_name), refit_after=True, incompatible_search_space="filter")
           # pipe.dump(workdir / run_name / "pipe")
