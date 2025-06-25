@@ -25,6 +25,7 @@ search_spaces = {
         low: 5.0e-5
         high: 1.0e-3
         log: True
+      early_stopping_config: [{"patience": 3}]
 - node_type: decision
   target_metric: decision_accuracy
   search_space:
@@ -45,18 +46,7 @@ search_spaces = {
       lora_alpha: [16, 32, 64]
       lora_dropout: [0.02, 0.1, 0.2, 0.3]
       r: [8, 16, 32, 64, 96]
-    - module_name: ptuning
-      num_train_epochs: [15]
-      batch_size: [8, 16, 32, 64]
-      learning_rate:
-        low: 5.0e-5
-        high: 1.0e-3
-        log: True
-      num_virtual_tokens: [5, 10, 30, 50]
-      encoder_dropout: [0.02, 0.1, 0.2, 0.3]
-      encoder_hidden_size: [128, 256, 512]
-      encoder_reparameterization_type: [MLP, LSTM]
-      encoder_num_layers: [1, 2, 3]
+      early_stopping_config: [{"patience": 3}]
 - node_type: decision
   target_metric: decision_accuracy
   search_space:
@@ -79,6 +69,7 @@ search_spaces = {
       encoder_hidden_size: [128, 256, 512]
       encoder_reparameterization_type: [MLP, LSTM]
       encoder_num_layers: [1, 2, 3]
+      early_stopping_config: [{"patience": 3}]
 - node_type: decision
   target_metric: decision_accuracy
   search_space:
