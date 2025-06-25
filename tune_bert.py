@@ -72,7 +72,7 @@ search_spaces = {
       batch_size: [8, 16, 32, 64]
       learning_rate:
         low: 5.0e-5
-        high: 1.0-3
+        high: 1.0e-3
         log: True
       num_virtual_tokens: [5, 10, 30, 50]
       encoder_dropout: [0.02, 0.1, 0.2, 0.3]
