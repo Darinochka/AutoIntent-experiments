@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import os
 from autointent import setup_logging
 from autointent import Dataset, Pipeline
-from autointent.configs import LoggingConfig, DataConfig
+from autointent.configs import LoggingConfig, DataConfig, TokenizerConfig, HFModelConfig
 
 
 datasets_names = ["DeepPavlov/banking77", "DeepPavlov/minds14", "DeepPavlov/hwu64", "DeepPavlov/snips", "DeepPavlov/massive", "DeepPavlov/clinc150"]
@@ -49,8 +49,9 @@ if __name__ == "__main__":
                 pipe = Pipeline.from_preset(preset, seed=seed)
                 pipe.set_config(logging_config)
                 pipe.set_config(data_config)
+                pipe.set_config(HFModelConfig(tokenizer_config=TokenizerConfig(max_length=256)))
                 intents_name = (
                     "intentsqwen3-32b" if dataset != "DeepPavlov/banking77" else "intents"
                 )
-                pipe.fit(Dataset.from_hub(dataset, intent_subset_name=intents_name), incompatible_search_space="filter")
+                pipe.fit(Dataset.from_hub(dataset, intent_subset_name=intents_name), refit_after=True, incompatible_search_space="filter")
                 shutil.rmtree(logging_config.dirpath)
