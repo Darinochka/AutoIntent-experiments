@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:6dcbe01687dade640bfdd16b93ec94f89735787f14ad124d4ffc92c57b935c52"
+content_hash = "sha256:cd83a8d5541db5fe6b87e9da784dc0a2004aed0ce9f95ec965c850edf766f3be"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
@@ -230,8 +230,8 @@ name = "autointent"
 version = "0.1.0"
 requires_python = ">=3.10,<4.0"
 git = "ssh://git@github.com/DeepPavlov/AutoIntent.git"
-ref = "a8eac23"
-revision = "a8eac233df2576a953aae8315b4f736de1a71617"
+ref = "9b0f049"
+revision = "9b0f0499a957420196cde72d7890f7f635580a88"
 summary = "A tool for automatically configuring a text classification pipeline for intent prediction."
 groups = ["default"]
 dependencies = [
@@ -260,12 +260,12 @@ version = "0.1.0"
 extras = ["codecarbon"]
 requires_python = ">=3.10,<4.0"
 git = "ssh://git@github.com/DeepPavlov/AutoIntent.git"
-ref = "a8eac23"
-revision = "a8eac233df2576a953aae8315b4f736de1a71617"
+ref = "9b0f049"
+revision = "9b0f0499a957420196cde72d7890f7f635580a88"
 summary = "A tool for automatically configuring a text classification pipeline for intent prediction."
 groups = ["default"]
 dependencies = [
-    "autointent @ git+ssh://git@github.com/DeepPavlov/AutoIntent.git@a8eac23",
+    "autointent @ git+ssh://git@github.com/DeepPavlov/AutoIntent.git@9b0f049",
     "codecarbon<3.1.0,>=3.0.2",
     "pynvml<12.0.0,>=8.0.4",
 ]
@@ -848,7 +848,7 @@ files = [
 
 [[package]]
 name = "huggingface-hub"
-version = "0.33.0"
+version = "0.33.1"
 requires_python = ">=3.8.0"
 summary = "Client library to download and publish models, datasets and other repos on the huggingface.co hub"
 groups = ["default"]
@@ -863,8 +863,8 @@ dependencies = [
     "typing-extensions>=3.7.4.3",
 ]
 files = [
-    {file = "huggingface_hub-0.33.0-py3-none-any.whl", hash = "sha256:e8668875b40c68f9929150d99727d39e5ebb8a05a98e4191b908dc7ded9074b3"},
-    {file = "huggingface_hub-0.33.0.tar.gz", hash = "sha256:aa31f70d29439d00ff7a33837c03f1f9dd83971ce4e29ad664d63ffb17d3bb97"},
+    {file = "huggingface_hub-0.33.1-py3-none-any.whl", hash = "sha256:ec8d7444628210c0ba27e968e3c4c973032d44dcea59ca0d78ef3f612196f095"},
+    {file = "huggingface_hub-0.33.1.tar.gz", hash = "sha256:589b634f979da3ea4b8bdb3d79f97f547840dc83715918daf0b64209c0844c7b"},
 ]
 
 [[package]]
@@ -1219,7 +1219,7 @@ files = [
 
 [[package]]
 name = "multidict"
-version = "6.5.1"
+version = "6.6.0"
 requires_python = ">=3.9"
 summary = "multidict implementation"
 groups = ["default"]
@@ -1227,24 +1227,24 @@ dependencies = [
     "typing-extensions>=4.1.0; python_version < \"3.11\"",
 ]
 files = [
-    {file = "multidict-6.5.1-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:48f95fe064f63d9601ef7a3dce2fc2a437d5fcc11bca960bc8be720330b13b6a"},
-    {file = "multidict-6.5.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:7b7b6e1ce9b61f721417c68eeeb37599b769f3b631e6b25c21f50f8f619420b9"},
-    {file = "multidict-6.5.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:8b83b055889bda09fc866c0a652cdb6c36eeeafc2858259c9a7171fe82df5773"},
-    {file = "multidict-6.5.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:b7bd4d655dc460c7aebb73b58ed1c074e85f7286105b012556cf0f25c6d1dba3"},
-    {file = "multidict-6.5.1-cp312-cp312-manylinux2014_armv7l.manylinux_2_17_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:aa6dcf25ced31cdce10f004506dbc26129f28a911b32ed10e54453a0842a6173"},
-    {file = "multidict-6.5.1-cp312-cp312-manylinux2014_ppc64le.manylinux_2_17_ppc64le.manylinux_2_28_ppc64le.whl", hash = "sha256:059fb556c3e6ce1a168496f92ef139ad839a47f898eaa512b1d43e5e05d78c6b"},
-    {file = "multidict-6.5.1-cp312-cp312-manylinux2014_s390x.manylinux_2_17_s390x.manylinux_2_28_s390x.whl", hash = "sha256:f97680c839dd9fa208e9584b1c2a5f1224bd01d31961f7f7d94984408c4a6b9e"},
-    {file = "multidict-6.5.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7710c716243525cc05cd038c6e09f1807ee0fef2510a6e484450712c389c8d7f"},
-    {file = "multidict-6.5.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:83eb172b4856ffff2814bdcf9c7792c0439302faab1b31376817b067b26cd8f5"},
-    {file = "multidict-6.5.1-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:562d4714fa43f6ebc043a657535e4575e7d6141a818c9b3055f0868d29a1a41b"},
-    {file = "multidict-6.5.1-cp312-cp312-musllinux_1_2_ppc64le.whl", hash = "sha256:2d7def2fc47695c46a427b8f298fb5ace03d635c1fb17f30d6192c9a8fb69e70"},
-    {file = "multidict-6.5.1-cp312-cp312-musllinux_1_2_s390x.whl", hash = "sha256:77bc8ab5c6bfe696eff564824e73a451fdeca22f3b960261750836cee02bcbfa"},
-    {file = "multidict-6.5.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:9eec51891d3c210948ead894ec1483d48748abec08db5ce9af52cc13fef37aee"},
-    {file = "multidict-6.5.1-cp312-cp312-win32.whl", hash = "sha256:189f0c2bd1c0ae5509e453707d0e187e030c9e873a0116d1f32d1c870d0fc347"},
-    {file = "multidict-6.5.1-cp312-cp312-win_amd64.whl", hash = "sha256:e81f23b4b6f2a588f15d5cb554b2d8b482bb6044223d64b86bc7079cae9ebaad"},
-    {file = "multidict-6.5.1-cp312-cp312-win_arm64.whl", hash = "sha256:79d13e06d5241f9c8479dfeaf0f7cce8f453a4a302c9a0b1fa9b1a6869ff7757"},
-    {file = "multidict-6.5.1-py3-none-any.whl", hash = "sha256:895354f4a38f53a1df2cc3fa2223fa714cff2b079a9f018a76cad35e7f0f044c"},
-    {file = "multidict-6.5.1.tar.gz", hash = "sha256:a835ea8103f4723915d7d621529c80ef48db48ae0c818afcabe0f95aa1febc3a"},
+    {file = "multidict-6.6.0-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:0b95809f30d197efa899b5e08a38cf8d6658f3acfa5f5c984e0fe6bc21245aeb"},
+    {file = "multidict-6.6.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:c146b37f0a719df5f82e0dccc2ecbcbcccae75e762d696b5b26990aef65e6ac4"},
+    {file = "multidict-6.6.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:d36d3cd27eba1f7aa209839ccce79b9601abbd82e9b503f33f16652072e347da"},
+    {file = "multidict-6.6.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c2e1676ed48d42e3db21a18030a149bff12ed564185453777814722ec8c67f26"},
+    {file = "multidict-6.6.0-cp312-cp312-manylinux2014_armv7l.manylinux_2_17_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:b1201db24a4b55921cf5db90cbd9a31a44c0bb2eba8ee5f50e330c0b2080fa00"},
+    {file = "multidict-6.6.0-cp312-cp312-manylinux2014_ppc64le.manylinux_2_17_ppc64le.manylinux_2_28_ppc64le.whl", hash = "sha256:9a2a7242da589b5879857646847e806dad51b6de6fab8de3c0330ea60656d915"},
+    {file = "multidict-6.6.0-cp312-cp312-manylinux2014_s390x.manylinux_2_17_s390x.manylinux_2_28_s390x.whl", hash = "sha256:8175c3ec6a7ed880ccf576a80a95f2b559a97158662698db6c8fbeffdf982123"},
+    {file = "multidict-6.6.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8a5e7c0e6ef7e98ea7601c672f067e491bd286531293c62930b10ade50120af2"},
+    {file = "multidict-6.6.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:cfb725d2379d7c54958cce23a0fd8ff5b3d8dd1f4e2741a44a548eddefad6eae"},
+    {file = "multidict-6.6.0-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:6dbff377ce9e67a5cae6c5989a4963816d70d52a9f6bf01dd04aadaa9ca31dba"},
+    {file = "multidict-6.6.0-cp312-cp312-musllinux_1_2_ppc64le.whl", hash = "sha256:b04670b6d3251dfc1761e8a8c58cd1ccb28c1fc8041ed7dc0b1e741bd7753b02"},
+    {file = "multidict-6.6.0-cp312-cp312-musllinux_1_2_s390x.whl", hash = "sha256:20da2c7faa1bddc3fda31258debcbcc7033f33094f4d89b3b6269570bd7b132d"},
+    {file = "multidict-6.6.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:7a848558168b6c39bca54c57dacc27eac708b479b1ff92469a7465ead6619334"},
+    {file = "multidict-6.6.0-cp312-cp312-win32.whl", hash = "sha256:a066dc45b29ce247a2ddbccc2cf20ce99f95e849a7624cf3cdfd7d50b1261098"},
+    {file = "multidict-6.6.0-cp312-cp312-win_amd64.whl", hash = "sha256:74fa779e729bb20dd7ce9bbc2b4b704f4134b6763ea8f4a13d259aed044812fd"},
+    {file = "multidict-6.6.0-cp312-cp312-win_arm64.whl", hash = "sha256:860ddc224123efb788812f16329d629722c68ca687c0d4410f4ad26a9197cc73"},
+    {file = "multidict-6.6.0-py3-none-any.whl", hash = "sha256:447df643754e273681fda37764a89880d32c86cab102bfc05c1e8359ebcf0980"},
+    {file = "multidict-6.6.0.tar.gz", hash = "sha256:460b213769cb8691b5ba2f12e53522acd95eb5b2602497d4d7e64069a61e5941"},
 ]
 
 [[package]]
@@ -1524,7 +1524,7 @@ files = [
 
 [[package]]
 name = "openai"
-version = "1.91.0"
+version = "1.92.2"
 requires_python = ">=3.8"
 summary = "The official Python library for the openai API"
 groups = ["default"]
@@ -1539,8 +1539,8 @@ dependencies = [
     "typing-extensions<5,>=4.11",
 ]
 files = [
-    {file = "openai-1.91.0-py3-none-any.whl", hash = "sha256:207f87aa3bc49365e014fac2f7e291b99929f4fe126c4654143440e0ad446a5f"},
-    {file = "openai-1.91.0.tar.gz", hash = "sha256:d6b07730d2f7c6745d0991997c16f85cddfc90ddcde8d569c862c30716b9fc90"},
+    {file = "openai-1.92.2-py3-none-any.whl", hash = "sha256:abb64bee7f2571709edf9a856f598ffe871730129a7d807a8a4d8d2958f5c842"},
+    {file = "openai-1.92.2.tar.gz", hash = "sha256:b571a79fc7e165e7d00e6963a8a95eb5f42b60ac89fd316f1dc0a2dac5c6fae1"},
 ]
 
 [[package]]
@@ -1691,7 +1691,7 @@ files = [
 
 [[package]]
 name = "plotly"
-version = "6.1.2"
+version = "6.2.0"
 requires_python = ">=3.8"
 summary = "An open-source interactive data visualization library for Python"
 groups = ["default"]
@@ -1700,8 +1700,8 @@ dependencies = [
     "packaging",
 ]
 files = [
-    {file = "plotly-6.1.2-py3-none-any.whl", hash = "sha256:f1548a8ed9158d59e03d7fed548c7db5549f3130d9ae19293c8638c202648f6d"},
-    {file = "plotly-6.1.2.tar.gz", hash = "sha256:4fdaa228926ba3e3a213f4d1713287e69dcad1a7e66cf2025bd7d7026d5014b4"},
+    {file = "plotly-6.2.0-py3-none-any.whl", hash = "sha256:32c444d4c940887219cb80738317040363deefdfee4f354498cc0b6dab8978bd"},
+    {file = "plotly-6.2.0.tar.gz", hash = "sha256:9dfa23c328000f16c928beb68927444c1ab9eae837d1fe648dbcda5360c7953d"},
 ]
 
 [[package]]
@@ -2230,7 +2230,7 @@ files = [
 
 [[package]]
 name = "sentry-sdk"
-version = "2.31.0"
+version = "2.32.0"
 requires_python = ">=3.6"
 summary = "Python client for Sentry (https://sentry.io)"
 groups = ["default"]
@@ -2239,8 +2239,8 @@ dependencies = [
     "urllib3>=1.26.11",
 ]
 files = [
-    {file = "sentry_sdk-2.31.0-py2.py3-none-any.whl", hash = "sha256:e953f5ab083e6599bab255b75d6829b33b3ddf9931a27ca00b4ab0081287e84f"},
-    {file = "sentry_sdk-2.31.0.tar.gz", hash = "sha256:fed6d847f15105849cdf5dfdc64dcec356f936d41abb8c9d66adae45e60959ec"},
+    {file = "sentry_sdk-2.32.0-py2.py3-none-any.whl", hash = "sha256:6cf51521b099562d7ce3606da928c473643abe99b00ce4cb5626ea735f4ec345"},
+    {file = "sentry_sdk-2.32.0.tar.gz", hash = "sha256:9016c75d9316b0f6921ac14c8cd4fb938f26002430ac5be9945ab280f78bec6b"},
 ]
 
 [[package]]
@@ -2425,7 +2425,7 @@ files = [
 
 [[package]]
 name = "torch"
-version = "2.7.0"
+version = "2.7.1"
 requires_python = ">=3.9.0"
 summary = "Tensors and Dynamic neural networks in Python with strong GPU acceleration"
 groups = ["default"]
@@ -2450,32 +2450,32 @@ dependencies = [
     "nvidia-nvtx-cu12==12.6.77; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
     "setuptools; python_version >= \"3.12\"",
     "sympy>=1.13.3",
-    "triton==3.3.0; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+    "triton==3.3.1; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
     "typing-extensions>=4.10.0",
 ]
 files = [
-    {file = "torch-2.7.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:36a6368c7ace41ad1c0f69f18056020b6a5ca47bedaca9a2f3b578f5a104c26c"},
-    {file = "torch-2.7.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:15aab3e31c16feb12ae0a88dba3434a458874636f360c567caa6a91f6bfba481"},
-    {file = "torch-2.7.0-cp312-cp312-win_amd64.whl", hash = "sha256:f56d4b2510934e072bab3ab8987e00e60e1262fb238176168f5e0c43a1320c6d"},
-    {file = "torch-2.7.0-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:30b7688a87239a7de83f269333651d8e582afffce6f591fff08c046f7787296e"},
+    {file = "torch-2.7.1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:27ea1e518df4c9de73af7e8a720770f3628e7f667280bce2be7a16292697e3fa"},
+    {file = "torch-2.7.1-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:c33360cfc2edd976c2633b3b66c769bdcbbf0e0b6550606d188431c81e7dd1fc"},
+    {file = "torch-2.7.1-cp312-cp312-win_amd64.whl", hash = "sha256:d8bf6e1856ddd1807e79dc57e54d3335f2b62e6f316ed13ed3ecfe1fc1df3d8b"},
+    {file = "torch-2.7.1-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:787687087412c4bd68d315e39bc1223f08aae1d16a9e9771d95eabbb04ae98fb"},
 ]
 
 [[package]]
 name = "torchvision"
-version = "0.22.0"
+version = "0.22.1"
 requires_python = ">=3.9"
 summary = "image and video datasets and models for torch deep learning"
 groups = ["default"]
 dependencies = [
     "numpy",
     "pillow!=8.3.*,>=5.3.0",
-    "torch==2.7.0",
+    "torch==2.7.1",
 ]
 files = [
-    {file = "torchvision-0.22.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:31c3165418fe21c3d81fe3459e51077c2f948801b8933ed18169f54652796a0f"},
-    {file = "torchvision-0.22.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:8f116bc82e0c076e70ba7776e611ed392b9666aa443662e687808b08993d26af"},
-    {file = "torchvision-0.22.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:ce4dc334ebd508de2c534817c9388e928bc2500cf981906ae8d6e2ca3bf4727a"},
-    {file = "torchvision-0.22.0-cp312-cp312-win_amd64.whl", hash = "sha256:24b8c9255c209ca419cc7174906da2791c8b557b75c23496663ec7d73b55bebf"},
+    {file = "torchvision-0.22.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:153f1790e505bd6da123e21eee6e83e2e155df05c0fe7d56347303067d8543c5"},
+    {file = "torchvision-0.22.1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:964414eef19459d55a10e886e2fca50677550e243586d1678f65e3f6f6bac47a"},
+    {file = "torchvision-0.22.1-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:699c2d70d33951187f6ed910ea05720b9b4aaac1dcc1135f53162ce7d42481d3"},
+    {file = "torchvision-0.22.1-cp312-cp312-win_amd64.whl", hash = "sha256:75e0897da7a8e43d78632f66f2bdc4f6e26da8d3f021a7c0fa83746073c2597b"},
 ]
 
 [[package]]
@@ -2526,7 +2526,7 @@ files = [
 
 [[package]]
 name = "transformers"
-version = "4.51.3"
+version = "4.53.0"
 requires_python = ">=3.9.0"
 summary = "State-of-the-art Machine Learning for JAX, PyTorch and TensorFlow"
 groups = ["default"]
@@ -2543,30 +2543,30 @@ dependencies = [
     "tqdm>=4.27",
 ]
 files = [
-    {file = "transformers-4.51.3-py3-none-any.whl", hash = "sha256:fd3279633ceb2b777013234bbf0b4f5c2d23c4626b05497691f00cfda55e8a83"},
-    {file = "transformers-4.51.3.tar.gz", hash = "sha256:e292fcab3990c6defe6328f0f7d2004283ca81a7a07b2de9a46d67fd81ea1409"},
+    {file = "transformers-4.53.0-py3-none-any.whl", hash = "sha256:7d8039ff032c01a2d7f8a8fe0066620367003275f023815a966e62203f9f5dd7"},
+    {file = "transformers-4.53.0.tar.gz", hash = "sha256:f89520011b4a73066fdc7aabfa158317c3934a22e3cd652d7ffbc512c4063841"},
 ]
 
 [[package]]
 name = "transformers"
-version = "4.51.3"
+version = "4.53.0"
 extras = ["torch"]
 requires_python = ">=3.9.0"
 summary = "State-of-the-art Machine Learning for JAX, PyTorch and TensorFlow"
 groups = ["default"]
 dependencies = [
     "accelerate>=0.26.0",
-    "torch>=2.0",
-    "transformers==4.51.3",
+    "torch>=2.1",
+    "transformers==4.53.0",
 ]
 files = [
-    {file = "transformers-4.51.3-py3-none-any.whl", hash = "sha256:fd3279633ceb2b777013234bbf0b4f5c2d23c4626b05497691f00cfda55e8a83"},
-    {file = "transformers-4.51.3.tar.gz", hash = "sha256:e292fcab3990c6defe6328f0f7d2004283ca81a7a07b2de9a46d67fd81ea1409"},
+    {file = "transformers-4.53.0-py3-none-any.whl", hash = "sha256:7d8039ff032c01a2d7f8a8fe0066620367003275f023815a966e62203f9f5dd7"},
+    {file = "transformers-4.53.0.tar.gz", hash = "sha256:f89520011b4a73066fdc7aabfa158317c3934a22e3cd652d7ffbc512c4063841"},
 ]
 
 [[package]]
 name = "triton"
-version = "3.3.0"
+version = "3.3.1"
 summary = "A language and compiler for custom Deep Learning operations"
 groups = ["default"]
 marker = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
@@ -2574,7 +2574,7 @@ dependencies = [
     "setuptools>=40.8.0",
 ]
 files = [
-    {file = "triton-3.3.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b68c778f6c4218403a6bd01be7484f6dc9e20fe2083d22dd8aef33e3b87a10a3"},
+    {file = "triton-3.3.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9999e83aba21e1a78c1f36f21bce621b77bcaa530277a50484a7cb4a822f6e43"},
 ]
 
 [[package]]
@@ -2716,18 +2716,18 @@ files = [
 
 [[package]]
 name = "xformers"
-version = "0.0.30"
+version = "0.0.31"
 requires_python = ">=3.9"
 summary = "XFormers: A collection of composable Transformer building blocks."
 groups = ["default"]
 dependencies = [
     "numpy",
-    "torch==2.7.0",
+    "torch==2.7.1",
 ]
 files = [
-    {file = "xformers-0.0.30-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:357875986f50f105f445dc9a002c8450623cd4a6a469865c463285d0376fe77b"},
-    {file = "xformers-0.0.30-cp312-cp312-win_amd64.whl", hash = "sha256:8549ca30700d70dae904ec4407c6188cd73fd551e585f862c1d3aca3b7bc371c"},
-    {file = "xformers-0.0.30.tar.gz", hash = "sha256:a12bf3eb39e294cdbe8a7253ac9b665f41bac61d6d98df174e34ef7bdb6f2fc4"},
+    {file = "xformers-0.0.31-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:50aedaea82a38d7d28631f77617d1ed1f6f37c60bdc4bf167a69cbc0e39cee76"},
+    {file = "xformers-0.0.31-cp39-abi3-win_amd64.whl", hash = "sha256:23331bdb9831ba0df96f55258537ca0df7ad888efc75cea97a0de79b5e2291c4"},
+    {file = "xformers-0.0.31.tar.gz", hash = "sha256:3fccb159c6327c13fc1b08f8b963c2779ca526e2e50755dee9bcc1bac67d20c6"},
 ]
 
 [[package]]
