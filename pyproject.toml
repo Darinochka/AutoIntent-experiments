@@ -10,7 +10,7 @@ dependencies = [
     "ipywidgets>=8.1.5",
     "wandb>=0.19.9",
     "pandas>=2.2.3",
-    "autointent[codecarbon] @ git+ssh://git@github.com/DeepPavlov/AutoIntent.git@92839ce3bf4a03d264c61837ebfc81b5e82ad59e",
+    "autointent[codecarbon] @ git+ssh://git@github.com/DeepPavlov/AutoIntent.git@4ccee7da87e8393b0cfff2fd2875391a7400b88b",
     "sentencepiece>=0.2.0",
     "xformers>=0.0.30",
     "torchvision>=0.22.0"
