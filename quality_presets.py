@@ -20,6 +20,7 @@ if __name__ == "__main__":
     parser.add_argument("--validation-scheme", type=str, choices=["ho", "cv"], default="ho")
     parser.add_argument("--cuda", type=str, default="0")
     parser.add_argument("--presets", nargs="+", type=str)
+    parser.add_argument("--no-clinc", action="store_true")
     args = parser.parse_args()
 
     load_dotenv()
@@ -36,6 +37,8 @@ if __name__ == "__main__":
     for seed in args.seeds:
         for preset in args.presets:
             for dataset in datasets_names:
+                if args.no_clinc and dataset == "DeepPavlov/clinc150":
+                    continue
                 data_config = DataConfig(scheme=args.validation_scheme)
 
                 logging_config = LoggingConfig(
