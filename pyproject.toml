@@ -8,9 +8,8 @@ authors = [
 dependencies = [
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.5",
-    "wandb>=0.19.9",
     "pandas>=2.2.3",
-    "autointent[codecarbon] @ git+ssh://git@github.com/DeepPavlov/AutoIntent.git@43f317ceb2b9e4a6d3bc383c140135c009dc8389",
+    "autointent[codecarbon,wandb] @ git+ssh://git@github.com/DeepPavlov/AutoIntent.git@5d571d99fb413cde59e5a359059a7bcb3cc2eb8e",
     "sentencepiece>=0.2.0",
     "xformers>=0.0.30",
     "torchvision>=0.22.0"

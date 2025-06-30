@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:fabaa5f892a6f457c692ef72a8f5d87c70365192fbadc360944cc0784e570d45"
+content_hash = "sha256:f8cd59af27a2158dc6d30126d7bde4391b7b79450ce30ef2637d0d65a6a703e2"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
@@ -230,8 +230,8 @@ name = "autointent"
 version = "0.1.0"
 requires_python = ">=3.10,<4.0"
 git = "ssh://git@github.com/DeepPavlov/AutoIntent.git"
-ref = "43f317ceb2b9e4a6d3bc383c140135c009dc8389"
-revision = "43f317ceb2b9e4a6d3bc383c140135c009dc8389"
+ref = "5d571d99fb413cde59e5a359059a7bcb3cc2eb8e"
+revision = "5d571d99fb413cde59e5a359059a7bcb3cc2eb8e"
 summary = "A tool for automatically configuring a text classification pipeline for intent prediction."
 groups = ["default"]
 dependencies = [
@@ -257,17 +257,18 @@ dependencies = [
 [[package]]
 name = "autointent"
 version = "0.1.0"
-extras = ["codecarbon"]
+extras = ["codecarbon", "wandb"]
 requires_python = ">=3.10,<4.0"
 git = "ssh://git@github.com/DeepPavlov/AutoIntent.git"
-ref = "43f317ceb2b9e4a6d3bc383c140135c009dc8389"
-revision = "43f317ceb2b9e4a6d3bc383c140135c009dc8389"
+ref = "5d571d99fb413cde59e5a359059a7bcb3cc2eb8e"
+revision = "5d571d99fb413cde59e5a359059a7bcb3cc2eb8e"
 summary = "A tool for automatically configuring a text classification pipeline for intent prediction."
 groups = ["default"]
 dependencies = [
-    "autointent @ git+ssh://git@github.com/DeepPavlov/AutoIntent.git@43f317ceb2b9e4a6d3bc383c140135c009dc8389",
+    "autointent @ git+ssh://git@github.com/DeepPavlov/AutoIntent.git@5d571d99fb413cde59e5a359059a7bcb3cc2eb8e",
     "codecarbon<3.1.0,>=3.0.2",
     "pynvml<12.0.0,>=8.0.4",
+    "wandb<1.0.0,>=0.19.10",
 ]
 
 [[package]]
@@ -399,7 +400,7 @@ version = "0.4.6"
 requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 summary = "Cross-platform colored terminal text."
 groups = ["default"]
-marker = "platform_system == \"Windows\" or sys_platform == \"win32\""
+marker = "sys_platform == \"win32\" or platform_system == \"Windows\""
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
@@ -1219,7 +1220,7 @@ files = [
 
 [[package]]
 name = "multidict"
-version = "6.6.2"
+version = "6.6.3"
 requires_python = ">=3.9"
 summary = "multidict implementation"
 groups = ["default"]
@@ -1227,26 +1228,26 @@ dependencies = [
     "typing-extensions>=4.1.0; python_version < \"3.11\"",
 ]
 files = [
-    {file = "multidict-6.6.2-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:6e5e426aff6b5b32167b1185909ea390e51e59c7a6adfe65de16746e5739d8c1"},
-    {file = "multidict-6.6.2-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:0c4617af352d3e03b5febd040100d1bba67ac844e0f7780c8a124358883119dd"},
-    {file = "multidict-6.6.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:65854da6c2f065f7e52c4385727494d72b25eaf4e901b15fb3f61e21bb0b52eb"},
-    {file = "multidict-6.6.2-cp312-cp312-manylinux1_i686.manylinux2014_i686.manylinux_2_17_i686.manylinux_2_5_i686.whl", hash = "sha256:c477d3bc9a1aa0214f5639a8c1b4a6b3cd9faea5a861b4001a6df62294dcc952"},
-    {file = "multidict-6.6.2-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:d19a4bc7c5c1a25424812a26e8dccb18fff65a5f24515d2f3b85302ca3f3914f"},
-    {file = "multidict-6.6.2-cp312-cp312-manylinux2014_armv7l.manylinux_2_17_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:54ffaf44483b082602c1e1831472e3369c005f092271dbbcad2f7b12d1e84019"},
-    {file = "multidict-6.6.2-cp312-cp312-manylinux2014_ppc64le.manylinux_2_17_ppc64le.manylinux_2_28_ppc64le.whl", hash = "sha256:a526df4fe21d2dc68265c046685042fc89187dc40754489f32f7efc05e264b0f"},
-    {file = "multidict-6.6.2-cp312-cp312-manylinux2014_s390x.manylinux_2_17_s390x.manylinux_2_28_s390x.whl", hash = "sha256:73e8763061f0a38cec6d084b696964ee7b7e50c10c89a64b20be7044dca36a74"},
-    {file = "multidict-6.6.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:81a13031b6831e4de5a89fe391d7f8b60a929f2d22dad403c69d60853e5ba1ca"},
-    {file = "multidict-6.6.2-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:6421f4d5acd632af56ae90906755b242e518d59f5313a7b41cd55fb59adfcd74"},
-    {file = "multidict-6.6.2-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:3fed2cfff9d8e3316fc4c5aca40f33d7cd29b5a9a4cbf4aa17dfcae592ccb17c"},
-    {file = "multidict-6.6.2-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:eb97a4eed516fb3d63028fc0a8a8661e1acdf7925eace9c85153ff967926331c"},
-    {file = "multidict-6.6.2-cp312-cp312-musllinux_1_2_ppc64le.whl", hash = "sha256:9bbef50bfefe84213b791c9a326d3221fa31181ba39576049a55c1eef9768109"},
-    {file = "multidict-6.6.2-cp312-cp312-musllinux_1_2_s390x.whl", hash = "sha256:1d7d15b9285d439c3ca80b97b0ed6cc98a2df22c481de1848b77117563ddba14"},
-    {file = "multidict-6.6.2-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:5244c5c12889d84b9b7bf22f875e52c5ba4daa89c8ab92719863a14cd76dd04d"},
-    {file = "multidict-6.6.2-cp312-cp312-win32.whl", hash = "sha256:a2ec0e52d7b298d53983cc4987fe76a25e033305f58d597fbcc1ff139b5e417e"},
-    {file = "multidict-6.6.2-cp312-cp312-win_amd64.whl", hash = "sha256:96d2d55c01ce4ec000a1b6eadbaa22971c91ec512819abee8b5b13f4af3fd566"},
-    {file = "multidict-6.6.2-cp312-cp312-win_arm64.whl", hash = "sha256:a0af3b15eab84e0d4f62a365927070d7f200db7efb8bb1e17de7c14fab5183bb"},
-    {file = "multidict-6.6.2-py3-none-any.whl", hash = "sha256:a7d14275ff2f85a8ff3c2a32e30f94b9fc8a2125b59a4ecc32271a347fad6e78"},
-    {file = "multidict-6.6.2.tar.gz", hash = "sha256:c1e8b8b0523c0361a78ce9b99d9850c51cf25e1fa3c5686030ce75df6fdf2918"},
+    {file = "multidict-6.6.3-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:056bebbeda16b2e38642d75e9e5310c484b7c24e3841dc0fb943206a72ec89d6"},
+    {file = "multidict-6.6.3-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:e5f481cccb3c5c5e5de5d00b5141dc589c1047e60d07e85bbd7dea3d4580d63f"},
+    {file = "multidict-6.6.3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:10bea2ee839a759ee368b5a6e47787f399b41e70cf0c20d90dfaf4158dfb4e55"},
+    {file = "multidict-6.6.3-cp312-cp312-manylinux1_i686.manylinux2014_i686.manylinux_2_17_i686.manylinux_2_5_i686.whl", hash = "sha256:2334cfb0fa9549d6ce2c21af2bfbcd3ac4ec3646b1b1581c88e3e2b1779ec92b"},
+    {file = "multidict-6.6.3-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:b8fee016722550a2276ca2cb5bb624480e0ed2bd49125b2b73b7010b9090e888"},
+    {file = "multidict-6.6.3-cp312-cp312-manylinux2014_armv7l.manylinux_2_17_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:e5511cb35f5c50a2db21047c875eb42f308c5583edf96bd8ebf7d770a9d68f6d"},
+    {file = "multidict-6.6.3-cp312-cp312-manylinux2014_ppc64le.manylinux_2_17_ppc64le.manylinux_2_28_ppc64le.whl", hash = "sha256:712b348f7f449948e0a6c4564a21c7db965af900973a67db432d724619b3c680"},
+    {file = "multidict-6.6.3-cp312-cp312-manylinux2014_s390x.manylinux_2_17_s390x.manylinux_2_28_s390x.whl", hash = "sha256:e4e15d2138ee2694e038e33b7c3da70e6b0ad8868b9f8094a72e1414aeda9c1a"},
+    {file = "multidict-6.6.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8df25594989aebff8a130f7899fa03cbfcc5d2b5f4a461cf2518236fe6f15961"},
+    {file = "multidict-6.6.3-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:159ca68bfd284a8860f8d8112cf0521113bffd9c17568579e4d13d1f1dc76b65"},
+    {file = "multidict-6.6.3-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:e098c17856a8c9ade81b4810888c5ad1914099657226283cab3062c0540b0643"},
+    {file = "multidict-6.6.3-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:67c92ed673049dec52d7ed39f8cf9ebbadf5032c774058b4406d18c8f8fe7063"},
+    {file = "multidict-6.6.3-cp312-cp312-musllinux_1_2_ppc64le.whl", hash = "sha256:bd0578596e3a835ef451784053cfd327d607fc39ea1a14812139339a18a0dbc3"},
+    {file = "multidict-6.6.3-cp312-cp312-musllinux_1_2_s390x.whl", hash = "sha256:346055630a2df2115cd23ae271910b4cae40f4e336773550dca4889b12916e75"},
+    {file = "multidict-6.6.3-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:555ff55a359302b79de97e0468e9ee80637b0de1fce77721639f7cd9440b3a10"},
+    {file = "multidict-6.6.3-cp312-cp312-win32.whl", hash = "sha256:73ab034fb8d58ff85c2bcbadc470efc3fafeea8affcf8722855fb94557f14cc5"},
+    {file = "multidict-6.6.3-cp312-cp312-win_amd64.whl", hash = "sha256:04cbcce84f63b9af41bad04a54d4cc4e60e90c35b9e6ccb130be2d75b71f8c17"},
+    {file = "multidict-6.6.3-cp312-cp312-win_arm64.whl", hash = "sha256:0f1130b896ecb52d2a1e615260f3ea2af55fa7dc3d7c3003ba0c3121a759b18b"},
+    {file = "multidict-6.6.3-py3-none-any.whl", hash = "sha256:8db10f29c7541fc5da4defd8cd697e1ca429db743fa716325f236079b96f775a"},
+    {file = "multidict-6.6.3.tar.gz", hash = "sha256:798a9eb12dab0a6c2e29c1de6f3468af5cb2da6053a20dfa3344907eed0937cc"},
 ]
 
 [[package]]
