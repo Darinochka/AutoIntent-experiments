@@ -27,6 +27,7 @@ h2o = [
     "h2o>=3.46.0.7",
 ]
 lama = [
+    "torch<2.7.0",
     "lightautoml[nlp]>=0.4.1",
 ]
 gluon = [
