@@ -1,0 +1,10 @@
+[project]
+name = "mcp-exps"
+version = "0.1.0"
+description = "Experiments on running MCP benchmarks with autointent-based tool-suggester"
+readme = "README.md"
+requires-python = "==3.13.*"
+dependencies = [
+    "tool_suggest[local] @ git+ssh://git@github.com/DeepPavlov/tool-suggest.git",
+    "mcp_evals @ git+ssh://git@github.com/DeepPavlov/mcp-evals.git",
+]
