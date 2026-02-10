@@ -15,6 +15,15 @@ wheels = [
 ]
 
 [[package]]
+name = "aiofiles"
+version = "25.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/41/c3/534eac40372d8ee36ef40df62ec129bee4fdb5ad9706e58a29be53b2c970/aiofiles-25.1.0.tar.gz", hash = "sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2", size = 46354, upload-time = "2025-10-09T20:51:04.358Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bc/8a/340a1555ae33d7354dbca4faa54948d76d89a27ceef032c8c3bc661d003e/aiofiles-25.1.0-py3-none-any.whl", hash = "sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695", size = 14668, upload-time = "2025-10-09T20:51:03.174Z" },
+]
+
+[[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -116,6 +125,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/96/f0/5eb65b2bb0d09ac6776f2eb54adee6abe8228ea05b20a5ad0e4945de8aac/anyio-4.12.1.tar.gz", hash = "sha256:41cfcc3a4c85d3f05c932da7c26d0201ac36f72abd4435ba90d0464a3ffed703", size = 228685, upload-time = "2026-01-06T11:45:21.246Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/38/0e/27be9fdef66e72d64c0cdc3cc2823101b80585f8119b5c112c2e8f5f7dab/anyio-4.12.1-py3-none-any.whl", hash = "sha256:d405828884fc140aa80a3c667b8beed277f1dfedec42ba031bd6ac3db606ab6c", size = 113592, upload-time = "2026-01-06T11:45:19.497Z" },
+]
+
+[[package]]
+name = "appdirs"
+version = "1.4.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/d8/05696357e0311f5b5c316d7b95f46c669dd9c15aaeecbb48c7d0aeb88c40/appdirs-1.4.4.tar.gz", hash = "sha256:7d5d0167b2b1ba821647616af46a749d1c653740dd0d2415100fe26e27afdf41", size = 13470, upload-time = "2020-05-11T07:59:51.037Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3b/00/2344469e2084fb287c2e0b57b72910309874c3245463acd6cf5e3db69324/appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128", size = 9566, upload-time = "2020-05-11T07:59:49.499Z" },
 ]
 
 [[package]]
@@ -1154,11 +1172,19 @@ wheels = [
 [[package]]
 name = "mcp-evals"
 version = "0.0.1"
-source = { git = "ssh://git@github.com/DeepPavlov/mcp-evals.git#adfddc5a331bf8757033258dd708778d0805d756" }
+source = { git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=adfddc5#adfddc5a331bf8757033258dd708778d0805d756" }
 dependencies = [
     { name = "loguru" },
     { name = "pydantic-ai" },
     { name = "pydantic-settings" },
+]
+
+[package.optional-dependencies]
+domain-filesystem = [
+    { name = "aiofiles" },
+    { name = "appdirs" },
+    { name = "httpx" },
+    { name = "tqdm" },
 ]
 
 [[package]]
@@ -1166,14 +1192,14 @@ name = "mcp-exps"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "mcp-evals" },
+    { name = "mcp-evals", extra = ["domain-filesystem"] },
     { name = "tool-suggest", extra = ["local"] },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp-evals", git = "ssh://git@github.com/DeepPavlov/mcp-evals.git" },
-    { name = "tool-suggest", extras = ["local"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git" },
+    { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=adfddc5" },
+    { name = "tool-suggest", extras = ["local"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=4c6b4ea" },
 ]
 
 [[package]]
@@ -2543,7 +2569,7 @@ wheels = [
 [[package]]
 name = "tool-suggest"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git#4c6b4eac4874e3f2d7e9bc8d07c9ba811dfdb896" }
+source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=4c6b4ea#4c6b4eac4874e3f2d7e9bc8d07c9ba811dfdb896" }
 dependencies = [
     { name = "numpy" },
     { name = "pydantic" },
