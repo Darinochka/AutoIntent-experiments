@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 r"""Script to run domain tasks with OpenAI.
 
 This script runs single domain's tasks from MCP Universe and MCPMark using an OpenAI-compatible
@@ -49,51 +48,12 @@ from typing import Any
 import logfire
 from dotenv import load_dotenv
 from loguru import logger
-from pydantic_ai import Agent
-from pydantic_ai.messages import ModelMessage, ModelRequest, ModelRequestPart, ToolReturnPart
-
 from mcp_evals import BenchmarkRunner, Domain
+
+from src.agents import create_basic_agent
 
 logfire.configure(send_to_logfire="if-token-present")
 logfire.instrument_pydantic_ai()
-
-TOOL_RETURN_LIMIT = 100_000
-
-
-def intermediate_speculations(thought: str) -> None:  # noqa: ARG001
-    """Record intermediate speculations.
-
-    This function is intended to use by AI agents to help them better understand current context.
-    It is not necessary to use it after each step.
-
-    Args:
-       thought: the thoughts to record.
-    """
-    return
-
-
-def truncate_tool_returns(messages: list[ModelMessage]) -> list[ModelMessage]:
-    """Truncate overly long tool retuns to prevent model fail."""
-    res: list[ModelMessage] = []
-    for m in messages:
-        if not isinstance(m, ModelRequest):
-            res.append(m)
-            continue
-        parts: list[ModelRequestPart] = []
-        for p in m.parts:
-            if not isinstance(p, ToolReturnPart):
-                parts.append(p)
-                continue
-            if not isinstance(p.content, str):
-                parts.append(p)
-                continue
-            if len(p.content) > TOOL_RETURN_LIMIT:
-                logger.warning("Met too long tool return. Truncating...")
-                p.content = p.content[:TOOL_RETURN_LIMIT] + "\n[too long... truncated...]"
-                parts.append(p)
-        m.parts = parts
-        res.append(m)
-    return res
 
 
 def main() -> None:
@@ -127,15 +87,7 @@ def main() -> None:
 
     # Create agent with custom base URL
     load_dotenv()
-    agent = Agent(
-        f"openai:{args.model}",
-        system_prompt=(
-            "You are a helpful assistant that can use tools to complete tasks. "
-            "You can provide text messages beside the final answer as a means of "
-            "intermediate speculations and reasoning."
-        ),
-        tools=[intermediate_speculations],
-    )
+    agent = create_basic_agent(model=f"openai:{args.model}")
 
     # Create domain and runner
     domain: Domain[Any]
