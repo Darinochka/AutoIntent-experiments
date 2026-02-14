@@ -114,7 +114,7 @@ def main() -> None:
     parser.add_argument(
         "--model",
         type=str,
-        default=None,
+        required=True,
         help="Model name to use (overrides OPENAI_MODEL env var or 'gpt-4.1' default)",
     )
     parser.add_argument(
