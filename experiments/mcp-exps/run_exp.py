@@ -43,18 +43,17 @@ Examples:
 
 import argparse
 import asyncio
-import re
 import secrets
 from collections.abc import AsyncGenerator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import logfire
 from loguru import logger
 from mcp_evals import BenchmarkRunner, Domain
 from mcp_evals.task import Task
-from mcp_evals.types import DepsMaker
+from mcp_evals.types import DepsMaker, Runner, TrainingTestingCallback
 from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfig
 from tool_suggest.embedder import SentenceTransformerEmbedder
 from tool_suggest.repository import JSONFileRepository
@@ -63,45 +62,64 @@ from tool_suggest.suggester import KNNSuggester
 
 from src.agents import AgentState, create_basic_agent, create_tool_suggest_agent
 
+if TYPE_CHECKING:
+    from pydantic_ai import Agent
 
-def create_tool_suggest_deps_maker(
+
+def create_phase_scoped_tool_suggest_deps(
     output_dir: Path,
-) -> DepsMaker:
-    """Build a DepsMaker that creates AgentState with ToolSuggestClient per task.
+) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
+    """Build phase-scoped deps: same client/repo for all tasks in a training+testing phase.
 
-    Collection name and file path are derived from task name + random suffix.
-    The embedder is reused for all tasks. JSON repository files are left on disk.
+    Returns (deps_maker, start_training, start_testing). start_training creates fresh
+    AgentState (new collection/repo/client) and stores it in a shared ref; start_testing
+    calls await client.train() so the tool-suggest service is ready for test tasks.
+    DepsMaker yields the current phase deps for every task (no per-task collection).
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     embedder = SentenceTransformerEmbedder(device="mps")
 
-    def deps_maker(task: Task[Any, Any]) -> AbstractAsyncContextManager[object]:
+    # Mutable ref holding current phase's AgentState (or None before first start_training).
+    phase_deps_ref: list[AgentState | None] = [None]
+
+    async def start_training() -> None:
+        base = "phase"
+        suffix = secrets.token_hex(4)
+        collection_name = f"{base}_{suffix}"
+        file_path = output_dir / f"{collection_name}.json"
+        repository = JSONFileRepository(
+            collection_name=collection_name,
+            file_path=file_path,
+        )
+        backend_config = LocalBackendConfig(
+            repository=repository,
+            suggester=KNNSuggester(embedder=embedder),
+            selector=GreedySelector(embedder=embedder, target_size=15),  # NOTE: test value
+        )
+        config = ToolSuggestConfig(
+            collection_name=collection_name,
+            local_backend=backend_config,
+        )
+        client = ToolSuggestClient(config=config)
+        phase_deps_ref[0] = AgentState(tool_suggest_client=client)
+
+    async def start_testing() -> None:
+        state = phase_deps_ref[0]
+        if state is not None:
+            await state.tool_suggest_client.train()
+
+    def deps_maker(_task: Task[Any, Any]) -> AbstractAsyncContextManager[object]:
         @asynccontextmanager
-        async def cm() -> AsyncGenerator[AgentState]:
-            base = re.sub(r"[^a-zA-Z0-9_-]", "_", task.name)
-            suffix = secrets.token_hex(4)
-            collection_name = f"{base}_{suffix}"
-            file_path = output_dir / f"{collection_name}.json"
-            repository = JSONFileRepository(
-                collection_name=collection_name,
-                file_path=file_path,
-            )
-            backend_config = LocalBackendConfig(
-                repository=repository,
-                suggester=KNNSuggester(embedder=embedder),
-                selector=GreedySelector(embedder=embedder, target_size=15),  # NOTE: test value
-            )
-            config = ToolSuggestConfig(
-                collection_name=collection_name,
-                local_backend=backend_config,
-            )
-            client = ToolSuggestClient(config=config)
-            yield AgentState(tool_suggest_client=client)
+        async def cm() -> AsyncGenerator[object]:
+            state = phase_deps_ref[0]
+            if state is None:
+                raise RuntimeError("Phase deps not set; start_training must run first.")
+            yield state
 
         return cm()
 
-    return deps_maker
+    return (deps_maker, start_training, start_testing)
 
 
 def main() -> None:
@@ -142,6 +160,31 @@ def main() -> None:
         default=Path("tool_suggest_repos"),
         help="Directory for persistent tool-suggest JSON repositories (default: tool_suggest_repos).",
     )
+    parser.add_argument(
+        "--runner",
+        type=str,
+        choices=["ho", "cv"],
+        default="ho",
+        help="Runner for ts agent: 'ho' (hold-out) or 'cv' (cross-validation). Ignored when --agent basic.",
+    )
+    parser.add_argument(
+        "--ho-ratio",
+        type=float,
+        default=0.2,
+        help="Hold-out test ratio (default: 0.2). Used when --agent ts --runner ho.",
+    )
+    parser.add_argument(
+        "--cv-splits",
+        type=int,
+        default=5,
+        help="Number of CV folds (default: 5). Used when --agent ts --runner cv.",
+    )
+    parser.add_argument(
+        "--random-state",
+        type=int,
+        default=None,
+        help="Random state for train/test splits. Used when --agent ts.",
+    )
 
     args = parser.parse_args()
 
@@ -151,6 +194,7 @@ def main() -> None:
     # Create agent with custom base URL
     model = f"openai:{args.model}"
 
+    agent: Agent[Any, Any]
     if args.agent == "basic":
         agent = create_basic_agent(model=model)
     elif args.agent == "ts":
@@ -167,20 +211,35 @@ def main() -> None:
 
         domain = FilesystemDomain()
 
-    runner = BenchmarkRunner(agent=agent, domains=[domain])
-
     deps_maker = None
-    if args.agent == "ts":
-        deps_maker = create_tool_suggest_deps_maker(args.repos_dir)
+    start_training_cb: TrainingTestingCallback | None = None
+    start_testing_cb: TrainingTestingCallback | None = None
+    runner_type = Runner.INFERENCE_ONLY
+
+    if args.agent == "basic":
+        runner_type = Runner.INFERENCE_ONLY
+    elif args.agent == "ts":
+        runner_type = Runner.HOLD_OUT if args.runner == "ho" else Runner.CROSS_VALIDATION
+        deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(args.repos_dir)
+
+    runner = BenchmarkRunner(
+        agent=agent,
+        domains=[domain],
+        runner=runner_type,
+        deps_maker=deps_maker,
+        experiment_name=args.experiment_name,
+        hold_out_test_ratio=args.ho_ratio,
+        cv_n_splits=args.cv_splits,
+        random_state=args.random_state,
+        start_training=start_training_cb,
+        start_testing=start_testing_cb,
+    )
 
     logger.info(f"Running {args.domain} tasks with model: {args.model}")
 
     # Run benchmark
     async def run() -> None:
-        reports = await runner.run(
-            experiment_name=args.experiment_name,
-            deps_maker=deps_maker,
-        )
+        reports = await runner.run()
         report = reports[0]
         logger.info(f"\nDomain: {args.domain}")
         logger.info(f"Total tasks: {len(report.cases)}")
