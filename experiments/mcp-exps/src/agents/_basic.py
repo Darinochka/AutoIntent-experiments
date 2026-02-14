@@ -5,7 +5,7 @@ from src.history_processors import truncate_tool_returns
 from src.tools import intermediate_speculations
 
 
-def create_basic_agent(model: str = "openai:gpt-4.1") -> None:
+def create_basic_agent(model: str = "openai:gpt-4.1") -> Agent[None, str]:
     load_dotenv()
     return Agent(
         model,
