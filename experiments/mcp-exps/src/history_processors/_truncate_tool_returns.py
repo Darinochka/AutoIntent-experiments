@@ -1,5 +1,7 @@
 """Truncator for excessive tool returns."""
 
+from copy import deepcopy
+
 from loguru import logger
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelRequestPart, ToolReturnPart
 
@@ -7,7 +9,7 @@ TOOL_RETURN_LIMIT = 100_000
 
 
 def truncate_tool_returns(messages: list[ModelMessage]) -> list[ModelMessage]:
-    """Truncate overly long tool retuns to prevent model fail."""
+    """Truncate overly long tool returns to prevent model fail."""
     res: list[ModelMessage] = []
     for m in messages:
         if not isinstance(m, ModelRequest):
@@ -23,8 +25,13 @@ def truncate_tool_returns(messages: list[ModelMessage]) -> list[ModelMessage]:
                 continue
             if len(p.content) > TOOL_RETURN_LIMIT:
                 logger.warning("Met too long tool return. Truncating...")
-                p.content = p.content[:TOOL_RETURN_LIMIT] + "\n[too long... truncated...]"
+                edited_part = deepcopy(p)
+                edited_part.content = p.content[:TOOL_RETURN_LIMIT] + "\n[too long... truncated...]"
+                parts.append(edited_part)
+            else:
                 parts.append(p)
-        m.parts = parts
-        res.append(m)
+        edited_message = deepcopy(m)
+        edited_message.parts = parts
+        res.append(edited_message)
+
     return res
