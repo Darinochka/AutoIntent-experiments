@@ -43,17 +43,65 @@ Examples:
 
 import argparse
 import asyncio
+import re
+import secrets
+from collections.abc import AsyncGenerator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import logfire
-from dotenv import load_dotenv
 from loguru import logger
 from mcp_evals import BenchmarkRunner, Domain
+from mcp_evals.task import Task
+from mcp_evals.types import DepsMaker
+from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfig
+from tool_suggest.embedder import SentenceTransformerEmbedder
+from tool_suggest.repository import JSONFileRepository
+from tool_suggest.selector import GreedySelector
+from tool_suggest.suggester import KNNSuggester
 
-from src.agents import create_basic_agent
+from src.agents import AgentState, create_basic_agent, create_tool_suggest_agent
 
-logfire.configure(send_to_logfire="if-token-present")
-logfire.instrument_pydantic_ai()
+
+def create_tool_suggest_deps_maker(
+    output_dir: Path,
+) -> DepsMaker:
+    """Build a DepsMaker that creates AgentState with ToolSuggestClient per task.
+
+    Collection name and file path are derived from task name + random suffix.
+    The embedder is reused for all tasks. JSON repository files are left on disk.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    embedder = SentenceTransformerEmbedder(device="mps")
+
+    def deps_maker(task: Task[Any, Any]) -> AbstractAsyncContextManager[object]:
+        @asynccontextmanager
+        async def cm() -> AsyncGenerator[AgentState]:
+            base = re.sub(r"[^a-zA-Z0-9_-]", "_", task.name)
+            suffix = secrets.token_hex(4)
+            collection_name = f"{base}_{suffix}"
+            file_path = output_dir / f"{collection_name}.json"
+            repository = JSONFileRepository(
+                collection_name=collection_name,
+                file_path=file_path,
+            )
+            backend_config = LocalBackendConfig(
+                repository=repository,
+                suggester=KNNSuggester(embedder=embedder),
+                selector=GreedySelector(embedder=embedder, target_size=15),  # NOTE: test value
+            )
+            config = ToolSuggestConfig(
+                collection_name=collection_name,
+                local_backend=backend_config,
+            )
+            client = ToolSuggestClient(config=config)
+            yield AgentState(tool_suggest_client=client)
+
+        return cm()
+
+    return deps_maker
 
 
 def main() -> None:
@@ -82,12 +130,31 @@ def main() -> None:
         default=None,
         help="Experiment name. Use it to differentiate runs.",
     )
+    parser.add_argument(
+        "--agent",
+        type=str,
+        choices=["basic", "ts"],
+        help="Agent variant: 'basic' or 'ts' (tool-suggest).",
+    )
+    parser.add_argument(
+        "--repos-dir",
+        type=Path,
+        default=Path("tool_suggest_repos"),
+        help="Directory for persistent tool-suggest JSON repositories (default: tool_suggest_repos).",
+    )
 
     args = parser.parse_args()
 
+    logfire.configure(send_to_logfire="if-token-present")
+    logfire.instrument_pydantic_ai()
+
     # Create agent with custom base URL
-    load_dotenv()
-    agent = create_basic_agent(model=f"openai:{args.model}")
+    model = f"openai:{args.model}"
+
+    if args.agent == "basic":
+        agent = create_basic_agent(model=model)
+    elif args.agent == "ts":
+        agent = create_tool_suggest_agent(model=model)
 
     # Create domain and runner
     domain: Domain[Any]
@@ -102,11 +169,18 @@ def main() -> None:
 
     runner = BenchmarkRunner(agent=agent, domains=[domain])
 
+    deps_maker = None
+    if args.agent == "ts":
+        deps_maker = create_tool_suggest_deps_maker(args.repos_dir)
+
     logger.info(f"Running {args.domain} tasks with model: {args.model}")
 
     # Run benchmark
     async def run() -> None:
-        reports = await runner.run(experiment_name=args.experiment_name)
+        reports = await runner.run(
+            experiment_name=args.experiment_name,
+            deps_maker=deps_maker,
+        )
         report = reports[0]
         logger.info(f"\nDomain: {args.domain}")
         logger.info(f"Total tasks: {len(report.cases)}")
