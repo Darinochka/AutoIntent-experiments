@@ -108,11 +108,12 @@ def create_phase_scoped_tool_suggest_deps(
 
     async def start_testing() -> None:
         logger.info("Start training tool suggester on collected data")
-        state = phase_deps_ref[0]
-        if state is not None:
-            logger.debug("Training...")
-            await state.tool_suggest_client.train()
-            logger.debug("Trained!")
+        with logfire.span("Training tool suggester"):
+            state = phase_deps_ref[0]
+            if state is not None:
+                logger.debug("Training...")
+                await state.tool_suggest_client.train()
+                logger.debug("Trained!")
 
     def deps_maker(_task: Task[Any, Any]) -> AbstractAsyncContextManager[object]:
         @asynccontextmanager
@@ -209,6 +210,7 @@ def main() -> None:  # noqa: PLR0915
     if args.agent == "basic":
         agent = create_basic_agent(model=model)
     elif args.agent == "ts":
+        logger.debug("Creating ts agent")
         agent = create_tool_suggest_agent(model=model)
 
     # Create domain and runner

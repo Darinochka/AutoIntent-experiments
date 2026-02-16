@@ -1,7 +1,9 @@
 from collections.abc import AsyncIterable
 from dataclasses import dataclass
 
+import logfire
 from dotenv import load_dotenv
+from loguru import logger
 from pydantic_ai import (
     Agent,
     AgentStreamEvent,
@@ -45,17 +47,21 @@ def create_tool_suggest_agent(model: str) -> Agent[AgentState, str]:
         history_processors=[truncate_tool_returns],
         deps_type=AgentState,
         event_stream_handler=_record_tool_calls,
+        retries=5,
     )
 
 
 async def suggest_tools(ctx: RunContext[AgentState], tool_defs: list[ToolDefinition]) -> list[ToolDefinition] | None:
     if not ctx.deps.tool_suggest_client.is_trained:
+        logger.debug("Suggester is not trained yet")
         return tool_defs
-    messages = ctx.messages
-    suggestions = await ctx.deps.tool_suggest_client.suggest(context=messages)
-    names = [s.id for s in suggestions]
-    filtered = [t for t in tool_defs if t.name in names]
-    return sorted(filtered, key=lambda t: names.index(t.name))
+    with logfire.span("Gettings suggestions from suggester") as span:
+        messages = ctx.messages
+        suggestions = await ctx.deps.tool_suggest_client.suggest(context=messages)
+        names = [s.id for s in suggestions]
+        selected = sorted((t for t in tool_defs if t.name in names), key=lambda t: names.index(t.name))
+        span.set_attribute("tools_suggested", [s.name for s in selected])
+    return selected
 
 
 async def _handle_event(ctx: RunContext[AgentState], event: AgentStreamEvent) -> None:
