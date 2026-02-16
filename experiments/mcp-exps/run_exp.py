@@ -84,6 +84,7 @@ def create_phase_scoped_tool_suggest_deps(
     phase_deps_ref: list[AgentState | None] = [None]
 
     async def start_training() -> None:
+        logger.info("Collect training samples...")
         base = "phase"
         suffix = secrets.token_hex(4)
         collection_name = f"{base}_{suffix}"
@@ -103,11 +104,15 @@ def create_phase_scoped_tool_suggest_deps(
         )
         client = ToolSuggestClient(config=config)
         phase_deps_ref[0] = AgentState(tool_suggest_client=client)
+        logger.success("Data collection is set up!")
 
     async def start_testing() -> None:
+        logger.info("Start training tool suggester on collected data")
         state = phase_deps_ref[0]
         if state is not None:
+            logger.debug("Training...")
             await state.tool_suggest_client.train()
+            logger.debug("Trained!")
 
     def deps_maker(_task: Task[Any, Any]) -> AbstractAsyncContextManager[object]:
         @asynccontextmanager
