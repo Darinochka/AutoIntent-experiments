@@ -122,7 +122,7 @@ def create_phase_scoped_tool_suggest_deps(
     return (deps_maker, start_training, start_testing)
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915
     """Run all filesystem tasks with OpenAI."""
     parser = argparse.ArgumentParser(
         description="Run filesystem tasks with OpenAI-compatible API",
@@ -185,6 +185,12 @@ def main() -> None:
         default=None,
         help="Random state for train/test splits. Used when --agent ts.",
     )
+    parser.add_argument(
+        "--max-tasks",
+        type=int,
+        default=None,
+        help="Limit number of tasks to run (useful for smoke tests).",
+    )
 
     args = parser.parse_args()
 
@@ -233,6 +239,7 @@ def main() -> None:
         random_state=args.random_state,
         start_training=start_training_cb,
         start_testing=start_testing_cb,
+        max_tasks=args.max_tasks,
     )
 
     logger.info(f"Running {args.domain} tasks with model: {args.model}")
