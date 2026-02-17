@@ -43,89 +43,23 @@ Examples:
 
 import argparse
 import asyncio
-import secrets
-from collections.abc import AsyncGenerator
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import logfire
 from loguru import logger
 from mcp_evals import BenchmarkRunner, Domain
-from mcp_evals.task import Task
-from mcp_evals.types import DepsMaker, Runner, TrainingTestingCallback
-from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfig
-from tool_suggest.embedder import SentenceTransformerEmbedder
-from tool_suggest.repository import JSONFileRepository
-from tool_suggest.selector import GreedySelector
-from tool_suggest.suggester import KNNSuggester
+from mcp_evals.types import Runner, TrainingTestingCallback
 
-from src.agents import AgentState, create_basic_agent, create_tool_suggest_agent
+from src.agents import (
+    create_basic_agent,
+    create_basic_deps_maker,
+    create_phase_scoped_tool_suggest_deps,
+    create_tool_suggest_agent,
+)
 
 if TYPE_CHECKING:
     from pydantic_ai import Agent
-
-
-def create_phase_scoped_tool_suggest_deps(
-    output_dir: Path,
-) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
-    """Build phase-scoped deps: same client/repo for all tasks in a training+testing phase.
-
-    Returns (deps_maker, start_training, start_testing). start_training creates fresh
-    AgentState (new collection/repo/client) and stores it in a shared ref; start_testing
-    calls await client.train() so the tool-suggest service is ready for test tasks.
-    DepsMaker yields the current phase deps for every task (no per-task collection).
-    """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    embedder = SentenceTransformerEmbedder(device="mps")
-
-    # Mutable ref holding current phase's AgentState (or None before first start_training).
-    phase_deps_ref: list[AgentState | None] = [None]
-
-    async def start_training() -> None:
-        logger.info("Collect training samples...")
-        base = "phase"
-        suffix = secrets.token_hex(4)
-        collection_name = f"{base}_{suffix}"
-        file_path = output_dir / f"{collection_name}.json"
-        repository = JSONFileRepository(
-            collection_name=collection_name,
-            file_path=file_path,
-        )
-        backend_config = LocalBackendConfig(
-            repository=repository,
-            suggester=KNNSuggester(embedder=embedder),
-            selector=GreedySelector(embedder=embedder, target_size=15),  # NOTE: test value
-        )
-        config = ToolSuggestConfig(
-            collection_name=collection_name,
-            local_backend=backend_config,
-        )
-        client = ToolSuggestClient(config=config)
-        phase_deps_ref[0] = AgentState(tool_suggest_client=client)
-        logger.success("Data collection is set up!")
-
-    async def start_testing() -> None:
-        logger.info("Start training tool suggester on collected data")
-        with logfire.span("Training tool suggester"):
-            state = phase_deps_ref[0]
-            if state is not None:
-                logger.debug("Training...")
-                await state.tool_suggest_client.train()
-                logger.debug("Trained!")
-
-    def deps_maker(_task: Task[Any, Any]) -> AbstractAsyncContextManager[object]:
-        @asynccontextmanager
-        async def cm() -> AsyncGenerator[object]:
-            state = phase_deps_ref[0]
-            if state is None:
-                raise RuntimeError("Phase deps not set; start_training must run first.")
-            yield state
-
-        return cm()
-
-    return (deps_maker, start_training, start_testing)
 
 
 def main() -> None:  # noqa: PLR0915
@@ -197,6 +131,12 @@ def main() -> None:  # noqa: PLR0915
         default=None,
         help="Limit number of tasks to run (useful for smoke tests).",
     )
+    parser.add_argument(
+        "--tool-retries",
+        type=int,
+        default=3,
+        help="Limit number of tasks to run (useful for smoke tests).",
+    )
 
     args = parser.parse_args()
 
@@ -218,11 +158,11 @@ def main() -> None:  # noqa: PLR0915
     if args.domain == "pg":
         from mcp_evals.contrib.postgres import PostgresDomain  # noqa: PLC0415
 
-        domain = PostgresDomain()
+        domain = PostgresDomain(tool_retries=args.tool_retries)
     elif args.domain == "fs":
         from mcp_evals.contrib.filesystem import FilesystemDomain  # noqa: PLC0415
 
-        domain = FilesystemDomain()
+        domain = FilesystemDomain(tool_retries=args.tool_retries)
 
     deps_maker = None
     start_training_cb: TrainingTestingCallback | None = None
@@ -231,6 +171,7 @@ def main() -> None:  # noqa: PLR0915
 
     if args.agent == "basic":
         runner_type = Runner.INFERENCE_ONLY
+        deps_maker = create_basic_deps_maker()
     elif args.agent == "ts":
         runner_type = Runner.HOLD_OUT if args.runner == "ho" else Runner.CROSS_VALIDATION
         deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(args.repos_dir)

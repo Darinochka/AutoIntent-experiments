@@ -1,9 +1,15 @@
-from collections.abc import AsyncIterable
-from dataclasses import dataclass
+import secrets
+from collections.abc import AsyncGenerator, AsyncIterable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 import logfire
 from dotenv import load_dotenv
 from loguru import logger
+from mcp_evals.task import Task
+from mcp_evals.types import DepsMaker, TrainingTestingCallback
 from pydantic_ai import (
     Agent,
     AgentStreamEvent,
@@ -11,18 +17,23 @@ from pydantic_ai import (
     RunContext,
     ToolDefinition,
 )
-from tool_suggest import ToolSuggestClient
+from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfig
+from tool_suggest.embedder import SentenceTransformerEmbedder
+from tool_suggest.repository import JSONFileRepository
+from tool_suggest.selector import GreedySelector
+from tool_suggest.suggester import KNNSuggester
 
 from src.history_processors import truncate_tool_returns
-from src.tools import intermediate_speculations
+from src.tools import get_thoughts, record_intermediate_speculations
 
 
 @dataclass
-class AgentState:
+class TSAgentState:
     tool_suggest_client: ToolSuggestClient
+    speculations: list[str] = field(default_factory=list)
 
 
-def create_tool_suggest_agent(model: str) -> Agent[AgentState, str]:
+def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
     """Create agent that uses tool suggestion service for reducing context size.
 
     Details:
@@ -42,16 +53,16 @@ def create_tool_suggest_agent(model: str) -> Agent[AgentState, str]:
             "You can provide text messages beside the final answer as a means of "
             "intermediate speculations and reasoning."
         ),
-        tools=[intermediate_speculations],
+        tools=[record_intermediate_speculations, get_thoughts],
         prepare_tools=suggest_tools,
         history_processors=[truncate_tool_returns],
-        deps_type=AgentState,
+        deps_type=TSAgentState,
         event_stream_handler=_record_tool_calls,
         retries=5,
     )
 
 
-async def suggest_tools(ctx: RunContext[AgentState], tool_defs: list[ToolDefinition]) -> list[ToolDefinition] | None:
+async def suggest_tools(ctx: RunContext[TSAgentState], tool_defs: list[ToolDefinition]) -> list[ToolDefinition] | None:
     if not ctx.deps.tool_suggest_client.is_trained:
         logger.debug("Suggester is not trained yet")
         return tool_defs
@@ -64,7 +75,7 @@ async def suggest_tools(ctx: RunContext[AgentState], tool_defs: list[ToolDefinit
     return selected
 
 
-async def _handle_event(ctx: RunContext[AgentState], event: AgentStreamEvent) -> None:
+async def _handle_event(ctx: RunContext[TSAgentState], event: AgentStreamEvent) -> None:
     if not isinstance(event, FunctionToolCallEvent):
         return
     context = ctx.messages
@@ -74,8 +85,71 @@ async def _handle_event(ctx: RunContext[AgentState], event: AgentStreamEvent) ->
 
 
 async def _record_tool_calls(
-    ctx: RunContext[AgentState],
+    ctx: RunContext[TSAgentState],
     event_stream: AsyncIterable[AgentStreamEvent],
 ) -> None:
     async for event in event_stream:
         await _handle_event(ctx, event)
+
+
+def create_phase_scoped_tool_suggest_deps(
+    output_dir: Path,
+) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
+    """Build phase-scoped deps: same client/repo for all tasks in a training+testing phase.
+
+    Returns (deps_maker, start_training, start_testing). start_training creates fresh
+    TSAgentState (new collection/repo/client) and stores it in a shared ref; start_testing
+    calls await client.train() so the tool-suggest service is ready for test tasks.
+    DepsMaker yields the current phase deps for every task (no per-task collection).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    embedder = SentenceTransformerEmbedder(device="mps")
+
+    # Mutable ref holding current phase's TSAgentState (or None before first start_training).
+    phase_deps_ref: list[TSAgentState | None] = [None]
+
+    async def start_training() -> None:
+        logger.info("Collect training samples...")
+        base = "phase"
+        suffix = secrets.token_hex(4)
+        collection_name = f"{base}_{suffix}"
+        file_path = output_dir / f"{collection_name}.json"
+        repository = JSONFileRepository(
+            collection_name=collection_name,
+            file_path=file_path,
+        )
+        backend_config = LocalBackendConfig(
+            repository=repository,
+            suggester=KNNSuggester(embedder=embedder),
+            selector=GreedySelector(embedder=embedder, target_size=15),  # NOTE: test value
+        )
+        config = ToolSuggestConfig(
+            collection_name=collection_name,
+            local_backend=backend_config,
+        )
+        client = ToolSuggestClient(config=config)
+        phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[])
+        logger.success("Data collection is set up!")
+
+    async def start_testing() -> None:
+        logger.info("Start training tool suggester on collected data")
+        with logfire.span("Training tool suggester"):
+            state = phase_deps_ref[0]
+            if state is not None:
+                logger.debug("Training...")
+                await state.tool_suggest_client.train()
+                logger.debug("Trained!")
+
+    def deps_maker(_task: Task[Any, Any]) -> AbstractAsyncContextManager[object]:
+        @asynccontextmanager
+        async def cm() -> AsyncGenerator[object]:
+            state = phase_deps_ref[0]
+            if state is None:
+                raise RuntimeError("Phase deps not set; start_training must run first.")
+            state.speculations.clear()
+            yield state
+
+        return cm()
+
+    return (deps_maker, start_training, start_testing)
