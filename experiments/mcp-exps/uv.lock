@@ -1191,7 +1191,7 @@ wheels = [
 [[package]]
 name = "mcp-evals"
 version = "0.0.1"
-source = { git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=4de9a1054000314e88c36b0c781a542199731824#4de9a1054000314e88c36b0c781a542199731824" }
+source = { git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=6c0b4fb#6c0b4fb8c805c92a8b8fdc3988efe5b3bc1451ff" }
 dependencies = [
     { name = "loguru" },
     { name = "pydantic-ai" },
@@ -1223,7 +1223,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=4de9a1054000314e88c36b0c781a542199731824" },
+    { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=6c0b4fb" },
     { name = "tool-suggest", extras = ["local"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=5c74630019292a18c49930ef8b4c4886d005be55" },
 ]
 
