@@ -1,22 +1,24 @@
+from __future__ import annotations
+
 import secrets
-from collections.abc import AsyncGenerator, AsyncIterable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+    from uuid import UUID
+
+    from mcp_evals.task import Task
+    from mcp_evals.types import DepsMaker, TrainingTestingCallback
+    from pydantic_ai.run import AgentRunResult
 
 import logfire
 from dotenv import load_dotenv
 from loguru import logger
-from mcp_evals.task import Task
-from mcp_evals.types import DepsMaker, TrainingTestingCallback
-from pydantic_ai import (
-    Agent,
-    AgentStreamEvent,
-    FunctionToolCallEvent,
-    RunContext,
-    ToolDefinition,
-)
+from pydantic_ai import Agent, RunContext, ToolDefinition
+from pydantic_ai.messages import ModelResponse
 from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfig
 from tool_suggest.embedder import SentenceTransformerEmbedder
 from tool_suggest.repository import JSONFileRepository
@@ -37,7 +39,8 @@ def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
     """Create agent that uses tool suggestion service for reducing context size.
 
     Details:
-    - collect train data using FunctionToolCallEvent stream handler
+    - Training data is collected via run result processor (record from result.all_messages()
+      with parent_context compression), not event_stream_handler.
     - suggest in Agent.__init__(prepare_tools=...)
 
     Note:
@@ -57,7 +60,6 @@ def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
         prepare_tools=suggest_tools,
         history_processors=[truncate_tool_returns],
         deps_type=TSAgentState,
-        event_stream_handler=_record_tool_calls,
         retries=5,
     )
 
@@ -75,21 +77,44 @@ async def suggest_tools(ctx: RunContext[TSAgentState], tool_defs: list[ToolDefin
     return selected
 
 
-async def _handle_event(ctx: RunContext[TSAgentState], event: AgentStreamEvent) -> None:
-    if not isinstance(event, FunctionToolCallEvent):
+def _tool_names_from_response(msg: ModelResponse) -> list[str]:
+    """Collect tool names from a ModelResponse's tool-call parts."""
+    return [part.tool_name for part in msg.parts if hasattr(part, "tool_name") and part.tool_name]
+
+
+async def tool_suggest_run_result_processor(_task: Task[Any, Any], result: AgentRunResult[Any], deps: object) -> None:
+    """Record tool-suggest samples from result.all_messages() with parent_context."""
+    if not isinstance(deps, TSAgentState):
         return
-    context = ctx.messages
-    # NOTE: handle multiple tool calls in a single run gracefully
-    selected_tools = [event.part.tool_name]
-    await ctx.deps.tool_suggest_client.record(context=context, selected_tools=selected_tools)
-
-
-async def _record_tool_calls(
-    ctx: RunContext[TSAgentState],
-    event_stream: AsyncIterable[AgentStreamEvent],
-) -> None:
-    async for event in event_stream:
-        await _handle_event(ctx, event)
+    client = deps.tool_suggest_client
+    messages = result.all_messages()
+    # Collect (end_index_excl, selected_tools) for each ModelResponse that contains tool calls.
+    steps: list[tuple[int, list[str]]] = []
+    for i, msg in enumerate(messages):
+        if isinstance(msg, ModelResponse):
+            tool_names = _tool_names_from_response(msg)
+            if tool_names:
+                steps.append((i + 1, tool_names))
+    if not steps:
+        return
+    last_sample_id: UUID | None = None
+    prev_end = 0
+    for end_idx, selected_tools in steps:
+        context_slice = messages[prev_end:end_idx]
+        if last_sample_id is None:
+            sample_id = await client.record(
+                context=context_slice,
+                selected_tools=selected_tools,
+                parent_context=None,
+            )
+        else:
+            sample_id = await client.record(
+                context=context_slice,
+                selected_tools=selected_tools,
+                parent_context=last_sample_id,
+            )
+        last_sample_id = sample_id
+        prev_end = end_idx
 
 
 def create_phase_scoped_tool_suggest_deps(

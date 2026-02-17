@@ -56,6 +56,7 @@ from src.agents import (
     create_basic_deps_maker,
     create_phase_scoped_tool_suggest_deps,
     create_tool_suggest_agent,
+    tool_suggest_run_result_processor,
 )
 
 if TYPE_CHECKING:
@@ -176,6 +177,7 @@ def main() -> None:  # noqa: PLR0915
         runner_type = Runner.HOLD_OUT if args.runner == "ho" else Runner.CROSS_VALIDATION
         deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(args.repos_dir)
 
+    run_result_processor = tool_suggest_run_result_processor if args.agent == "ts" else None
     runner = BenchmarkRunner(
         agent=agent,
         domains=[domain],
@@ -187,6 +189,7 @@ def main() -> None:  # noqa: PLR0915
         random_state=args.random_state,
         start_training=start_training_cb,
         start_testing=start_testing_cb,
+        run_result_processor=run_result_processor,
         max_tasks=args.max_tasks,
     )
 
