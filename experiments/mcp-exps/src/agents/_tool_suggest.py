@@ -20,10 +20,11 @@ from loguru import logger
 from pydantic_ai import Agent, RunContext, ToolDefinition
 from pydantic_ai.messages import ModelResponse
 from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfig
-from tool_suggest.embedder import SentenceTransformerEmbedder
-from tool_suggest.repository import JSONFileRepository
-from tool_suggest.selector import GreedySelector
-from tool_suggest.suggester import KNNSuggester
+from tool_suggest.services.embedder import SentenceTransformerEmbedder
+from tool_suggest.services.formatter import SampleFormatter
+from tool_suggest.services.repository import JSONFileRepository
+from tool_suggest.services.selector import GreedySelector
+from tool_suggest.services.suggester import KNNSuggester
 
 from src.history_processors import truncate_tool_returns
 from src.tools import get_thoughts, record_intermediate_speculations
@@ -144,10 +145,11 @@ def create_phase_scoped_tool_suggest_deps(
             collection_name=collection_name,
             file_path=file_path,
         )
+        formatter = SampleFormatter(max_len=1000)
         backend_config = LocalBackendConfig(
             repository=repository,
-            suggester=KNNSuggester(embedder=embedder),
-            selector=GreedySelector(embedder=embedder, target_size=15),  # NOTE: test value
+            suggester=KNNSuggester(embedder=embedder, formatter=formatter),
+            selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=15),  # NOTE: test value
         )
         config = ToolSuggestConfig(
             collection_name=collection_name,

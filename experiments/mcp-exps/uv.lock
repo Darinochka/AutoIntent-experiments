@@ -1224,7 +1224,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=3b46189" },
-    { name = "tool-suggest", extras = ["local"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=5c74630019292a18c49930ef8b4c4886d005be55" },
+    { name = "tool-suggest", extras = ["local"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=8135167" },
 ]
 
 [package.metadata.requires-dev]
@@ -2664,8 +2664,9 @@ wheels = [
 [[package]]
 name = "tool-suggest"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=5c74630019292a18c49930ef8b4c4886d005be55#5c74630019292a18c49930ef8b4c4886d005be55" }
+source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=8135167#8135167ce66bd6ff42a65bd8c4f5d1adeb9f44df" }
 dependencies = [
+    { name = "loguru" },
     { name = "numpy" },
     { name = "pydantic" },
     { name = "pydantic-ai-slim" },
