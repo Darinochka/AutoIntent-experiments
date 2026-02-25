@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from uuid import UUID
 
+    from autointent.custom_types import SearchSpacePreset
     from mcp_evals.task import Task
     from mcp_evals.types import DepsMaker, TrainingTestingCallback
     from pydantic_ai.run import AgentRunResult
@@ -24,7 +25,7 @@ from tool_suggest.services.embedder import SentenceTransformerEmbedder
 from tool_suggest.services.formatter import SampleFormatter
 from tool_suggest.services.repository import JSONFileRepository
 from tool_suggest.services.selector import GreedySelector
-from tool_suggest.services.suggester import KNNSuggester
+from tool_suggest.services.suggester import AutoIntentSuggester
 
 from src.history_processors import truncate_tool_returns
 from src.tools import get_thoughts, record_intermediate_speculations
@@ -120,6 +121,8 @@ async def tool_suggest_run_result_processor(_task: Task[Any, Any], result: Agent
 
 def create_phase_scoped_tool_suggest_deps(
     output_dir: Path,
+    multilabel: bool = False,
+    preset: SearchSpacePreset = "classic-light",
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Build phase-scoped deps: same client/repo for all tasks in a training+testing phase.
 
@@ -148,7 +151,7 @@ def create_phase_scoped_tool_suggest_deps(
         formatter = SampleFormatter(max_len=1000)
         backend_config = LocalBackendConfig(
             repository=repository,
-            suggester=KNNSuggester(embedder=embedder, formatter=formatter),
+            suggester=AutoIntentSuggester(formatter=formatter, multilabel=multilabel, preset=preset),
             selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=15),  # NOTE: test value
         )
         config = ToolSuggestConfig(
