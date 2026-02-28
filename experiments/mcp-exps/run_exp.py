@@ -50,6 +50,7 @@ import logfire
 from loguru import logger
 from mcp_evals import BenchmarkRunner, Domain
 from mcp_evals.types import Runner, TrainingTestingCallback
+from pydantic_ai import UsageLimits
 
 from src.agents import (
     create_basic_agent,
@@ -141,7 +142,7 @@ def main() -> None:  # noqa: PLR0915
 
     args = parser.parse_args()
 
-    logfire.configure(send_to_logfire="if-token-present")
+    logfire.configure(send_to_logfire="if-token-present", scrubbing=False)
     logfire.instrument_pydantic_ai()
 
     # Create agent with custom base URL
@@ -191,6 +192,7 @@ def main() -> None:  # noqa: PLR0915
         start_testing=start_testing_cb,
         run_result_processor=run_result_processor,
         max_tasks=args.max_tasks,
+        usage_limits=UsageLimits(request_limit=10),
     )
 
     logger.info(f"Running {args.domain} tasks with model: {args.model}")
