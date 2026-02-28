@@ -70,6 +70,8 @@ def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
     def current_tool_return_limit(ctx: RunContext[TSAgentState]) -> str:
         return f"Current tool return limit is {ctx.deps.tool_return_limit} (in chars)."
 
+    return agent
+
 
 async def suggest_tools(ctx: RunContext[TSAgentState], tool_defs: list[ToolDefinition]) -> list[ToolDefinition] | None:
     if not ctx.deps.tool_suggest_client.is_trained:
