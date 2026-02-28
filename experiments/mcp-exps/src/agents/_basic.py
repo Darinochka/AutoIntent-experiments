@@ -14,6 +14,7 @@ from src.tools import get_thoughts, record_intermediate_speculations
 
 class BasicAgentState(BaseModel):
     speculations: list[str] = Field(default_factory=list)
+    tool_return_limit: int = 10_000
 
 
 def create_basic_agent(model: str = "openai:gpt-4.1") -> Agent[BasicAgentState, str]:
