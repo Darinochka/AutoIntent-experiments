@@ -35,6 +35,7 @@ from src.tools import get_thoughts, record_intermediate_speculations
 class TSAgentState:
     tool_suggest_client: ToolSuggestClient
     speculations: list[str] = field(default_factory=list)
+    tool_return_limit: int = 10_000
 
 
 def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
@@ -51,7 +52,7 @@ def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
 
     """
     load_dotenv()
-    return Agent(
+    agent = Agent(
         model,
         system_prompt=(
             "You are a helpful assistant that can use tools to complete tasks. "
@@ -64,6 +65,10 @@ def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
         deps_type=TSAgentState,
         retries=5,
     )
+
+    @agent.instructions
+    def current_tool_return_limit(ctx: RunContext[TSAgentState]) -> str:
+        return f"Current tool return limit is {ctx.deps.tool_return_limit} (in chars)."
 
 
 async def suggest_tools(ctx: RunContext[TSAgentState], tool_defs: list[ToolDefinition]) -> list[ToolDefinition] | None:

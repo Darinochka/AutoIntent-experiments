@@ -1,16 +1,23 @@
 """Truncator for excessive tool returns."""
 
 from copy import deepcopy
+from typing import Protocol
 
 from loguru import logger
+from pydantic_ai import RunContext
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelRequestPart, ToolReturnPart
 
-TOOL_RETURN_LIMIT = 10_000
+TRUNCATION_MESSAGE = "\n[too long... truncated...]"
 
 
-def truncate_tool_returns(messages: list[ModelMessage]) -> list[ModelMessage]:
+class DepsWithToolReturnLimit(Protocol):
+    tool_return_limit: int
+
+
+def truncate_tool_returns(ctx: RunContext[DepsWithToolReturnLimit], messages: list[ModelMessage]) -> list[ModelMessage]:
     """Truncate overly long tool returns to prevent model fail."""
     res: list[ModelMessage] = []
+    limit = ctx.deps.tool_return_limit
     for m in messages:
         if not isinstance(m, ModelRequest):
             res.append(m)
@@ -23,10 +30,10 @@ def truncate_tool_returns(messages: list[ModelMessage]) -> list[ModelMessage]:
             if not isinstance(p.content, str):
                 parts.append(p)
                 continue
-            if len(p.content) > TOOL_RETURN_LIMIT:
-                logger.warning(f"Met too long tool return: {len(p.content)}. Truncating to {TOOL_RETURN_LIMIT}...")
+            if len(p.content) > limit:
+                logger.warning(f"Met too long tool return: {len(p.content)}. Truncating to {limit}...")
                 edited_part = deepcopy(p)
-                edited_part.content = p.content[:TOOL_RETURN_LIMIT] + "\n[too long... truncated...]"
+                edited_part.content = p.content[: limit - len(TRUNCATION_MESSAGE)] + TRUNCATION_MESSAGE
                 parts.append(edited_part)
             else:
                 parts.append(p)
