@@ -17,7 +17,7 @@ def change_output_limit(
     By default tool outputs are limited to avoid accidental bloat. This tool allows
     for reading long files by changing the truncation length.
 
-    Returns:
+    Return:
         operation status message
     """
     ctx.deps.tool_return_limit = limit
