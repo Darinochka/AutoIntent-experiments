@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 from mcp_evals.task import Task
 from mcp_evals.types import DepsMaker
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent
+from pydantic_ai import Agent, RunContext
 
 from src.history_processors import truncate_tool_returns
-from src.tools import get_thoughts, record_intermediate_speculations
+from src.tools import change_output_limit, get_thoughts, record_intermediate_speculations
 
 
 class BasicAgentState(BaseModel):
@@ -19,17 +19,23 @@ class BasicAgentState(BaseModel):
 
 def create_basic_agent(model: str = "openai:gpt-4.1") -> Agent[BasicAgentState, str]:
     load_dotenv()
-    return Agent(
+    agent = Agent(
         model,
         system_prompt=(
             "You are a helpful assistant that can use tools to complete tasks. "
             "You can provide text messages beside the final answer as a means of "
             "intermediate speculations and reasoning."
         ),
-        tools=[record_intermediate_speculations, get_thoughts],
+        tools=[record_intermediate_speculations, get_thoughts, change_output_limit],
         history_processors=[truncate_tool_returns],
         deps_type=BasicAgentState,
     )
+
+    @agent.instructions
+    def current_tool_return_limit(ctx: RunContext[BasicAgentState]) -> str:
+        return f"Current tool return limit is {ctx.deps.tool_return_limit} (in chars)."
+
+    return agent
 
 
 def create_basic_deps_maker() -> DepsMaker:

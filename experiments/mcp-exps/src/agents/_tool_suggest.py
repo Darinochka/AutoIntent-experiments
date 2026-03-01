@@ -28,7 +28,7 @@ from tool_suggest.services.selector import GreedySelector
 from tool_suggest.services.suggester import AutoIntentSuggester
 
 from src.history_processors import truncate_tool_returns
-from src.tools import get_thoughts, record_intermediate_speculations
+from src.tools import change_output_limit, get_thoughts, record_intermediate_speculations
 
 
 @dataclass
@@ -59,7 +59,7 @@ def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
             "You can provide text messages beside the final answer as a means of "
             "intermediate speculations and reasoning."
         ),
-        tools=[record_intermediate_speculations, get_thoughts],
+        tools=[record_intermediate_speculations, get_thoughts, change_output_limit],
         prepare_tools=suggest_tools,
         history_processors=[truncate_tool_returns],
         deps_type=TSAgentState,
