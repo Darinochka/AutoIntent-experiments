@@ -1,5 +1,6 @@
 """Truncator for excessive tool returns."""
 
+import json
 from copy import deepcopy
 from typing import Protocol
 
@@ -28,7 +29,12 @@ def truncate_tool_returns(ctx: RunContext[DepsWithToolReturnLimit], messages: li
             if isinstance(p.content, MULTI_MODAL_CONTENT_TYPES):
                 parts.append(p)
                 continue
-            content_stringifyed = str(p.content)
+            try:
+                content_stringifyed = json.dumps(p.content, ensure_ascii=False)
+            except (ValueError, TypeError, MemoryError, json.JSONDecodeError) as e:
+                logger.warning(f"Error while stringifying tool return content: {e}")
+                content_stringifyed = str(p.content)
+
             if len(content_stringifyed) > limit:
                 logger.warning(f"Met too long tool return: {len(content_stringifyed)}. Truncating to {limit}...")
                 truncation_message = f"\n[too long: {len(content_stringifyed)}; truncated to {limit}]"
