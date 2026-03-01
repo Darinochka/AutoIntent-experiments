@@ -56,10 +56,9 @@ def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
         model,
         system_prompt=(
             "You are an autonomous worker that can use tools to complete tasks. "
-            "You can provide text messages besides the final answer as a means for "
-            "intermediate speculation and reasoning. Don't communicate with the "
-            "user except when providing the final answer. Don't ask for confirmations; "
-            "make your own decisions"
+            "You must solve the task before sumbitting the final answer (or report that it is not possible). "
+            "Don't ask for confirmations; make your own decisions. "
+            "After you submit `final_result`, you will be strictly judged and evaluated."
         ),
         tools=[record_intermediate_speculations, get_thoughts, change_output_limit],
         prepare_tools=suggest_tools,
