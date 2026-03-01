@@ -5,7 +5,7 @@ from typing import Protocol
 
 from loguru import logger
 from pydantic_ai import RunContext
-from pydantic_ai.messages import ModelMessage, ModelRequest, ModelRequestPart, ToolReturnPart
+from pydantic_ai.messages import MULTI_MODAL_CONTENT_TYPES, ModelMessage, ModelRequest, ModelRequestPart, ToolReturnPart
 
 TRUNCATION_MESSAGE = "\n[too long... truncated...]"
 
@@ -27,13 +27,14 @@ def truncate_tool_returns(ctx: RunContext[DepsWithToolReturnLimit], messages: li
             if not isinstance(p, ToolReturnPart):
                 parts.append(p)
                 continue
-            if not isinstance(p.content, str):
+            if isinstance(p.content, MULTI_MODAL_CONTENT_TYPES):
                 parts.append(p)
                 continue
-            if len(p.content) > limit:
-                logger.warning(f"Met too long tool return: {len(p.content)}. Truncating to {limit}...")
+            content_stringifyed = str(p.content)
+            if len(content_stringifyed) > limit:
+                logger.warning(f"Met too long tool return: {len(content_stringifyed)}. Truncating to {limit}...")
                 edited_part = deepcopy(p)
-                edited_part.content = p.content[: limit - len(TRUNCATION_MESSAGE)] + TRUNCATION_MESSAGE
+                edited_part.content = content_stringifyed[: limit - len(TRUNCATION_MESSAGE)] + TRUNCATION_MESSAGE
                 parts.append(edited_part)
             else:
                 parts.append(p)
