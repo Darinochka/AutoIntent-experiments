@@ -105,9 +105,12 @@ def main() -> None:  # noqa: PLR0915
     parser.add_argument(
         "--runner",
         type=str,
-        choices=["ho", "cv"],
+        choices=["ho", "cv", "sc"],
         default="ho",
-        help="Runner for ts agent: 'ho' (hold-out) or 'cv' (cross-validation). Ignored when --agent basic.",
+        help=(
+            "Runner: 'ho' (hold-out), 'cv' (cross-validation), or 'sc' (self-correction). sc works with any agent; "
+            "ho/cv are for ts only. Ignored when --agent basic and runner is ho/cv."
+        ),
     )
     parser.add_argument(
         "--ho-ratio",
@@ -138,6 +141,12 @@ def main() -> None:  # noqa: PLR0915
         type=int,
         default=3,
         help="Limit number of tasks to run (useful for smoke tests).",
+    )
+    parser.add_argument(
+        "--max-self-correction-retries",
+        type=int,
+        default=3,
+        help="Max self-correction retries when --runner sc (default: 3).",
     )
 
     args = parser.parse_args()
@@ -172,10 +181,14 @@ def main() -> None:  # noqa: PLR0915
     runner_type = Runner.INFERENCE_ONLY
 
     if args.agent == "basic":
-        runner_type = Runner.INFERENCE_ONLY
+        runner_type = Runner.SELF_CORRECTION if args.runner == "sc" else Runner.INFERENCE_ONLY
         deps_maker = create_basic_deps_maker()
     elif args.agent == "ts":
-        runner_type = Runner.HOLD_OUT if args.runner == "ho" else Runner.CROSS_VALIDATION
+        runner_type = (
+            Runner.SELF_CORRECTION
+            if args.runner == "sc"
+            else (Runner.HOLD_OUT if args.runner == "ho" else Runner.CROSS_VALIDATION)
+        )
         deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(args.repos_dir)
 
     run_result_processor = tool_suggest_run_result_processor if args.agent == "ts" else None
@@ -185,6 +198,7 @@ def main() -> None:  # noqa: PLR0915
         runner=runner_type,
         deps_maker=deps_maker,
         experiment_name=args.experiment_name,
+        max_self_correction_retries=args.max_self_correction_retries,
         hold_out_test_ratio=args.ho_ratio,
         cv_n_splits=args.cv_splits,
         random_state=args.random_state,
@@ -192,7 +206,7 @@ def main() -> None:  # noqa: PLR0915
         start_testing=start_testing_cb,
         run_result_processor=run_result_processor,
         max_tasks=args.max_tasks,
-        usage_limits=UsageLimits(request_limit=10),
+        usage_limits=UsageLimits(request_limit=100),
     )
 
     logger.info(f"Running {args.domain} tasks with model: {args.model}")
