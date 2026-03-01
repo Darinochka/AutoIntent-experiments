@@ -22,9 +22,11 @@ def create_basic_agent(model: str = "openai:gpt-4.1") -> Agent[BasicAgentState, 
     agent = Agent(
         model,
         system_prompt=(
-            "You are a helpful assistant that can use tools to complete tasks. "
-            "You can provide text messages beside the final answer as a means of "
-            "intermediate speculations and reasoning."
+            "You are an autonomous worker that can use tools to complete tasks. "
+            "You can provide text messages besides the final answer as a means for "
+            "intermediate speculation and reasoning. Don't communicate with the "
+            "user except when providing the final answer. Don't ask for confirmations; "
+            "make your own decisions"
         ),
         tools=[record_intermediate_speculations, get_thoughts, change_output_limit],
         history_processors=[truncate_tool_returns],
