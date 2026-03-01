@@ -30,7 +30,10 @@ def truncate_tool_returns(ctx: RunContext[DepsWithToolReturnLimit], messages: li
                 parts.append(p)
                 continue
             try:
-                content_stringifyed = json.dumps(p.content, ensure_ascii=False)
+                if isinstance(p.content, str):
+                    content_stringifyed = p.content
+                else:
+                    content_stringifyed = json.dumps(p.content, ensure_ascii=False)
             except (ValueError, TypeError, MemoryError, json.JSONDecodeError) as e:
                 logger.warning(f"Error while stringifying tool return content: {e}")
                 content_stringifyed = str(p.content)
