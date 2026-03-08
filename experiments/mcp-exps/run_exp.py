@@ -74,8 +74,8 @@ def main() -> None:  # noqa: PLR0915
     parser.add_argument(
         "--model",
         type=str,
-        required=True,
-        help="Model name to use (overrides OPENAI_MODEL env var or 'gpt-4.1' default)",
+        default="openai:gpt-4.1",
+        help="Model name to use (overrides OPENAI_MODEL env var or 'openai:gpt-4.1' default)",
     )
     parser.add_argument(
         "--domain",
@@ -155,14 +155,13 @@ def main() -> None:  # noqa: PLR0915
     logfire.instrument_pydantic_ai()
 
     # Create agent with custom base URL
-    model = f"openai:{args.model}"
 
     agent: Agent[Any, Any]
     if args.agent == "basic":
-        agent = create_basic_agent(model=model)
+        agent = create_basic_agent(model=args.model)
     elif args.agent == "ts":
         logger.debug("Creating ts agent")
-        agent = create_tool_suggest_agent(model=model)
+        agent = create_tool_suggest_agent(model=args.model)
 
     # Create domain and runner
     domain: Domain[Any]
