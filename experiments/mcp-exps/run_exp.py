@@ -48,8 +48,7 @@ from typing import TYPE_CHECKING, Any
 
 import logfire
 from loguru import logger
-from mcp_evals import BenchmarkRunner, Domain
-from mcp_evals.types import Runner, TrainingTestingCallback
+from mcp_evals import BenchmarkRunner, CVGrouper, Domain, Grouper, HoldOutGrouper, PlainGrouper
 from pydantic_ai import UsageLimits
 
 from src.agents import (
@@ -61,10 +60,11 @@ from src.agents import (
 )
 
 if TYPE_CHECKING:
+    from mcp_evals.types import TrainingTestingCallback
     from pydantic_ai import Agent
 
 
-def main() -> None:  # noqa: PLR0915
+def main() -> None:  # noqa: C901, PLR0915
     """Run all filesystem tasks with OpenAI."""
     parser = argparse.ArgumentParser(
         description="Run filesystem tasks with OpenAI-compatible API",
@@ -103,12 +103,12 @@ def main() -> None:  # noqa: PLR0915
         help="Directory for persistent tool-suggest JSON repositories (default: tool_suggest_repos).",
     )
     parser.add_argument(
-        "--runner",
+        "--grouper",
         type=str,
-        choices=["ho", "cv", "sc"],
-        default="ho",
+        choices=["plain", "ho", "cv"],
+        default="plain",
         help=(
-            "Runner: 'ho' (hold-out), 'cv' (cross-validation), or 'sc' (self-correction). sc works with any agent; "
+            "Runner: 'ho' (hold-out), 'cv' (cross-validation). "
             "ho/cv are for ts only. Ignored when --agent basic and runner is ho/cv."
         ),
     )
@@ -148,6 +148,10 @@ def main() -> None:  # noqa: PLR0915
         default=3,
         help="Max self-correction retries when --runner sc (default: 3).",
     )
+    parser.add_argument(
+        "--self-correction",
+        action="store_true",
+    )
 
     args = parser.parse_args()
 
@@ -177,16 +181,18 @@ def main() -> None:  # noqa: PLR0915
     deps_maker = None
     start_training_cb: TrainingTestingCallback | None = None
     start_testing_cb: TrainingTestingCallback | None = None
-    runner_type = Runner.INFERENCE_ONLY
 
+    grouper: Grouper
     if args.agent == "basic":
-        runner_type = Runner.SELF_CORRECTION if args.runner == "sc" else Runner.INFERENCE_ONLY
+        grouper = PlainGrouper()
         deps_maker = create_basic_deps_maker()
     elif args.agent == "ts":
-        runner_type = (
-            Runner.SELF_CORRECTION
-            if args.runner == "sc"
-            else (Runner.HOLD_OUT if args.runner == "ho" else Runner.CROSS_VALIDATION)
+        if args.grouper == "plain":
+            raise ValueError("ts agent doesnt support plain grouper")
+        grouper = (
+            HoldOutGrouper(test_ratio=args.ho_ratio, random_state=args.random_state)
+            if args.grouper == "ho"
+            else CVGrouper(n_splits=args.cv_splits, random_state=args.random_state)
         )
         deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(args.repos_dir)
 
@@ -194,13 +200,10 @@ def main() -> None:  # noqa: PLR0915
     runner = BenchmarkRunner(
         agent=agent,
         domains=[domain],
-        runner=runner_type,
+        grouper=grouper,
         deps_maker=deps_maker,
         experiment_name=args.experiment_name,
         max_self_correction_retries=args.max_self_correction_retries,
-        hold_out_test_ratio=args.ho_ratio,
-        cv_n_splits=args.cv_splits,
-        random_state=args.random_state,
         start_training=start_training_cb,
         start_testing=start_testing_cb,
         run_result_processor=run_result_processor,
