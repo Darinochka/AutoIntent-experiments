@@ -48,7 +48,7 @@ from typing import TYPE_CHECKING, Any
 
 import logfire
 from loguru import logger
-from mcp_evals import BenchmarkRunner, CVGrouper, Domain, Grouper, HoldOutGrouper, PlainGrouper
+from mcp_evals import CVGrouper, Domain, DomainRunner, Grouper, HoldOutGrouper, PlainGrouper
 from pydantic_ai import UsageLimits
 
 from src.agents import (
@@ -197,12 +197,10 @@ def main() -> None:  # noqa: C901, PLR0915
         deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(args.repos_dir)
 
     run_result_processor = tool_suggest_run_result_processor if args.agent == "ts" else None
-    runner = BenchmarkRunner(
+    runner = DomainRunner(
         agent=agent,
-        domains=[domain],
         grouper=grouper,
         deps_maker=deps_maker,
-        experiment_name=args.experiment_name,
         max_self_correction_retries=args.max_self_correction_retries,
         start_training=start_training_cb,
         start_testing=start_testing_cb,
@@ -215,8 +213,7 @@ def main() -> None:  # noqa: C901, PLR0915
 
     # Run benchmark
     async def run() -> None:
-        reports = await runner.run()
-        report = reports[0]
+        report = await runner.run(domain, experiment_name=args.experiment_name)
         logger.info(f"\nDomain: {args.domain}")
         logger.info(f"Total tasks: {len(report.cases)}")
 
