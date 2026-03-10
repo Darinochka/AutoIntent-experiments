@@ -207,6 +207,7 @@ def main() -> None:  # noqa: C901, PLR0915
         run_result_processor=run_result_processor,
         max_tasks=args.max_tasks,
         usage_limits=UsageLimits(request_limit=100),
+        rerun_start_training_on_resume=True,
     )
 
     logger.info(f"Running {args.domain} tasks with model: {args.model}")

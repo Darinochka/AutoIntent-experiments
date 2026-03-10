@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import secrets
+import re
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -134,11 +134,17 @@ def create_phase_scoped_tool_suggest_deps(
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Build phase-scoped deps: same client/repo for all tasks in a training+testing phase.
 
-    Returns (deps_maker, start_training, start_testing). start_training creates fresh
-    TSAgentState (new collection/repo/client) and stores it in a shared ref; start_testing
-    calls await client.train() so the tool-suggest service is ready for test tasks.
+    Returns (deps_maker, start_training, start_testing). start_training(phase_name) creates
+    TSAgentState (repo at output_dir/{phase_name}.json) and stores it in a shared ref; if the
+    file exists, the repo loads it (idempotent resume). start_testing(phase_name) calls
+    await client.train() so the tool-suggest service is ready for test tasks.
     DepsMaker yields the current phase deps for every task (no per-task collection).
     """
+
+    def _sanitize_phase_name(name: str) -> str:
+        """Make phase name safe for use in filenames."""
+        return re.sub(r"[^\w\-]", "_", name) or "phase"
+
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     embedder = SentenceTransformerEmbedder(device="mps")
@@ -146,11 +152,9 @@ def create_phase_scoped_tool_suggest_deps(
     # Mutable ref holding current phase's TSAgentState (or None before first start_training).
     phase_deps_ref: list[TSAgentState | None] = [None]
 
-    async def start_training() -> None:
-        logger.info("Collect training samples...")
-        base = "phase"
-        suffix = secrets.token_hex(4)
-        collection_name = f"{base}_{suffix}"
+    async def start_training(phase_name: str) -> None:
+        logger.info("Collect training samples... (phase={})", phase_name)
+        collection_name = _sanitize_phase_name(phase_name)
         file_path = output_dir / f"{collection_name}.json"
         repository = JSONFileRepository(
             collection_name=collection_name,
@@ -168,10 +172,10 @@ def create_phase_scoped_tool_suggest_deps(
         )
         client = ToolSuggestClient(config=config)
         phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[])
-        logger.success("Data collection is set up!")
+        logger.success("Data collection is set up! (file={})", file_path)
 
-    async def start_testing() -> None:
-        logger.info("Start training tool suggester on collected data")
+    async def start_testing(phase_name: str) -> None:
+        logger.info("Start training tool suggester on collected data (phase={})", phase_name)
         with logfire.span("Training tool suggester"):
             state = phase_deps_ref[0]
             if state is not None:
