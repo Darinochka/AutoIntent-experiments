@@ -5,7 +5,7 @@ description = "Experiments on running MCP benchmarks with autointent-based tool-
 readme = "README.md"
 requires-python = "==3.13.*"
 dependencies = [
-    "tool_suggest[local,autointent] @ git+ssh://git@github.com/DeepPavlov/tool-suggest.git@c94efaeabe57756168e92addd439cd866a1ab44c",
+    "tool_suggest[local,autointent] @ git+ssh://git@github.com/DeepPavlov/tool-suggest.git@1dfb9dd8d93d98fbb4a57d186f9ef4d778b49650",
     "mcp_evals[domain-filesystem] @ git+ssh://git@github.com/DeepPavlov/mcp-evals.git@baad34e",
 ]
 
@@ -37,3 +37,16 @@ max-args = 10
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_ignores = true
+strict = true
+plugins = [
+    "pydantic.mypy",
+]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true

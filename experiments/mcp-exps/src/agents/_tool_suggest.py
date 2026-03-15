@@ -10,12 +10,13 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from uuid import UUID
 
-    from autointent.custom_types import SearchSpacePreset
     from mcp_evals.task import Task
     from mcp_evals.types import DepsMaker, TrainingTestingCallback
     from pydantic_ai.run import AgentRunResult
 
 import logfire
+from autointent import OptimizationConfig
+from autointent.configs import LoggingConfig
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic_ai import Agent, RunContext, ToolDefinition
@@ -130,7 +131,6 @@ async def tool_suggest_run_result_processor(_task: Task[Any, Any], result: Agent
 def create_phase_scoped_tool_suggest_deps(
     output_dir: Path,
     multilabel: bool = False,
-    preset: SearchSpacePreset = "classic-light",
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Build phase-scoped deps: same client/repo for all tasks in a training+testing phase.
 
@@ -149,6 +149,9 @@ def create_phase_scoped_tool_suggest_deps(
     output_dir.mkdir(parents=True, exist_ok=True)
     embedder = SentenceTransformerEmbedder(device="mps")
 
+    ai_config = OptimizationConfig.from_preset("classic-light")
+    ai_config.logging_config = LoggingConfig(dump_modules=True, clear_ram=True)
+
     # Mutable ref holding current phase's TSAgentState (or None before first start_training).
     phase_deps_ref: list[TSAgentState | None] = [None]
 
@@ -163,7 +166,7 @@ def create_phase_scoped_tool_suggest_deps(
         formatter = SampleFormatter(max_len=1000)
         backend_config = LocalBackendConfig(
             repository=repository,
-            suggester=AutoIntentSuggester(formatter=formatter, multilabel=multilabel, preset=preset),
+            suggester=AutoIntentSuggester(formatter=formatter, multilabel=multilabel, config=ai_config),
             selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=15),  # NOTE: test value
         )
         config = ToolSuggestConfig(
