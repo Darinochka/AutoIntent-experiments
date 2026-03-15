@@ -5,7 +5,7 @@ description = "Experiments on running MCP benchmarks with autointent-based tool-
 readme = "README.md"
 requires-python = "==3.13.*"
 dependencies = [
-    "tool_suggest[local,autointent] @ git+ssh://git@github.com/DeepPavlov/tool-suggest.git@9ace7d109b340f3c026d7773b9288197da1e3c8c",
+    "tool_suggest[local,autointent] @ git+ssh://git@github.com/DeepPavlov/tool-suggest.git@c94efaeabe57756168e92addd439cd866a1ab44c",
     "mcp_evals[domain-filesystem] @ git+ssh://git@github.com/DeepPavlov/mcp-evals.git@baad34e",
 ]
 

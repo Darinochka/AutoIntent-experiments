@@ -218,7 +218,7 @@ wheels = [
 [[package]]
 name = "autointent"
 version = "0.2.0"
-source = { git = "https://github.com/DeepPavlov/AutoIntent?rev=309a6cfacb505dc17dbdac63f11c15af259263f2#309a6cfacb505dc17dbdac63f11c15af259263f2" }
+source = { git = "https://github.com/DeepPavlov/AutoIntent?rev=32eb96c15553283b8c32a83253d7e0cf0167bfc7#32eb96c15553283b8c32a83253d7e0cf0167bfc7" }
 dependencies = [
     { name = "aiofiles" },
     { name = "aiometer" },
@@ -1526,7 +1526,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=baad34e" },
-    { name = "tool-suggest", extras = ["local", "autointent"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=9ace7d109b340f3c026d7773b9288197da1e3c8c" },
+    { name = "tool-suggest", extras = ["local", "autointent"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=c94efaeabe57756168e92addd439cd866a1ab44c" },
 ]
 
 [package.metadata.requires-dev]
@@ -3201,7 +3201,7 @@ wheels = [
 [[package]]
 name = "tool-suggest"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=9ace7d109b340f3c026d7773b9288197da1e3c8c#9ace7d109b340f3c026d7773b9288197da1e3c8c" }
+source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=c94efaeabe57756168e92addd439cd866a1ab44c#c94efaeabe57756168e92addd439cd866a1ab44c" }
 dependencies = [
     { name = "loguru" },
     { name = "numpy" },

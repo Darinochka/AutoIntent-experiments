@@ -87,7 +87,7 @@ def main() -> None:  # noqa: C901, PLR0915
     parser.add_argument(
         "--experiment-name",
         type=str,
-        default=None,
+        required=True,
         help="Experiment name. Use it to differentiate runs.",
     )
     parser.add_argument(
@@ -194,7 +194,10 @@ def main() -> None:  # noqa: C901, PLR0915
             if args.grouper == "ho"
             else CVGrouper(n_splits=args.cv_splits, random_state=args.random_state)
         )
-        deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(args.repos_dir)
+        deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(
+            Path(args.repos_dir) / args.experiment_name,
+            multilabel=False,
+        )
 
     run_result_processor = tool_suggest_run_result_processor if args.agent == "ts" else None
     runner = DomainRunner(
@@ -206,7 +209,7 @@ def main() -> None:  # noqa: C901, PLR0915
         start_testing=start_testing_cb,
         run_result_processor=run_result_processor,
         max_tasks=args.max_tasks,
-        usage_limits=UsageLimits(request_limit=100),
+        usage_limits=UsageLimits(request_limit=10),
         rerun_start_training_on_resume=True,
     )
 
