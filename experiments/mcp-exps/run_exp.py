@@ -1,44 +1,32 @@
-r"""Script to run domain tasks with OpenAI.
+r"""Run MCP-evals domain tasks using an OpenAI-compatible API.
 
-This script runs single domain's tasks from MCP Universe and MCPMark using an OpenAI-compatible
-API endpoint. It uses the mcp-evals library to execute tasks and evaluate results.
+This script runs tasks from an MCP-evals "domain" (e.g. filesystem or postgres) by constructing a
+`DomainRunner` with either:
+- a basic agent (`--agent basic`), or
+- a tool-suggest / TS agent (`--agent ts`).
 
 Prerequisites:
     Install filesystem domain dependencies:
         uv sync --extra domain-filesystem
     Or with pip:
         pip install 'mcp-evals[domain-filesystem]'
-    Extra for postgres tasks: 'domain-postgres'
+    (Optional) Extra for postgres tasks: `domain-postgres`.
 
 Usage:
-    # Set OpenAI API key and base URL via environment variables
+    # Environment variables (typical for OpenAI-compatible endpoints)
     export OPENAI_API_KEY="your-api-key"
     export OPENAI_BASE_URL="https://your-custom-endpoint.com/v1"
-    uv run python scripts/run_domain_tasks.py
 
-    # Or use command line arguments
-    uv run python scripts/run_domain_tasks.py
+    # Run (file system domain)
+    uv run run_exp.py --domain fs --experiment-name <name> --agent basic
 
-    # Specify a different model
-    uv run python scripts/run_domain_tasks.py --model "gpt-4o-mini"
+    # Specify a different model (model strings are passed through to pydantic-ai)
+    uv run run_exp.py --domain fs --experiment-name <name> --agent basic --model "openai:gpt-4o-mini"
 
 Environment Variables:
-    OPENAI_API_KEY: Your OpenAI API key (required if not provided via --api-key)
-    OPENAI_BASE_URL: Custom base URL for OpenAI-compatible API (required if not provided via --base-url)
-    OPENAI_MODEL: Model name to use (defaults to "gpt-4o" if not provided)
-    DOWNLOAD_PROXY: URL for proxy used for loading setup data
-
-Examples:
-    # Run with default settings (gpt-4o)
-    uv run python scripts/run_domain_tasks.py
-
-    # Run with a specific model
-    OPENAI_MODEL="gpt-4o-mini" uv run python scripts/run_domain_tasks.py
-
-    # Run with custom endpoint
-    OPENAI_BASE_URL="http://localhost:8000/v1" \\
-    OPENAI_API_KEY="dummy-key" \\
-    uv run python scripts/run_domain_tasks.py
+    OPENAI_API_KEY: API key for the OpenAI-compatible endpoint.
+    OPENAI_BASE_URL: Base URL for the OpenAI-compatible API (must include `/v1`).
+    DOWNLOAD_PROXY: URL for proxy used for loading setup data.
 """
 
 import argparse
@@ -93,6 +81,7 @@ def main() -> None:  # noqa: C901, PLR0915
     parser.add_argument(
         "--agent",
         type=str,
+        required=True,
         choices=["basic", "ts"],
         help="Agent variant: 'basic' or 'ts' (tool-suggest).",
     )
