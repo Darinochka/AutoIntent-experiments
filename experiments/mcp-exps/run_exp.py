@@ -196,7 +196,7 @@ def main() -> None:  # noqa: C901, PLR0915
         )
         deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(
             Path(args.repos_dir) / args.experiment_name,
-            multilabel=False,
+            multilabel=True,
         )
 
     run_result_processor = tool_suggest_run_result_processor if args.agent == "ts" else None
@@ -204,6 +204,7 @@ def main() -> None:  # noqa: C901, PLR0915
         agent=agent,
         grouper=grouper,
         deps_maker=deps_maker,
+        use_self_correction=args.self_correction,
         max_self_correction_retries=args.max_self_correction_retries,
         start_training=start_training_cb,
         start_testing=start_testing_cb,
