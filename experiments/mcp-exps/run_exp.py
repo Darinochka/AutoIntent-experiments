@@ -29,12 +29,12 @@ Environment Variables:
     DOWNLOAD_PROXY: URL for proxy used for loading setup data.
 """
 
-import argparse
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import logfire
+from cyclopts import App, Parameter
 from loguru import logger
 from mcp_evals import CVGrouper, Domain, DomainRunner, Grouper, HoldOutGrouper, PlainGrouper
 from pydantic_ai import UsageLimits
@@ -52,163 +52,153 @@ if TYPE_CHECKING:
     from pydantic_ai import Agent
 
 
-def main() -> None:  # noqa: C901, PLR0915
-    """Run all filesystem tasks with OpenAI."""
-    parser = argparse.ArgumentParser(
-        description="Run filesystem tasks with OpenAI-compatible API",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="openai:gpt-4.1",
-        help="Model name to use (overrides OPENAI_MODEL env var or 'openai:gpt-4.1' default)",
-    )
-    parser.add_argument(
-        "--domain",
-        type=str,
-        choices=["pg", "fs"],
-        required=True,
-        help="Domain to run tasks from. Available: 'pg' (postgres), 'fs' (file system).",
-    )
-    parser.add_argument(
-        "--experiment-name",
-        type=str,
-        required=True,
-        help="Experiment name. Use it to differentiate runs.",
-    )
-    parser.add_argument(
-        "--agent",
-        type=str,
-        required=True,
-        choices=["basic", "ts"],
-        help="Agent variant: 'basic' or 'ts' (tool-suggest).",
-    )
-    parser.add_argument(
-        "--repos-dir",
-        type=Path,
-        default=Path("tool_suggest_repos"),
-        help="Directory for persistent tool-suggest JSON repositories (default: tool_suggest_repos).",
-    )
-    parser.add_argument(
-        "--grouper",
-        type=str,
-        choices=["plain", "ho", "cv"],
-        default="plain",
-        help=(
-            "Runner: 'ho' (hold-out), 'cv' (cross-validation). "
-            "ho/cv are for ts only. Ignored when --agent basic and runner is ho/cv."
+app = App(
+    help="Run MCP-evals domain tasks using an OpenAI-compatible API.",
+    help_epilogue=__doc__,
+)
+
+
+@app.default
+def main(  # noqa: C901, PLR0913
+    *,
+    model: Annotated[
+        str,
+        Parameter(
+            help="Model name to use (overrides OPENAI_MODEL env var or 'openai:gpt-4.1' default).",
         ),
-    )
-    parser.add_argument(
-        "--ho-ratio",
-        type=float,
-        default=0.2,
-        help="Hold-out test ratio (default: 0.2). Used when --agent ts --runner ho.",
-    )
-    parser.add_argument(
-        "--cv-splits",
-        type=int,
-        default=5,
-        help="Number of CV folds (default: 5). Used when --agent ts --runner cv.",
-    )
-    parser.add_argument(
-        "--random-state",
-        type=int,
-        default=None,
-        help="Random state for train/test splits. Used when --agent ts.",
-    )
-    parser.add_argument(
-        "--max-tasks",
-        type=int,
-        default=None,
-        help="Limit number of tasks to run (useful for smoke tests).",
-    )
-    parser.add_argument(
-        "--tool-retries",
-        type=int,
-        default=3,
-        help="Limit number of tasks to run (useful for smoke tests).",
-    )
-    parser.add_argument(
-        "--max-self-correction-retries",
-        type=int,
-        default=3,
-        help="Max self-correction retries when --runner sc (default: 3).",
-    )
-    parser.add_argument(
-        "--self-correction",
-        action="store_true",
-    )
-
-    args = parser.parse_args()
-
+    ] = "openai:gpt-4.1",
+    domain_key: Annotated[
+        Literal["pg", "fs"],
+        Parameter(
+            name="--domain",
+            help="Domain to run tasks from: 'pg' (postgres) or 'fs' (file system).",
+        ),
+    ],
+    experiment_name: Annotated[
+        str,
+        Parameter(help="Experiment name. Use it to differentiate runs."),
+    ],
+    agent_variant: Annotated[
+        Literal["basic", "ts"],
+        Parameter(
+            name="--agent",
+            help="Agent variant: 'basic' or 'ts' (tool-suggest).",
+        ),
+    ],
+    repos_dir: Annotated[
+        Path,
+        Parameter(
+            help="Directory for persistent tool-suggest JSON repositories (default: tool_suggest_repos).",
+        ),
+    ] = Path("tool_suggest_repos"),
+    grouper_kind: Annotated[
+        Literal["plain", "ho", "cv"],
+        Parameter(
+            name="--grouper",
+            help=(
+                "Grouper: 'ho' (hold-out) or 'cv' (cross-validation). "
+                "ho/cv are for ts only. Ignored when --agent basic."
+            ),
+        ),
+    ] = "plain",
+    ho_ratio: Annotated[
+        float,
+        Parameter(help="Hold-out test ratio (default: 0.2). Used when --agent ts --grouper ho."),
+    ] = 0.2,
+    cv_splits: Annotated[
+        int,
+        Parameter(help="Number of CV folds (default: 5). Used when --agent ts --grouper cv."),
+    ] = 5,
+    random_state: Annotated[
+        int | None,
+        Parameter(help="Random state for train/test splits. Used when --agent ts."),
+    ] = None,
+    max_tasks: Annotated[
+        int | None,
+        Parameter(help="Limit number of tasks to run (useful for smoke tests)."),
+    ] = None,
+    tool_retries: Annotated[
+        int,
+        Parameter(help="Tool call retries within each task (default: 3)."),
+    ] = 3,
+    max_self_correction_retries: Annotated[
+        int,
+        Parameter(help="Max self-correction retries when --self-correction is enabled (default: 3)."),
+    ] = 3,
+    self_correction: Annotated[
+        bool,
+        Parameter(
+            help="Enable self-correction.",
+            negative_bool=(),
+        ),
+    ] = False,
+) -> None:
+    """Run all filesystem tasks with OpenAI."""
     logfire.configure(send_to_logfire="if-token-present", scrubbing=False)
     logfire.instrument_pydantic_ai()
 
     # Create agent with custom base URL
 
-    agent: Agent[Any, Any]
-    if args.agent == "basic":
-        agent = create_basic_agent(model=args.model)
-    elif args.agent == "ts":
+    agent_obj: Agent[Any, Any]
+    if agent_variant == "basic":
+        agent_obj = create_basic_agent(model=model)
+    elif agent_variant == "ts":
         logger.debug("Creating ts agent")
-        agent = create_tool_suggest_agent(model=args.model)
+        agent_obj = create_tool_suggest_agent(model=model)
 
     # Create domain and runner
-    domain: Domain[Any]
-    if args.domain == "pg":
+    domain_obj: Domain[Any]
+    if domain_key == "pg":
         from mcp_evals.contrib.postgres import PostgresDomain  # noqa: PLC0415
 
-        domain = PostgresDomain(tool_retries=args.tool_retries)
-    elif args.domain == "fs":
+        domain_obj = PostgresDomain(tool_retries=tool_retries)
+    elif domain_key == "fs":
         from mcp_evals.contrib.filesystem import FilesystemDomain  # noqa: PLC0415
 
-        domain = FilesystemDomain(tool_retries=args.tool_retries)
+        domain_obj = FilesystemDomain(tool_retries=tool_retries)
 
     deps_maker = None
     start_training_cb: TrainingTestingCallback | None = None
     start_testing_cb: TrainingTestingCallback | None = None
 
-    grouper: Grouper
-    if args.agent == "basic":
-        grouper = PlainGrouper()
+    grouper_obj: Grouper
+    if agent_variant == "basic":
+        grouper_obj = PlainGrouper()
         deps_maker = create_basic_deps_maker()
-    elif args.agent == "ts":
-        if args.grouper == "plain":
+    elif agent_variant == "ts":
+        if grouper_kind == "plain":
             raise ValueError("ts agent doesnt support plain grouper")
-        grouper = (
-            HoldOutGrouper(test_ratio=args.ho_ratio, random_state=args.random_state)
-            if args.grouper == "ho"
-            else CVGrouper(n_splits=args.cv_splits, random_state=args.random_state)
+        grouper_obj = (
+            HoldOutGrouper(test_ratio=ho_ratio, random_state=random_state)
+            if grouper_kind == "ho"
+            else CVGrouper(n_splits=cv_splits, random_state=random_state)
         )
         deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(
-            Path(args.repos_dir) / args.experiment_name,
+            repos_dir / experiment_name,
             multilabel=True,
         )
 
-    run_result_processor = tool_suggest_run_result_processor if args.agent == "ts" else None
+    run_result_processor = tool_suggest_run_result_processor if agent_variant == "ts" else None
     runner = DomainRunner(
-        agent=agent,
-        grouper=grouper,
+        agent=agent_obj,
+        grouper=grouper_obj,
         deps_maker=deps_maker,
-        use_self_correction=args.self_correction,
-        max_self_correction_retries=args.max_self_correction_retries,
+        use_self_correction=self_correction,
+        max_self_correction_retries=max_self_correction_retries,
         start_training=start_training_cb,
         start_testing=start_testing_cb,
         run_result_processor=run_result_processor,
-        max_tasks=args.max_tasks,
+        max_tasks=max_tasks,
         usage_limits=UsageLimits(request_limit=10),
         rerun_start_training_on_resume=True,
     )
 
-    logger.info(f"Running {args.domain} tasks with model: {args.model}")
+    logger.info(f"Running {domain_key} tasks with model: {model}")
 
     # Run benchmark
     async def run() -> None:
-        report = await runner.run(domain, experiment_name=args.experiment_name)
-        logger.info(f"\nDomain: {args.domain}")
+        report = await runner.run(domain_obj, experiment_name=experiment_name)
+        logger.info(f"\nDomain: {domain_key}")
         logger.info(f"Total tasks: {len(report.cases)}")
 
         report.print(include_reasons=True, include_output=True)
@@ -223,4 +213,4 @@ def main() -> None:  # noqa: C901, PLR0915
 
 
 if __name__ == "__main__":
-    main()
+    app()

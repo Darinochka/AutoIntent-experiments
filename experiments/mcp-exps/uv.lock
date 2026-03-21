@@ -1513,6 +1513,7 @@ name = "mcp-exps"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "cyclopts" },
     { name = "mcp-evals", extra = ["domain-filesystem"] },
     { name = "tool-suggest", extra = ["autointent", "local"] },
 ]
@@ -1525,6 +1526,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cyclopts", specifier = ">=4.5.1,<5.0.0" },
     { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=baad34e" },
     { name = "tool-suggest", extras = ["local", "autointent"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=446204d" },
 ]
