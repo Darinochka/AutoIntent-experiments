@@ -132,6 +132,10 @@ def main(  # noqa: C901, PLR0913
             negative_bool=(),
         ),
     ] = False,
+    max_concurrency: Annotated[
+        int,
+        Parameter(help="Maximum parallel tasks to run."),
+    ] = 1,
 ) -> None:
     """Run all filesystem tasks with OpenAI."""
     logfire.configure(send_to_logfire="if-token-present", scrubbing=False)
@@ -191,6 +195,7 @@ def main(  # noqa: C901, PLR0913
         max_tasks=max_tasks,
         usage_limits=UsageLimits(request_limit=10),
         rerun_start_training_on_resume=True,
+        max_concurrency=max_concurrency,
     )
 
     logger.info(f"Running {domain_key} tasks with model: {model}")
