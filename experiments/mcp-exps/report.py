@@ -76,7 +76,9 @@ async def load(
 
         trace_totals: dict[str, dict[str, float]] = {}
         trace_order: list[str] = []
-        case_by_name: dict[str, tuple[bool, dict[str, Any]]] = {}
+        case_by_name: dict[str, tuple[bool, dict[str, Any], dict[str, Any]]] = {}
+        case_requests_sum: float = 0.0
+        case_requests_count: int = 0
 
         for row in rows:
             trace_id = row.get("trace_id")
@@ -88,23 +90,28 @@ async def load(
                 trace_totals[trace_id_str] = _extract_parent_metrics(row)
                 trace_order.append(trace_id_str)
 
-            case_name, passed, scores = _parse_case_row(row)
+            case_name, passed, scores, metrics = _parse_case_row(row)
+            case_requests_sum += _safe_float(metrics.get("requests"))
+            case_requests_count += 1
 
             # Merge by case_name: prefer a passing version if we see duplicates.
             # TODO(voorhs): is it ok?
             if case_name not in case_by_name:
-                case_by_name[case_name] = (passed, scores)
+                case_by_name[case_name] = (passed, scores, metrics)
             else:
                 logger.warning(f"Duplicate case info found: {case_name}")
-                existing_passed, _existing_scores = case_by_name[case_name]
+                existing_passed, _existing_scores, _existing_metrics = case_by_name[case_name]
                 if (not existing_passed) and passed:
-                    case_by_name[case_name] = (passed, scores)
+                    case_by_name[case_name] = (passed, scores, metrics)
 
         merged_totals = {
             "cost": 0.0,
             "input_tokens": 0.0,
             "output_tokens": 0.0,
             "cache_read_tokens": 0.0,
+            # Parent trace-level metrics store `requests` as an average; we compute
+            # average requests per *case span* from child_attributes["metrics"]["requests"].
+            "requests": 0.0,
         }
         for totals in trace_totals.values():
             merged_totals["cost"] += totals.get("cost", 0.0)
@@ -112,13 +119,20 @@ async def load(
             merged_totals["output_tokens"] += totals.get("output_tokens", 0.0)
             merged_totals["cache_read_tokens"] += totals.get("cache_read_tokens", 0.0)
 
+        if case_requests_count:
+            merged_totals["requests"] = case_requests_sum / case_requests_count
+
         header_trace_id = trace_order[0] if trace_order else "unknown_trace"
         output_file.write(json.dumps({"trace_id": header_trace_id, **merged_totals}, sort_keys=True) + "\n")
 
         for case_name in sorted(case_by_name.keys()):
-            passed, scores = case_by_name[case_name]
+            passed, scores, metrics = case_by_name[case_name]
             output_file.write(
-                json.dumps({"case_name": case_name, "passed": passed, "scores": scores}, sort_keys=True) + "\n"
+                json.dumps(
+                    {"case_name": case_name, "passed": passed, "scores": scores, "metrics": metrics},
+                    sort_keys=True,
+                )
+                + "\n"
             )
 
     logger.success("Done!")
@@ -155,14 +169,15 @@ def _extract_parent_metrics(row: dict[str, Any]) -> dict[str, float]:
     }
 
 
-def _parse_case_row(row: dict[str, Any]) -> tuple[str, bool, dict[str, Any]]:
-    """Extract (case_name, passed, per-evaluator scores) from a case span.
+def _parse_case_row(row: dict[str, Any]) -> tuple[str, bool, dict[str, Any], dict[str, Any]]:
+    """Extract (case_name, passed, per-evaluator scores, case metrics) from a case span.
 
     Scores are copied verbatim; we only compute the aggregate `passed` boolean.
     """
     child_attributes = row.get("child_attributes") or {}
     case_name = child_attributes.get("case_name") or "unknown_case"
     scores: dict[str, Any] = child_attributes.get("scores") or {}
+    metrics: dict[str, Any] = child_attributes.get("metrics") or {}
 
     def _is_green(v: object) -> bool:
         if isinstance(v, dict) and "value" in v:
@@ -170,7 +185,7 @@ def _parse_case_row(row: dict[str, Any]) -> tuple[str, bool, dict[str, Any]]:
         return abs(_safe_float(v) - 1.0) < PASSED_EPS
 
     passed = bool(scores) and all(_is_green(v) for v in scores.values())
-    return str(case_name), passed, scores
+    return str(case_name), passed, scores, metrics
 
 
 if __name__ == "__main__":
