@@ -1,6 +1,26 @@
 """Download and visualize experiment results.
 
-Total cost, tokens and per-case results.
+This module contains two CLI commands:
+
+1. Default command: download experiment spans from Logfire and write a JSONL report.
+2. `table` command: read a JSONL report and print a Rich summary.
+
+## Usage examples
+
+### 1) Download a report from Logfire
+```bash
+export LOGFIRE_API_KEY="..."
+uv run report.py --experiment basic-fs --output-dir ./reports
+```
+
+The output will be saved as `./reports/basic-fs.jsonl` (one JSON object per line):
+- first line: experiment header (trace id + aggregated metrics)
+- following lines: per-case rows (evaluator scores)
+
+### 2) Pretty-print the report
+```bash
+uv run report.py table --report-path ./reports/basic-fs.jsonl
+```
 """
 
 import os
