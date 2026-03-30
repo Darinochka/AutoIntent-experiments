@@ -1,6 +1,6 @@
-"""Download experiment cases.
+"""Download and visualize experiment results.
 
-Load total cost, tokens and per-case results.
+Total cost, tokens and per-case results.
 """
 
 import os
@@ -97,7 +97,11 @@ async def load(
         cyclopts.Parameter(help="Query timeout in seconds"),
     ] = 10,
 ) -> None:
-    """Load raw data from Logfire and save to JSONL file."""
+    """Load raw data from Logfire and save to JSONL file.
+
+    This script finds all runs of the experiment with this name, collects cases and saved them
+    to a JSONL file. The file starts with a header which is followed by per-case rows.
+    """
     output_path = ((output_dir or Path.cwd()).resolve() / experiment).with_suffix(".jsonl")
     logger.info(f"Result will be saved to {output_path}")
 
