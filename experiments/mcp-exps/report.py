@@ -3,7 +3,6 @@
 Load total cost, tokens and per-case results.
 """
 
-import json
 import os
 from pathlib import Path
 from typing import Annotated, Any
@@ -12,6 +11,7 @@ import cyclopts
 from dotenv import load_dotenv
 from logfire.query_client import AsyncLogfireQueryClient
 from loguru import logger
+from pydantic import BaseModel, ConfigDict, Field
 
 load_dotenv()
 
@@ -22,6 +22,61 @@ app = cyclopts.App(
 
 
 PASSED_EPS = 1e-9
+
+
+class ExperimentHeader(BaseModel):
+    """Outpu JSONL file header."""
+
+    trace_id: str
+    cost: float
+    input_tokens: float
+    output_tokens: float
+    cache_read_tokens: float
+    requests: float
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class TraceMetrics(BaseModel):
+    """Aggregated metrics."""
+
+    cost: float = 0.0
+    input_tokens: float = 0.0
+    output_tokens: float = 0.0
+    cache_read_tokens: float = 0.0
+    requests: float = 0.0
+
+    model_config = ConfigDict(extra="allow")
+
+
+class CaseMetrics(BaseModel):
+    """Single case metrics."""
+
+    cost: float = 0.0
+    input_tokens: float = 0.0
+    output_tokens: float = 0.0
+    cache_read_tokens: float = 0.0
+    requests: float = 0.0
+
+    model_config = ConfigDict(extra="allow")
+
+
+class EvaluatorResult(BaseModel):
+    """One evaluator result object inside Logfire `scores`."""
+
+    name: str | None = None
+    value: float | None = None
+    reason: str | None = None
+    source: Any | None = None
+
+
+class CaseRow(BaseModel):
+    """Output from logfire API."""
+
+    case_name: str
+    passed: bool
+    scores: dict[str, EvaluatorResult] = Field(default_factory=dict)
+    metrics: CaseMetrics
 
 
 @app.default
@@ -74,9 +129,9 @@ async def load(
         # 1) single header line (trace_id + aggregated cost/tokens over unique traces)
         # 2) per-case lines (verbatim per-evaluator scores + aggregate `passed`)
 
-        trace_totals: dict[str, dict[str, float]] = {}
+        trace_totals: dict[str, TraceMetrics] = {}
         trace_order: list[str] = []
-        case_by_name: dict[str, tuple[bool, dict[str, Any], dict[str, Any]]] = {}
+        case_by_name: dict[str, CaseRow] = {}
         case_requests_sum: float = 0.0
         case_requests_count: int = 0
 
@@ -90,50 +145,38 @@ async def load(
                 trace_totals[trace_id_str] = _extract_parent_metrics(row)
                 trace_order.append(trace_id_str)
 
-            case_name, passed, scores, metrics = _parse_case_row(row)
-            case_requests_sum += _safe_float(metrics.get("requests"))
+            case_row = _parse_case_row(row)
+            case_name = case_row.case_name
+            case_requests_sum += case_row.metrics.requests
             case_requests_count += 1
 
             # Merge by case_name: prefer a passing version if we see duplicates.
             # TODO(voorhs): is it ok?
             if case_name not in case_by_name:
-                case_by_name[case_name] = (passed, scores, metrics)
-            else:
+                case_by_name[case_name] = case_row
+            elif (not case_by_name[case_name].passed) and case_row.passed:
                 logger.warning(f"Duplicate case info found: {case_name}")
-                existing_passed, _existing_scores, _existing_metrics = case_by_name[case_name]
-                if (not existing_passed) and passed:
-                    case_by_name[case_name] = (passed, scores, metrics)
+                case_by_name[case_name] = case_row
 
-        merged_totals = {
-            "cost": 0.0,
-            "input_tokens": 0.0,
-            "output_tokens": 0.0,
-            "cache_read_tokens": 0.0,
-            # Parent trace-level metrics store `requests` as an average; we compute
-            # average requests per *case span* from child_attributes["metrics"]["requests"].
-            "requests": 0.0,
-        }
-        for totals in trace_totals.values():
-            merged_totals["cost"] += totals.get("cost", 0.0)
-            merged_totals["input_tokens"] += totals.get("input_tokens", 0.0)
-            merged_totals["output_tokens"] += totals.get("output_tokens", 0.0)
-            merged_totals["cache_read_tokens"] += totals.get("cache_read_tokens", 0.0)
-
-        if case_requests_count:
-            merged_totals["requests"] = case_requests_sum / case_requests_count
+        merged_cost = sum(t.cost for t in trace_totals.values())
+        merged_input_tokens = sum(t.input_tokens for t in trace_totals.values())
+        merged_output_tokens = sum(t.output_tokens for t in trace_totals.values())
+        merged_cache_read_tokens = sum(t.cache_read_tokens for t in trace_totals.values())
+        merged_requests = case_requests_sum / case_requests_count if case_requests_count else 0.0
 
         header_trace_id = trace_order[0] if trace_order else "unknown_trace"
-        output_file.write(json.dumps({"trace_id": header_trace_id, **merged_totals}, sort_keys=True) + "\n")
+        header = ExperimentHeader(
+            trace_id=header_trace_id,
+            cost=merged_cost,
+            input_tokens=merged_input_tokens,
+            output_tokens=merged_output_tokens,
+            cache_read_tokens=merged_cache_read_tokens,
+            requests=merged_requests,
+        )
+        output_file.write(header.model_dump_json() + "\n")
 
         for case_name in sorted(case_by_name.keys()):
-            passed, scores, metrics = case_by_name[case_name]
-            output_file.write(
-                json.dumps(
-                    {"case_name": case_name, "passed": passed, "scores": scores, "metrics": metrics},
-                    sort_keys=True,
-                )
-                + "\n"
-            )
+            output_file.write(case_by_name[case_name].model_dump_json() + "\n")
 
     logger.success("Done!")
 
@@ -150,7 +193,7 @@ def _safe_float(v: object) -> float:
         return 0.0
 
 
-def _extract_parent_metrics(row: dict[str, Any]) -> dict[str, float]:
+def _extract_parent_metrics(row: dict[str, Any]) -> TraceMetrics:
     """Extract cost/tokens from `parent_attributes` for a single trace.
 
     The query joins experiment parent span (which contains aggregated metrics) with each case span,
@@ -160,32 +203,42 @@ def _extract_parent_metrics(row: dict[str, Any]) -> dict[str, float]:
     logfire_meta = parent_attributes.get("logfire.experiment.metadata") or {}
     averages = logfire_meta.get("averages") or {}
     metrics = averages.get("metrics") or {}
-    return {
-        "cost": _safe_float(metrics.get("cost")),
-        "input_tokens": _safe_float(metrics.get("input_tokens")),
-        "output_tokens": _safe_float(metrics.get("output_tokens")),
-        "cache_read_tokens": _safe_float(metrics.get("cache_read_tokens")),
-        "requests": _safe_float(metrics.get("requests")),
-    }
+    return TraceMetrics(
+        cost=_safe_float(metrics.get("cost")),
+        input_tokens=_safe_float(metrics.get("input_tokens")),
+        output_tokens=_safe_float(metrics.get("output_tokens")),
+        cache_read_tokens=_safe_float(metrics.get("cache_read_tokens")),
+        requests=_safe_float(metrics.get("requests")),
+    )
 
 
-def _parse_case_row(row: dict[str, Any]) -> tuple[str, bool, dict[str, Any], dict[str, Any]]:
-    """Extract (case_name, passed, per-evaluator scores, case metrics) from a case span.
+def _parse_case_row(row: dict[str, Any]) -> CaseRow:
+    """Extract a `CaseRow` from a case span.
 
-    Scores are copied verbatim; we only compute the aggregate `passed` boolean.
+    Scores are copied (as `EvaluatorResult` models); we compute only the aggregate `passed` boolean.
     """
     child_attributes = row.get("child_attributes") or {}
     case_name = child_attributes.get("case_name") or "unknown_case"
-    scores: dict[str, Any] = child_attributes.get("scores") or {}
-    metrics: dict[str, Any] = child_attributes.get("metrics") or {}
+    scores_raw_obj = child_attributes.get("scores") or {}
+    metrics_raw_obj = child_attributes.get("metrics") or {}
 
-    def _is_green(v: object) -> bool:
-        if isinstance(v, dict) and "value" in v:
-            return abs(_safe_float(v.get("value")) - 1.0) < PASSED_EPS
-        return abs(_safe_float(v) - 1.0) < PASSED_EPS
+    scores_raw: dict[str, Any] = scores_raw_obj if isinstance(scores_raw_obj, dict) else {}
+    metrics_raw: dict[str, Any] = metrics_raw_obj if isinstance(metrics_raw_obj, dict) else {}
 
-    passed = bool(scores) and all(_is_green(v) for v in scores.values())
-    return str(case_name), passed, scores, metrics
+    scores = {
+        str(eval_name): (
+            EvaluatorResult.model_validate(eval_result)
+            if isinstance(eval_result, dict)
+            else EvaluatorResult(value=_safe_float(eval_result))
+        )
+        for eval_name, eval_result in scores_raw.items()
+    }
+    case_metrics = CaseMetrics.model_validate(metrics_raw)
+
+    passed = bool(scores) and all(
+        (score.value is not None) and abs(score.value - 1.0) < PASSED_EPS for score in scores.values()
+    )
+    return CaseRow(case_name=str(case_name), passed=passed, scores=scores, metrics=case_metrics)
 
 
 if __name__ == "__main__":
