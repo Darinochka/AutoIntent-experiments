@@ -5,7 +5,7 @@ Load total cost, tokens and per-case results.
 
 import os
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import cyclopts
 from dotenv import load_dotenv
@@ -190,9 +190,9 @@ async def load(
 def print_table(
     report_path: Annotated[Path, cyclopts.Parameter(help="Path to JSONL report file")],
     sort_cases: Annotated[
-        str,
-        cyclopts.Parameter(help="Sort cases by: name|input_tokens|output_tokens"),
-    ] = "name",
+        Literal["passed", "name", "input_tokens", "output_tokens"],
+        cyclopts.Parameter(help="Sort cases by: passed|name|input_tokens|output_tokens"),
+    ] = "passed",
 ) -> None:
     """Print parsed report metrics using `rich`."""
     console = Console()
@@ -230,14 +230,16 @@ def print_table(
     )
     console.print(summary)
 
-    if sort_cases == "name":
+    if sort_cases == "passed":
+        cases_sorted = sorted(cases, key=lambda c: (not c.passed, c.case_name))
+    elif sort_cases == "name":
         cases_sorted = sorted(cases, key=lambda c: c.case_name)
     elif sort_cases == "input_tokens":
         cases_sorted = sorted(cases, key=lambda c: c.metrics.input_tokens, reverse=True)
     elif sort_cases == "output_tokens":
         cases_sorted = sorted(cases, key=lambda c: c.metrics.output_tokens, reverse=True)
     else:
-        raise ValueError("sort_cases must be one of: name|input_tokens|output_tokens")
+        raise ValueError("sort_cases must be one of: passed|name|input_tokens|output_tokens")
 
     per_case = Table(title="Per-case Results", box=box.SIMPLE_HEAVY)
     per_case.add_column("Case")
