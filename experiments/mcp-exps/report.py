@@ -12,6 +12,9 @@ from dotenv import load_dotenv
 from logfire.query_client import AsyncLogfireQueryClient
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
+from rich import box
+from rich.console import Console
+from rich.table import Table
 
 load_dotenv()
 
@@ -27,6 +30,7 @@ PASSED_EPS = 1e-9
 class ExperimentHeader(BaseModel):
     """Outpu JSONL file header."""
 
+    experiment_name: str = "unknown"
     trace_id: str
     cost: float
     input_tokens: float
@@ -166,6 +170,7 @@ async def load(
 
         header_trace_id = trace_order[0] if trace_order else "unknown_trace"
         header = ExperimentHeader(
+            experiment_name=experiment,
             trace_id=header_trace_id,
             cost=merged_cost,
             input_tokens=merged_input_tokens,
@@ -179,6 +184,75 @@ async def load(
             output_file.write(case_by_name[case_name].model_dump_json() + "\n")
 
     logger.success("Done!")
+
+
+@app.command(name="table", help="Read a JSONL report and print a rich summary table.")
+def print_table(
+    report_path: Annotated[Path, cyclopts.Parameter(help="Path to JSONL report file")],
+    sort_cases: Annotated[
+        str,
+        cyclopts.Parameter(help="Sort cases by: name|input_tokens|output_tokens"),
+    ] = "name",
+) -> None:
+    """Print parsed report metrics using `rich`."""
+    console = Console()
+
+    with report_path.open("r", encoding="utf-8") as f:
+        header_line = f.readline()
+        if not header_line.strip():
+            msg = f"Empty report file: {report_path}"
+            raise ValueError(msg)
+        header = ExperimentHeader.model_validate_json(header_line)
+
+        cases: list[CaseRow] = []
+        for line_ in f:
+            line = line_.strip()
+            if not line:
+                continue
+            cases.append(CaseRow.model_validate_json(line))
+
+    summary = Table(title="Experiment Summary", box=box.SIMPLE)
+    summary.add_column("Experiment")
+    summary.add_column("Trace ID")
+    summary.add_column("Cost")
+    summary.add_column("Input Tokens")
+    summary.add_column("Output Tokens")
+    summary.add_column("Cache Read Tokens")
+    summary.add_column("Requests")
+    summary.add_row(
+        header.experiment_name,
+        header.trace_id,
+        f"{header.cost:.6g}",
+        f"{header.input_tokens:.0f}",
+        f"{header.output_tokens:.0f}",
+        f"{header.cache_read_tokens:.0f}",
+        f"{header.requests:.2f}",
+    )
+    console.print(summary)
+
+    if sort_cases == "name":
+        cases_sorted = sorted(cases, key=lambda c: c.case_name)
+    elif sort_cases == "input_tokens":
+        cases_sorted = sorted(cases, key=lambda c: c.metrics.input_tokens, reverse=True)
+    elif sort_cases == "output_tokens":
+        cases_sorted = sorted(cases, key=lambda c: c.metrics.output_tokens, reverse=True)
+    else:
+        raise ValueError("sort_cases must be one of: name|input_tokens|output_tokens")
+
+    per_case = Table(title="Per-case Results", box=box.SIMPLE_HEAVY)
+    per_case.add_column("Case")
+    per_case.add_column("Passed")
+    per_case.add_column("Input Tokens")
+    per_case.add_column("Output Tokens")
+
+    for c in cases_sorted:
+        per_case.add_row(
+            c.case_name,
+            "true" if c.passed else "false",
+            f"{c.metrics.input_tokens:.0f}",
+            f"{c.metrics.output_tokens:.0f}",
+        )
+    console.print(per_case)
 
 
 def _safe_float(v: object) -> float:
