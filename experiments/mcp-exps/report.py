@@ -37,6 +37,8 @@ class ExperimentHeader(BaseModel):
     output_tokens: float
     cache_read_tokens: float
     requests: float
+    total_tasks: int = 0
+    passed_tasks: int = 0
 
     model_config = ConfigDict(extra="forbid")
 
@@ -168,6 +170,9 @@ async def load(
         merged_cache_read_tokens = sum(t.cache_read_tokens for t in trace_totals.values())
         merged_requests = case_requests_sum / case_requests_count if case_requests_count else 0.0
 
+        total_tasks = len(case_by_name)
+        passed_tasks = sum(1 for c in case_by_name.values() if c.passed)
+
         header_trace_id = trace_order[0] if trace_order else "unknown_trace"
         header = ExperimentHeader(
             experiment_name=experiment,
@@ -177,6 +182,8 @@ async def load(
             output_tokens=merged_output_tokens,
             cache_read_tokens=merged_cache_read_tokens,
             requests=merged_requests,
+            total_tasks=total_tasks,
+            passed_tasks=passed_tasks,
         )
         output_file.write(header.model_dump_json() + "\n")
 
@@ -219,6 +226,8 @@ def print_table(
     summary.add_column("Output Tokens")
     summary.add_column("Cache Read Tokens")
     summary.add_column("Requests")
+    summary.add_column("Total Tasks")
+    summary.add_column("Passed Tasks")
     summary.add_row(
         header.experiment_name,
         header.trace_id,
@@ -227,6 +236,8 @@ def print_table(
         f"{header.output_tokens:.0f}",
         f"{header.cache_read_tokens:.0f}",
         f"{header.requests:.2f}",
+        str(header.total_tasks),
+        str(header.passed_tasks),
     )
     console.print(summary)
 
