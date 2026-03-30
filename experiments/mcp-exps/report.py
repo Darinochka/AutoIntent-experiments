@@ -5,7 +5,6 @@ Load total cost, tokens and per-case results.
 
 import json
 import os
-from collections import defaultdict
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -71,45 +70,56 @@ async def load(
             logger.warning("Logfire query returned no rows.")
             return
 
-        by_trace_id = _group_rows_by_trace_id(rows)
-
         # JSONL format:
-        # 1) header line (trace_id + aggregated cost/tokens)
-        # 2) per-case lines (case_name + per-evaluator scores + passed flag)
-        for trace_id in sorted(by_trace_id.keys()):
-            trace_rows = by_trace_id[trace_id]
-            totals = _compute_totals(trace_rows)
+        # 1) single header line (trace_id + aggregated cost/tokens over unique traces)
+        # 2) per-case lines (verbatim per-evaluator scores + aggregate `passed`)
 
+        trace_totals: dict[str, dict[str, float]] = {}
+        trace_order: list[str] = []
+        case_by_name: dict[str, tuple[bool, dict[str, Any]]] = {}
+
+        for row in rows:
+            trace_id = row.get("trace_id")
+            if trace_id is None:
+                continue
+            trace_id_str = str(trace_id)
+
+            if trace_id_str not in trace_totals:
+                trace_totals[trace_id_str] = _extract_parent_metrics(row)
+                trace_order.append(trace_id_str)
+
+            case_name, passed, scores = _parse_case_row(row)
+
+            # Merge by case_name: prefer a passing version if we see duplicates.
+            # TODO(voorhs): is it ok?
+            if case_name not in case_by_name:
+                case_by_name[case_name] = (passed, scores)
+            else:
+                logger.warning(f"Duplicate case info found: {case_name}")
+                existing_passed, _existing_scores = case_by_name[case_name]
+                if (not existing_passed) and passed:
+                    case_by_name[case_name] = (passed, scores)
+
+        merged_totals = {
+            "cost": 0.0,
+            "input_tokens": 0.0,
+            "output_tokens": 0.0,
+            "cache_read_tokens": 0.0,
+        }
+        for totals in trace_totals.values():
+            merged_totals["cost"] += totals.get("cost", 0.0)
+            merged_totals["input_tokens"] += totals.get("input_tokens", 0.0)
+            merged_totals["output_tokens"] += totals.get("output_tokens", 0.0)
+            merged_totals["cache_read_tokens"] += totals.get("cache_read_tokens", 0.0)
+
+        header_trace_id = trace_order[0] if trace_order else "unknown_trace"
+        output_file.write(json.dumps({"trace_id": header_trace_id, **merged_totals}, sort_keys=True) + "\n")
+
+        for case_name in sorted(case_by_name.keys()):
+            passed, scores = case_by_name[case_name]
             output_file.write(
-                json.dumps(
-                    {
-                        "trace_id": trace_id,
-                        **totals,
-                    },
-                    sort_keys=True,
-                )
-                + "\n"
+                json.dumps({"case_name": case_name, "passed": passed, "scores": scores}, sort_keys=True) + "\n"
             )
-
-            # Sort for stable output: by case_name, then evaluator keys.
-            def _case_sort_key(r: dict[str, Any]) -> str:
-                case_name = (r.get("child_attributes") or {}).get("case_name") or ""
-                return str(case_name)
-
-            for row in sorted(trace_rows, key=_case_sort_key):
-                case_name, passed, per_eval_scores = _parse_case_row(row)
-
-                output_file.write(
-                    json.dumps(
-                        {
-                            "case_name": str(case_name),
-                            "passed": passed,
-                            "scores": per_eval_scores,
-                        },
-                        sort_keys=True,
-                    )
-                    + "\n"
-                )
 
     logger.success("Done!")
 
@@ -126,53 +136,41 @@ def _safe_float(v: object) -> float:
         return 0.0
 
 
-def _group_rows_by_trace_id(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    """Group Logfire rows by `trace_id` (one experiment run)."""
-    by_trace_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        trace_id = row.get("trace_id")
-        if trace_id is None:
-            continue
-        by_trace_id[str(trace_id)].append(row)
-    return by_trace_id
+def _extract_parent_metrics(row: dict[str, Any]) -> dict[str, float]:
+    """Extract cost/tokens from `parent_attributes` for a single trace.
 
-
-def _compute_totals(trace_rows: list[dict[str, Any]]) -> dict[str, float]:
-    """Aggregate cost/tokens across all case spans for a single trace."""
-    totals = {
-        "cost": 0.0,
-        "input_tokens": 0.0,
-        "output_tokens": 0.0,
-        "cache_read_tokens": 0.0,
-        "requests": 0.0,
+    The query joins experiment parent span (which contains aggregated metrics) with each case span,
+    so these totals must be deduped per `trace_id` and not accumulated per case.
+    """
+    parent_attributes = row.get("parent_attributes") or {}
+    logfire_meta = parent_attributes.get("logfire.experiment.metadata") or {}
+    averages = logfire_meta.get("averages") or {}
+    metrics = averages.get("metrics") or {}
+    return {
+        "cost": _safe_float(metrics.get("cost")),
+        "input_tokens": _safe_float(metrics.get("input_tokens")),
+        "output_tokens": _safe_float(metrics.get("output_tokens")),
+        "cache_read_tokens": _safe_float(metrics.get("cache_read_tokens")),
+        "requests": _safe_float(metrics.get("requests")),
     }
-    for row in trace_rows:
-        child_attributes = row.get("child_attributes") or {}
-        metrics = child_attributes.get("metrics") or {}
-        totals["cost"] += _safe_float(metrics.get("cost"))
-        totals["input_tokens"] += _safe_float(metrics.get("input_tokens"))
-        totals["output_tokens"] += _safe_float(metrics.get("output_tokens"))
-        totals["cache_read_tokens"] += _safe_float(metrics.get("cache_read_tokens"))
-        totals["requests"] += _safe_float(metrics.get("requests"))
-    return totals
 
 
-def _parse_case_row(row: dict[str, Any]) -> tuple[str, bool, dict[str, float]]:
-    """Extract (case_name, passed, per-evaluator scores) from a case span."""
+def _parse_case_row(row: dict[str, Any]) -> tuple[str, bool, dict[str, Any]]:
+    """Extract (case_name, passed, per-evaluator scores) from a case span.
+
+    Scores are copied verbatim; we only compute the aggregate `passed` boolean.
+    """
     child_attributes = row.get("child_attributes") or {}
     case_name = child_attributes.get("case_name") or "unknown_case"
-    scores = child_attributes.get("scores") or {}
+    scores: dict[str, Any] = child_attributes.get("scores") or {}
 
-    per_eval_scores: dict[str, float] = {}
-    for eval_name, eval_result in scores.items():
-        # eval_result is typically {"name": ..., "value": float, "reason": ..., ...}
-        if isinstance(eval_result, dict):
-            per_eval_scores[str(eval_name)] = _safe_float(eval_result.get("value"))
-        else:
-            per_eval_scores[str(eval_name)] = _safe_float(eval_result)
+    def _is_green(v: object) -> bool:
+        if isinstance(v, dict) and "value" in v:
+            return abs(_safe_float(v.get("value")) - 1.0) < PASSED_EPS
+        return abs(_safe_float(v) - 1.0) < PASSED_EPS
 
-    passed = bool(per_eval_scores) and all(abs(v - 1.0) < PASSED_EPS for v in per_eval_scores.values())
-    return str(case_name), passed, per_eval_scores
+    passed = bool(scores) and all(_is_green(v) for v in scores.values())
+    return str(case_name), passed, scores
 
 
 if __name__ == "__main__":
