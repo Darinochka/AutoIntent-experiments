@@ -13,6 +13,7 @@ uv run samples.py --experiment basic-fs --output-dir ./tool_suggest_repos
 
 import os
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -43,7 +44,7 @@ class SpanRow(BaseModel):
     parent_span_id: str | None = None
     span_name: str
     otel_scope_name: str
-    created_at: float | None = None
+    created_at: datetime | None = None
     start_timestamp: str | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
 
@@ -112,7 +113,7 @@ async def load(
     samples = _extract_samples_from_spans(spans=spans, experiment_name=experiment)
 
     repo = JSONFileRepository(file_path=output_path, collection_name=experiment)
-    repo.add_bulk(samples, wait=True)
+    await repo.add_bulk(samples, wait=True)
 
     logger.success(f"Done! Saved {len(samples)} samples.")
 
