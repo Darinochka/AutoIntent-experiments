@@ -158,7 +158,7 @@ def create_phase_scoped_tool_suggest_deps(
     # Mutable ref holding current phase's TSAgentState (or None before first start_training).
     phase_deps_ref: list[TSAgentState | None] = [None]
 
-    async def start_training(phase_name: str) -> None:
+    async def start_training(phase_name: str, _run_context: EvalsContext) -> None:
         logger.info("Collect training samples... (phase={})", phase_name)
         collection_name = _sanitize_phase_name(phase_name)
         file_path = output_dir / f"{collection_name}.json"
@@ -180,7 +180,7 @@ def create_phase_scoped_tool_suggest_deps(
         phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[])
         logger.success("Data collection is set up! (file={})", file_path)
 
-    async def start_testing(phase_name: str) -> None:
+    async def start_testing(phase_name: str, _run_context: EvalsContext) -> None:
         logger.info("Start training tool suggester on collected data (phase={})", phase_name)
         with logfire.span("Training tool suggester"):
             state = phase_deps_ref[0]
