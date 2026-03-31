@@ -22,7 +22,9 @@ from loguru import logger
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
+    ModelRequestPart,
     ModelResponse,
+    ModelResponsePart,
     SystemPromptPart,
     TextPart,
     ToolCallPart,
@@ -199,7 +201,7 @@ def _tool_names_from_response(msg: ModelResponse) -> list[str]:
     return [part.tool_name for part in msg.parts if isinstance(part, ToolCallPart)]
 
 
-def _convert_genai_messages(raw_messages: list[dict]) -> list[ModelMessage]:  # noqa: C901, PLR0912
+def _convert_genai_messages(raw_messages: list[dict[str, Any]]) -> list[ModelMessage]:  # noqa: C901, PLR0912
     """Convert Logfire GenAI-format messages to pydantic-ai ModelMessage objects."""
     result: list[ModelMessage] = []
     for msg in raw_messages:
@@ -207,7 +209,7 @@ def _convert_genai_messages(raw_messages: list[dict]) -> list[ModelMessage]:  # 
         parts_raw = msg.get("parts", [])
 
         if role in ("system", "user"):
-            request_parts = []
+            request_parts: list[ModelRequestPart] = []
             for p in parts_raw:
                 ptype = p.get("type")
                 if ptype == "text":
@@ -227,7 +229,7 @@ def _convert_genai_messages(raw_messages: list[dict]) -> list[ModelMessage]:  # 
                 result.append(ModelRequest(parts=request_parts))
 
         elif role == "assistant":
-            response_parts = []
+            response_parts: list[ModelResponsePart] = []
             for p in parts_raw:
                 ptype = p.get("type")
                 if ptype == "tool_call":
