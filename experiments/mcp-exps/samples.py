@@ -61,6 +61,8 @@ async def load(
         SELECT
             s.trace_id,
             s.span_id,
+            s.start_timestamp,
+            s.end_timestamp,
             s.attributes->>'case_name' as case_name,
             s.attributes->>'task_name' as task_name,
             s.attributes as case_attributes
@@ -83,7 +85,10 @@ async def load(
             s.attributes->'gen_ai.response.model' as response_model,
             ROW_NUMBER() OVER (PARTITION BY c.span_id ORDER BY s.start_timestamp DESC) as rank
         FROM records s
-        JOIN case_spans c ON s.trace_id = c.trace_id AND s.parent_span_id = c.span_id
+        JOIN case_spans c
+          ON s.trace_id = c.trace_id
+          AND s.start_timestamp >= c.start_timestamp
+          AND s.start_timestamp <= c.end_timestamp
         WHERE s.message LIKE 'chat %'
           AND s.otel_scope_name = 'pydantic-ai'
     )
