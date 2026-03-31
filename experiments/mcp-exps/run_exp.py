@@ -143,6 +143,21 @@ def main(  # noqa: C901, PLR0913
         int,
         Parameter(help="Maximum parallel tasks to run."),
     ] = 1,
+    selection_target_size: Annotated[
+        int,
+        Parameter(
+            help="Core-set target size. This is the upper bound for number of samples used for AutoIntent training."
+        ),
+    ] = 100,
+    formatter_max_len: Annotated[
+        int,
+        Parameter(
+            help=(
+                "Maximum number of tokens for a single training sample. This number defines how much dialog contexts "
+                "will be truncated."
+            )
+        ),
+    ] = 1000,
 ) -> None:
     """Run all filesystem tasks with OpenAI."""
     logfire.configure(send_to_logfire="if-token-present", scrubbing=False)
@@ -192,11 +207,15 @@ def main(  # noqa: C901, PLR0913
                 jsonl_path=jsonl_repo,
                 output_dir=repos_dir / experiment_name,
                 multilabel=True,
+                formatter_max_len=formatter_max_len,
+                selection_target_size=selection_target_size,
             )
         else:
             deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(
                 repos_dir / experiment_name,
                 multilabel=True,
+                formatter_max_len=formatter_max_len,
+                selection_target_size=selection_target_size,
             )
 
     run_result_processor = tool_suggest_run_result_processor if agent_variant in ("ts", "ts-repro") else None

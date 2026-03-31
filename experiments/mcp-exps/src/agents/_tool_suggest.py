@@ -131,6 +131,8 @@ async def tool_suggest_run_result_processor(_task: Task[Any, Any], result: Agent
 
 def create_phase_scoped_tool_suggest_deps(
     output_dir: Path,
+    formatter_max_len: int,
+    selection_target_size: int,
     multilabel: bool = False,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Build phase-scoped deps: same client/repo for all tasks in a training+testing phase.
@@ -164,11 +166,11 @@ def create_phase_scoped_tool_suggest_deps(
             collection_name=collection_name,
             file_path=file_path,
         )
-        formatter = SampleFormatter(max_len=1000)
+        formatter = SampleFormatter(max_len=formatter_max_len)
         backend_config = LocalBackendConfig(
             repository=repository,
             suggester=AutoIntentSuggester(formatter=formatter, multilabel=multilabel, config=ai_config),
-            selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=15),  # NOTE: test value
+            selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=selection_target_size),
         )
         config = ToolSuggestConfig(
             collection_name=collection_name,
@@ -205,6 +207,8 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901
     experiment_name: str,
     jsonl_path: Path,
     output_dir: Path,
+    formatter_max_len: int,
+    selection_target_size: int,
     multilabel: bool = False,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Build tool-suggest deps from an existing JSONL repository.
@@ -235,7 +239,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901
     async def start_testing(phase_name: str, run_context: EvalsContext) -> None:
         logger.info("Preparing filtered JSONL repo and training suggester (phase={})", phase_name)
         collection_name = _sanitize_phase_name(phase_name)
-        formatter = SampleFormatter(max_len=1000)
+        formatter = SampleFormatter(max_len=formatter_max_len)
 
         source_repo = JSONFileRepository(
             collection_name=f"{collection_name}_source",
@@ -269,7 +273,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901
         backend_config = LocalBackendConfig(
             repository=dest_repo,
             suggester=AutoIntentSuggester(formatter=formatter, multilabel=multilabel, config=ai_config),
-            selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=15),
+            selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=selection_target_size),
         )
         config = ToolSuggestConfig(
             collection_name=collection_name,
