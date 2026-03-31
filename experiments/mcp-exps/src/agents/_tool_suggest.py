@@ -201,7 +201,8 @@ def create_phase_scoped_tool_suggest_deps(
     return (deps_maker, start_training, start_testing)
 
 
-def create_jsonl_repo_tool_suggest_deps(
+def create_jsonl_repo_tool_suggest_deps(  # noqa: C901
+    experiment_name: str,
     jsonl_path: Path,
     output_dir: Path,
     multilabel: bool = False,
@@ -220,7 +221,11 @@ def create_jsonl_repo_tool_suggest_deps(
     embedder = SentenceTransformerEmbedder(device="mps")
 
     ai_config = OptimizationConfig.from_preset("classic-light")
-    ai_config.logging_config = LoggingConfig(dump_modules=True, clear_ram=True)
+    ai_config.logging_config = LoggingConfig(
+        dump_modules=True, clear_ram=True, project_dir="./.autointent_runs", run_name=experiment_name
+    )
+
+    is_already_trained = (ai_config.logging_config.dirpath / experiment_name).exists()
 
     phase_deps_ref: list[TSAgentState | None] = [None]
 
@@ -237,7 +242,7 @@ def create_jsonl_repo_tool_suggest_deps(
             file_path=jsonl_path,
         )
         filtered_file_path = output_dir / f"{collection_name}.jsonl"
-        if filtered_file_path.exists():
+        if filtered_file_path.exists() and not is_already_trained:
             raise FileExistsError
 
         dest_repo = JSONFileRepository(
@@ -245,18 +250,21 @@ def create_jsonl_repo_tool_suggest_deps(
             file_path=filtered_file_path,
         )
 
-        train_tasks = run_context["phase_to_tasks"].get(phase_name, [])
-        train_case_names = {task.name for task in train_tasks}
-        logger.debug("Filtering by case names: {}", train_case_names)
+        if not is_already_trained:
+            train_tasks = run_context["phase_to_tasks"].get(phase_name, [])
+            train_case_names = {task.name for task in train_tasks}
+            logger.debug("Filtering by case names: {}", train_case_names)
 
-        copied_count = 0
-        async for batch in source_repo.get_batches(batch_size=64, resolve_links=False):
-            filtered_batch = [s for s in batch if s.data.get("case_name", "") in train_case_names]
-            if filtered_batch:
-                await dest_repo.add_bulk(filtered_batch)
-                copied_count += len(filtered_batch)
+            copied_count = 0
+            async for batch in source_repo.get_batches(batch_size=64, resolve_links=False):
+                filtered_batch = [s for s in batch if s.data.get("case_name", "") in train_case_names]
+                if filtered_batch:
+                    await dest_repo.add_bulk(filtered_batch)
+                    copied_count += len(filtered_batch)
 
-        logger.info("Copied {} samples into filtered repo: {}", copied_count, filtered_file_path)
+            logger.info("Copied {} samples into filtered repo: {}", copied_count, filtered_file_path)
+        else:
+            logger.debug("Skipped repo filtering")
 
         backend_config = LocalBackendConfig(
             repository=dest_repo,
@@ -270,10 +278,13 @@ def create_jsonl_repo_tool_suggest_deps(
         client = ToolSuggestClient(config=config)
         phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[])
 
-        with logfire.span("Training tool suggester"):
-            logger.debug("Training...")
-            await client.train()
-            logger.debug("Trained!")
+        if not is_already_trained:
+            with logfire.span("Training tool suggester"):
+                logger.debug("Training...")
+                await client.train()
+                logger.debug("Trained!")
+        else:
+            logger.debug("Skipped training")
 
     def deps_maker(_task: Task[Any, Any]) -> AbstractAsyncContextManager[object]:
         @asynccontextmanager

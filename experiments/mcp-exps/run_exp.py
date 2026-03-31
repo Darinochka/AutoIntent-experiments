@@ -188,6 +188,7 @@ def main(  # noqa: C901, PLR0913
             if jsonl_repo is None:
                 raise ValueError("--jsonl-repo is required for ts-repro agent")
             deps_maker, start_training_cb, start_testing_cb = create_jsonl_repo_tool_suggest_deps(
+                experiment_name=experiment_name,
                 jsonl_path=jsonl_repo,
                 output_dir=repos_dir / experiment_name,
                 multilabel=True,
@@ -199,6 +200,7 @@ def main(  # noqa: C901, PLR0913
             )
 
     run_result_processor = tool_suggest_run_result_processor if agent_variant in ("ts", "ts-repro") else None
+    is_repro_mode = agent_variant == "ts-repro"
     runner = DomainRunner(
         agent=agent_obj,
         grouper=grouper_obj,
@@ -211,8 +213,9 @@ def main(  # noqa: C901, PLR0913
         max_tasks=max_tasks,
         usage_limits=UsageLimits(request_limit=50),
         rerun_start_training_on_resume=True,
+        rerun_start_testing_on_resume=is_repro_mode,
         max_concurrency=max_concurrency,
-        skip_training_tasks=agent_variant == "ts-repro",
+        skip_training_tasks=is_repro_mode,
     )
 
     logger.info(f"Running {domain_key} tasks with model: {model}")
