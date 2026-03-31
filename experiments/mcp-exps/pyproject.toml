@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = "==3.13.*"
 dependencies = [
     "tool_suggest[local,autointent] @ git+ssh://git@github.com/DeepPavlov/tool-suggest.git@446204d",
-    "mcp_evals[domain-filesystem] @ git+ssh://git@github.com/DeepPavlov/mcp-evals.git@9ea2f2551c9f9ad0fd8e945d551bcedbba8db6ce",
+    "mcp_evals[domain-filesystem] @ git+ssh://git@github.com/DeepPavlov/mcp-evals.git@9ceea14",
     "cyclopts>=4.5.1,<5.0.0",
     "rich>=14.3.2,<15.0.0",
 ]

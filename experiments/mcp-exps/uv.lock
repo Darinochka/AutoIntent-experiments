@@ -1493,7 +1493,7 @@ wheels = [
 [[package]]
 name = "mcp-evals"
 version = "0.0.1"
-source = { git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=9ea2f2551c9f9ad0fd8e945d551bcedbba8db6ce#9ea2f2551c9f9ad0fd8e945d551bcedbba8db6ce" }
+source = { git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=9ceea14#9ceea14001f8b1fa4acf7be8312539ed62262987" }
 dependencies = [
     { name = "anyio" },
     { name = "loguru" },
@@ -1529,7 +1529,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cyclopts", specifier = ">=4.5.1,<5.0.0" },
-    { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=9ea2f2551c9f9ad0fd8e945d551bcedbba8db6ce" },
+    { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=9ceea14" },
     { name = "rich", specifier = ">=14.3.2,<15.0.0" },
     { name = "tool-suggest", extras = ["local", "autointent"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=446204d" },
 ]
