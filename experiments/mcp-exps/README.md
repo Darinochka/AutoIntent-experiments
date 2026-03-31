@@ -28,10 +28,10 @@ ALL_PROXY=http://127.0.0.1:1087 uv run run_exp.py --domain fs --experiment-name 
 ## бейзлайны filesystem
 
 - gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/abfb4e7c-9bdf-4415-a32c-de34fabcd418?spanId=204b814d12a4b866
-- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/abfb4e7c-9bdf-4415-a32c-de34fabcd418?spanId=204b814d12a4b866
-- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/abfb4e7c-9bdf-4415-a32c-de34fabcd418?spanId=204b814d12a4b866
+- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/d60a75de-0735-4c5e-b6e7-c0db11f523ec?spanId=dbb83e8eaf3b753d
+- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/c4e1adad-7361-4df5-9aba-1f489bad1213?spanId=aaf57ec6849add25
 - claude opus-4.6:
-    - https://logfire-eu.pydantic.dev/public-trace/abfb4e7c-9bdf-4415-a32c-de34fabcd418?spanId=204b814d12a4b866
-    - https://logfire-eu.pydantic.dev/public-trace/abfb4e7c-9bdf-4415-a32c-de34fabcd418?spanId=204b814d12a4b866
+    - https://logfire-eu.pydantic.dev/public-trace/a158dd2a-c3b4-4c31-9649-10a37a3a1d54?spanId=97f442b8a47c7d73
+    - https://logfire-eu.pydantic.dev/public-trace/831a49a3-ffc6-4148-a002-a0fb1e55a69b?spanId=397fc0042978e0f0
 - claude haiku-4.5:
-    - ...
+    - https://logfire-eu.pydantic.dev/public-trace/7a5a604b-40a8-4349-8c42-fa7b20b2ca5f?spanId=9fa54ec12a1bc28c
