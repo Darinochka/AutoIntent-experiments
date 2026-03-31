@@ -193,7 +193,7 @@ def main(  # noqa: C901, PLR0913
         start_testing=start_testing_cb,
         run_result_processor=run_result_processor,
         max_tasks=max_tasks,
-        usage_limits=UsageLimits(request_limit=10),
+        usage_limits=UsageLimits(request_limit=50),
         rerun_start_training_on_resume=True,
         max_concurrency=max_concurrency,
     )
@@ -206,7 +206,6 @@ def main(  # noqa: C901, PLR0913
         logger.info(f"\nDomain: {domain_key}")
         logger.info(f"Total tasks: {len(report.cases)}")
 
-        report.print(include_reasons=True, include_output=True)
         for case in report.cases:
             passed = all(eval_res.value == 1.0 for eval_res in case.scores.values())
             if passed:
