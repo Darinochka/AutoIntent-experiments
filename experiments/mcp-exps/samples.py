@@ -12,8 +12,6 @@ uv run samples.py --experiment basic-fs --output-dir ./tool_suggest_repos
 """
 
 import os
-from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -21,7 +19,6 @@ import cyclopts
 from dotenv import load_dotenv
 from logfire.query_client import AsyncLogfireQueryClient
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import (
     ModelMessage,
@@ -34,21 +31,6 @@ from tool_suggest.services.repository import JSONFileRepository
 load_dotenv()
 
 app = cyclopts.App()
-
-
-class SpanRow(BaseModel):
-    """Subset of Logfire span data needed for sample extraction."""
-
-    trace_id: str
-    span_id: str
-    parent_span_id: str | None = None
-    span_name: str
-    otel_scope_name: str
-    created_at: datetime | None = None
-    start_timestamp: str | None = None
-    attributes: dict[str, Any] = Field(default_factory=dict)
-
-    model_config = ConfigDict(extra="allow")
 
 
 @app.default
@@ -68,29 +50,56 @@ async def load(
     logger.info(f"Samples will be saved to {output_path}")
 
     query = f"""
+    WITH root_span AS (
+        SELECT trace_id, span_id
+        FROM records
+        WHERE message = 'evaluate {experiment}'
+          AND otel_scope_name = 'pydantic-evals'
+        LIMIT 1
+    ),
+    case_spans AS (
+        SELECT
+            s.trace_id,
+            s.span_id,
+            s.attributes->>'case_name' as case_name,
+            s.attributes->>'task_name' as task_name,
+            s.attributes as case_attributes
+        FROM records s
+        JOIN root_span r ON s.trace_id = r.trace_id AND s.parent_span_id = r.span_id
+        WHERE s.message LIKE 'case: %'
+          AND s.otel_scope_name = 'pydantic-evals'
+    ),
+    chat_spans_ranked AS (
+        SELECT
+            c.case_name,
+            c.task_name,
+            c.trace_id,
+            c.span_id as case_span_id,
+            c.case_attributes,
+            s.span_id as chat_span_id,
+            s.attributes->'gen_ai.input.messages' as input_messages,
+            s.attributes->'gen_ai.output.messages' as output_messages,
+            s.attributes->'gen_ai.request.model' as request_model,
+            s.attributes->'gen_ai.response.model' as response_model,
+            ROW_NUMBER() OVER (PARTITION BY c.span_id ORDER BY s.start_timestamp DESC) as rank
+        FROM records s
+        JOIN case_spans c ON s.trace_id = c.trace_id AND s.parent_span_id = c.span_id
+        WHERE s.message LIKE 'chat %'
+          AND s.otel_scope_name = 'pydantic-ai'
+    )
     SELECT
+        case_name,
+        task_name,
         trace_id,
-        span_id,
-        parent_span_id,
-        span_name,
-        otel_scope_name,
-        created_at,
-        start_timestamp,
-        attributes
-    FROM records
-    WHERE
-        trace_id IN (
-            SELECT DISTINCT trace_id
-            FROM records
-            WHERE
-                message = 'evaluate {experiment}'
-                AND otel_scope_name = 'pydantic-evals'
-        )
-        AND (
-            (otel_scope_name = 'pydantic-evals' AND span_name ILIKE 'case: %')
-            OR (otel_scope_name = 'pydantic-ai' AND span_name ILIKE 'chat %')
-        )
-    ORDER BY trace_id, created_at
+        case_span_id,
+        case_attributes,
+        chat_span_id,
+        input_messages,
+        output_messages,
+        request_model,
+        response_model
+    FROM chat_spans_ranked
+    WHERE rank = 1
     """  # noqa: S608
 
     if output_path.exists():
@@ -106,11 +115,10 @@ async def load(
 
     rows: list[dict[str, Any]] = json_rows.get("rows", [])
     if not rows:
-        logger.warning("Logfire query returned no rows.")
+        logger.warning("Logfire query returned no rows")
         return
 
-    spans = [SpanRow.model_validate(row) for row in rows]
-    samples = _extract_samples_from_spans(spans=spans, experiment_name=experiment)
+    samples = _extract_samples_from_rows(rows=rows, experiment_name=experiment)
 
     repo = JSONFileRepository(file_path=output_path, collection_name=experiment)
     await repo.add_bulk(samples, wait=True)
@@ -118,80 +126,35 @@ async def load(
     logger.success(f"Done! Saved {len(samples)} samples.")
 
 
-def _extract_samples_from_spans(spans: list[SpanRow], experiment_name: str) -> list[Sample]:
+def _extract_samples_from_rows(rows: list[dict[str, Any]], experiment_name: str) -> list[Sample]:
     """Extract tool-suggest samples from the last chat span under each case span."""
-    children_by_parent: dict[str, list[SpanRow]] = defaultdict(list)
-    case_spans: list[SpanRow] = []
-
-    for span in spans:
-        if span.parent_span_id is not None:
-            children_by_parent[span.parent_span_id].append(span)
-        if span.otel_scope_name == "pydantic-evals" and span.span_name.startswith("case: "):
-            case_spans.append(span)
-
     all_samples: list[Sample] = []
-    for case_span in case_spans:
-        case_name = str(case_span.attributes.get("case_name") or "unknown_case")
-        chat_spans = _collect_descendant_chat_spans(case_span.span_id, children_by_parent)
-        if not chat_spans:
-            logger.warning(f"No chat spans found for case {case_name}")
-            continue
+    for row in rows:
+        case_name = str(row.get("case_name") or "unknown_case")
+        input_messages_raw = row.get("input_messages") or []
+        output_messages_raw = row.get("output_messages") or []
 
-        last_chat = max(chat_spans, key=_span_sort_key)
-        transcript = _messages_from_last_chat(last_chat)
+        transcript = [
+            *ModelMessagesTypeAdapter.validate_python(input_messages_raw),
+            *ModelMessagesTypeAdapter.validate_python(output_messages_raw),
+        ]
+
         case_samples = _samples_from_messages(
             messages=transcript,
             base_data={
                 "experiment_name": experiment_name,
                 "case_name": case_name,
-                "task_name": case_span.attributes.get("task_name"),
-                "trace_id": case_span.trace_id,
-                "case_span_id": case_span.span_id,
-                "source_chat_span_id": last_chat.span_id,
-                "request_model": last_chat.attributes.get("gen_ai.request.model")
-                or last_chat.attributes.get("gen_ai_request_model"),
-                "response_model": last_chat.attributes.get("gen_ai.response.model")
-                or last_chat.attributes.get("gen_ai_response_model"),
+                "task_name": row.get("task_name"),
+                "trace_id": row.get("trace_id"),
+                "case_span_id": row.get("case_span_id"),
+                "source_chat_span_id": row.get("chat_span_id"),
+                "request_model": row.get("request_model"),
+                "response_model": row.get("response_model"),
             },
         )
         all_samples.extend(case_samples)
 
     return all_samples
-
-
-def _collect_descendant_chat_spans(
-    root_span_id: str,
-    children_by_parent: dict[str, list[SpanRow]],
-) -> list[SpanRow]:
-    """Collect descendant `chat %` spans under the given case span."""
-    stack = [root_span_id]
-    result: list[SpanRow] = []
-
-    while stack:
-        current_id = stack.pop()
-        for child in children_by_parent.get(current_id, []):
-            stack.append(child.span_id)
-            if child.otel_scope_name == "pydantic-ai" and child.span_name.startswith("chat "):
-                result.append(child)
-
-    return result
-
-
-def _span_sort_key(span: SpanRow) -> tuple[float, str]:
-    """Sort spans by creation time with a stable fallback."""
-    created_at = span.created_at if isinstance(span.created_at, int | float) else 0.0
-    return (float(created_at), span.start_timestamp or "")
-
-
-def _messages_from_last_chat(chat_span: SpanRow) -> list[ModelMessage]:
-    """Build transcript from the last chat span's input and output messages."""
-    attributes = chat_span.attributes or {}
-    input_messages_raw = attributes.get("gen_ai.input.messages") or []
-    output_messages_raw = attributes.get("gen_ai.output.messages") or []
-    return [
-        *ModelMessagesTypeAdapter.validate_python(input_messages_raw),
-        *ModelMessagesTypeAdapter.validate_python(output_messages_raw),
-    ]
 
 
 def _samples_from_messages(messages: list[ModelMessage], base_data: dict[str, Any]) -> list[Sample]:
