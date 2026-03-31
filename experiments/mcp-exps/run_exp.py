@@ -42,6 +42,7 @@ from pydantic_ai import UsageLimits
 from src.agents import (
     create_basic_agent,
     create_basic_deps_maker,
+    create_jsonl_repo_tool_suggest_deps,
     create_phase_scoped_tool_suggest_deps,
     create_tool_suggest_agent,
     tool_suggest_run_result_processor,
@@ -79,12 +80,18 @@ def main(  # noqa: C901, PLR0913
         Parameter(help="Experiment name. Use it to differentiate runs."),
     ],
     agent_variant: Annotated[
-        Literal["basic", "ts"],
+        Literal["basic", "ts", "ts-repro"],
         Parameter(
             name="--agent",
-            help="Agent variant: 'basic' or 'ts' (tool-suggest).",
+            help="Agent variant: 'basic', 'ts' (tool-suggest), or 'ts-repro' (reproduce from JSONL).",
         ),
     ],
+    jsonl_repo: Annotated[
+        Path | None,
+        Parameter(
+            help="Path to the JSONL repository for 'ts-repro' agent variant.",
+        ),
+    ] = None,
     repos_dir: Annotated[
         Path,
         Parameter(
@@ -146,7 +153,7 @@ def main(  # noqa: C901, PLR0913
     agent_obj: Agent[Any, Any]
     if agent_variant == "basic":
         agent_obj = create_basic_agent(model=model)
-    elif agent_variant == "ts":
+    elif agent_variant in ("ts", "ts-repro"):
         logger.debug("Creating ts agent")
         agent_obj = create_tool_suggest_agent(model=model)
 
@@ -169,7 +176,7 @@ def main(  # noqa: C901, PLR0913
     if agent_variant == "basic":
         grouper_obj = PlainGrouper()
         deps_maker = create_basic_deps_maker()
-    elif agent_variant == "ts":
+    elif agent_variant in ("ts", "ts-repro"):
         if grouper_kind == "plain":
             raise ValueError("ts agent doesnt support plain grouper")
         grouper_obj = (
@@ -177,12 +184,21 @@ def main(  # noqa: C901, PLR0913
             if grouper_kind == "ho"
             else CVGrouper(n_splits=cv_splits, random_state=random_state)
         )
-        deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(
-            repos_dir / experiment_name,
-            multilabel=True,
-        )
+        if agent_variant == "ts-repro":
+            if jsonl_repo is None:
+                raise ValueError("--jsonl-repo is required for ts-repro agent")
+            deps_maker, start_training_cb, start_testing_cb = create_jsonl_repo_tool_suggest_deps(
+                jsonl_path=jsonl_repo,
+                output_dir=repos_dir / experiment_name,
+                multilabel=True,
+            )
+        else:
+            deps_maker, start_training_cb, start_testing_cb = create_phase_scoped_tool_suggest_deps(
+                repos_dir / experiment_name,
+                multilabel=True,
+            )
 
-    run_result_processor = tool_suggest_run_result_processor if agent_variant == "ts" else None
+    run_result_processor = tool_suggest_run_result_processor if agent_variant in ("ts", "ts-repro") else None
     runner = DomainRunner(
         agent=agent_obj,
         grouper=grouper_obj,
@@ -196,6 +212,7 @@ def main(  # noqa: C901, PLR0913
         usage_limits=UsageLimits(request_limit=50),
         rerun_start_training_on_resume=True,
         max_concurrency=max_concurrency,
+        skip_training_tasks=agent_variant == "ts-repro",
     )
 
     logger.info(f"Running {domain_key} tasks with model: {model}")
