@@ -23,3 +23,15 @@ ALL_PROXY=http://127.0.0.1:1087 uv run run_exp.py --domain fs --experiment-name 
     - file_splitting
     - dataset_comparison
     - все задачи с фикстурой LEGAL_DOCUMENT
+
+
+## бейзлайны filesystem
+
+- gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/abfb4e7c-9bdf-4415-a32c-de34fabcd418?spanId=204b814d12a4b866
+- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/abfb4e7c-9bdf-4415-a32c-de34fabcd418?spanId=204b814d12a4b866
+- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/abfb4e7c-9bdf-4415-a32c-de34fabcd418?spanId=204b814d12a4b866
+- claude opus-4.6:
+    - https://logfire-eu.pydantic.dev/public-trace/abfb4e7c-9bdf-4415-a32c-de34fabcd418?spanId=204b814d12a4b866
+    - https://logfire-eu.pydantic.dev/public-trace/abfb4e7c-9bdf-4415-a32c-de34fabcd418?spanId=204b814d12a4b866
+- claude haiku-4.5:
+    - ...
