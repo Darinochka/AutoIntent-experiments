@@ -21,17 +21,14 @@ from dotenv import load_dotenv
 from logfire.query_client import AsyncLogfireQueryClient
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import (
     ModelMessage,
-    ModelRequest,
     ModelResponse,
-    SystemPromptPart,
-    TextPart,
     ToolCallPart,
-    ToolReturnPart,
-    UserPromptPart,
 )
 from tool_suggest.models import Sample
+from tool_suggest.services.repository import JSONFileRepository
 
 load_dotenv()
 
@@ -95,6 +92,9 @@ async def load(
     ORDER BY trace_id, created_at
     """  # noqa: S608
 
+    if output_path.exists():
+        raise FileExistsError
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     async with AsyncLogfireQueryClient(
@@ -111,9 +111,8 @@ async def load(
     spans = [SpanRow.model_validate(row) for row in rows]
     samples = _extract_samples_from_spans(spans=spans, experiment_name=experiment)
 
-    with output_path.open("w", encoding="utf-8") as output_file:
-        for sample in samples:
-            output_file.write(sample.model_dump_json() + "\n")
+    repo = JSONFileRepository(file_path=output_path, collection_name=experiment)
+    repo.add_bulk(samples, wait=True)
 
     logger.success(f"Done! Saved {len(samples)} samples.")
 
@@ -186,128 +185,12 @@ def _span_sort_key(span: SpanRow) -> tuple[float, str]:
 def _messages_from_last_chat(chat_span: SpanRow) -> list[ModelMessage]:
     """Build transcript from the last chat span's input and output messages."""
     attributes = chat_span.attributes or {}
-    system_instructions = _extract_system_instructions(attributes.get("gen_ai.system_instructions"))
     input_messages_raw = attributes.get("gen_ai.input.messages") or []
     output_messages_raw = attributes.get("gen_ai.output.messages") or []
     return [
-        *_convert_logfire_messages(input_messages_raw, system_instructions=system_instructions),
-        *_convert_logfire_messages(output_messages_raw, system_instructions=None),
+        *ModelMessagesTypeAdapter.validate_python(input_messages_raw),
+        *ModelMessagesTypeAdapter.validate_python(output_messages_raw),
     ]
-
-
-def _extract_system_instructions(system_instructions_raw: object) -> str | None:
-    """Extract plain-text instructions from Logfire system instructions payload."""
-    if not isinstance(system_instructions_raw, list):
-        return None
-
-    chunks: list[str] = []
-    for part in system_instructions_raw:
-        if not isinstance(part, dict):
-            continue
-        content = part.get("content")
-        if isinstance(content, str) and content:
-            chunks.append(content)
-
-    return "\n".join(chunks) if chunks else None
-
-
-def _convert_logfire_messages(messages_raw: object, system_instructions: str | None) -> list[ModelMessage]:
-    """Convert Logfire message payload to Pydantic AI messages."""
-    if not isinstance(messages_raw, list):
-        return []
-
-    converted: list[ModelMessage] = []
-    for msg_raw in messages_raw:
-        if not isinstance(msg_raw, dict):
-            continue
-        converted_msg = _convert_logfire_message(msg_raw, system_instructions=system_instructions)
-        if converted_msg is not None:
-            converted.append(converted_msg)
-    return converted
-
-
-def _convert_logfire_message(message_raw: dict[str, Any], system_instructions: str | None) -> ModelMessage | None:
-    """Convert one Logfire message dict into a `ModelMessage`."""
-    role = str(message_raw.get("role") or "")
-    parts_raw_obj = message_raw.get("parts") or []
-    parts_raw = [part for part in parts_raw_obj if isinstance(part, dict)] if isinstance(parts_raw_obj, list) else []
-
-    if role == "assistant":
-        response_parts = _convert_assistant_parts(parts_raw)
-        if not response_parts:
-            return None
-        return ModelResponse(parts=response_parts)
-
-    request_parts = _convert_request_parts(role=role, message_raw=message_raw, parts_raw=parts_raw)
-    if not request_parts:
-        return None
-    return ModelRequest(parts=request_parts, instructions=system_instructions)
-
-
-def _convert_request_parts(
-    role: str,
-    message_raw: dict[str, Any],
-    parts_raw: list[dict[str, Any]],
-) -> list[SystemPromptPart | UserPromptPart | ToolReturnPart]:
-    """Convert request-side Logfire parts."""
-    result: list[SystemPromptPart | UserPromptPart | ToolReturnPart] = []
-
-    if role == "system":
-        for part_raw in parts_raw:
-            content = _text_content(part_raw.get("content"))
-            if content:
-                result.append(SystemPromptPart(content=content))
-        return result
-
-    if role == "user":
-        for part_raw in parts_raw:
-            content = _text_content(part_raw.get("content"))
-            if content:
-                result.append(UserPromptPart(content=content))
-        return result
-
-    if role == "tool":
-        tool_name = _first_str(message_raw.get("name"), message_raw.get("tool_name")) or "unknown_tool"
-        tool_call_id = _first_str(message_raw.get("tool_call_id"), message_raw.get("id")) or f"tool_{tool_name}"
-        content = _tool_return_content(message_raw.get("content"))
-        result.append(ToolReturnPart(tool_name=tool_name, content=content, tool_call_id=tool_call_id))
-        return result
-
-    for part_raw in parts_raw:
-        part_type = str(part_raw.get("type") or "")
-        if part_type in {"tool_return", "tool-return"}:
-            tool_name = _first_str(part_raw.get("name"), part_raw.get("tool_name")) or "unknown_tool"
-            tool_call_id = _first_str(part_raw.get("tool_call_id"), part_raw.get("id")) or f"tool_{tool_name}"
-            content = _tool_return_content(part_raw.get("content"))
-            result.append(ToolReturnPart(tool_name=tool_name, content=content, tool_call_id=tool_call_id))
-
-    return result
-
-
-def _convert_assistant_parts(parts_raw: list[dict[str, Any]]) -> list[TextPart | ToolCallPart]:
-    """Convert assistant-side Logfire parts."""
-    result: list[TextPart | ToolCallPart] = []
-
-    for part_raw in parts_raw:
-        part_type = str(part_raw.get("type") or "")
-        if part_type == "text":
-            content = _text_content(part_raw.get("content"))
-            if content:
-                result.append(TextPart(content=content))
-        elif part_type in {"tool_call", "tool-call"}:
-            tool_name = _first_str(part_raw.get("name"), part_raw.get("tool_name"))
-            if not tool_name:
-                continue
-            tool_call_id = _first_str(part_raw.get("id"), part_raw.get("tool_call_id")) or f"call_{tool_name}"
-            result.append(
-                ToolCallPart(
-                    tool_name=tool_name,
-                    args=part_raw.get("arguments"),
-                    tool_call_id=tool_call_id,
-                )
-            )
-
-    return result
 
 
 def _samples_from_messages(messages: list[ModelMessage], base_data: dict[str, Any]) -> list[Sample]:
@@ -341,32 +224,6 @@ def _samples_from_messages(messages: list[ModelMessage], base_data: dict[str, An
 def _tool_names_from_response(msg: ModelResponse) -> list[str]:
     """Collect tool names from a ModelResponse's tool-call parts."""
     return [part.tool_name for part in msg.parts if isinstance(part, ToolCallPart)]
-
-
-def _first_str(*values: object) -> str | None:
-    """Return the first non-empty string representation."""
-    for value in values:
-        if isinstance(value, str) and value:
-            return value
-    return None
-
-
-def _text_content(value: object) -> str | None:
-    """Extract plain text content from a Logfire message part."""
-    if isinstance(value, str):
-        return value
-    return None
-
-
-def _tool_return_content(value: object) -> str | list[str]:
-    """Normalize tool return payload into ToolReturnPart-compatible content."""
-    if isinstance(value, str):
-        return value
-    if isinstance(value, list):
-        return [str(item) for item in value]
-    if value is None:
-        return ""
-    return str(value)
 
 
 if __name__ == "__main__":
