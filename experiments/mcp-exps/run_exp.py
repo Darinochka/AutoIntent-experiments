@@ -122,6 +122,14 @@ class TSArgs(BasicArgs):
         int,
         Parameter(help="Maximum number of tokens for a single training sample."),
     ] = 1000
+    multilabel: Annotated[
+        bool,
+        Parameter(help="Whether to use AutoIntent in multilabel mode"),
+    ] = False
+    top_k: Annotated[
+        int | None,
+        Parameter(help="Maximum number of tools to suggest per step (like top-k retrieval)."),
+    ]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -235,9 +243,10 @@ def _build_deps(
         return create_phase_scoped_tool_suggest_deps(
             cfg.experiment_name,
             cfg.repos_dir / cfg.experiment_name,
-            multilabel=True,
+            multilabel=cfg.multilabel,
             formatter_max_len=cfg.formatter_max_len,
             selection_target_size=cfg.selection_target_size,
+            top_k=cfg.top_k,
         )
     if not isinstance(cfg, TSReproArgs):
         raise TypeError("ts-repro mode requires TSReproArgs")
@@ -245,9 +254,10 @@ def _build_deps(
         experiment_name=cfg.experiment_name,
         jsonl_path=cfg.jsonl_repo,
         output_dir=cfg.repos_dir / cfg.experiment_name,
-        multilabel=True,
+        multilabel=cfg.multilabel,
         formatter_max_len=cfg.formatter_max_len,
         selection_target_size=cfg.selection_target_size,
+        top_k=cfg.top_k,
     )
 
 
