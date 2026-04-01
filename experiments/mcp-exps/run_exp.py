@@ -233,6 +233,7 @@ def _build_deps(
         if not isinstance(cfg, TSArgs):
             raise TypeError("ts mode requires TSArgs")
         return create_phase_scoped_tool_suggest_deps(
+            cfg.experiment_name,
             cfg.repos_dir / cfg.experiment_name,
             multilabel=True,
             formatter_max_len=cfg.formatter_max_len,
