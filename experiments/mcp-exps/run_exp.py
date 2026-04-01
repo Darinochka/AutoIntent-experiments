@@ -1,16 +1,49 @@
-r"""Run MCP-evals domain tasks using an OpenAI-compatible API.
+r"""Run MCP-evals domain tasks with baseline and tool-suggest agents.
 
-The CLI is split into subcommands:
-- `basic`: basic agent with plain task grouping.
+Subcommands:
+- `basic`: baseline agent with plain task grouping.
 - `ts`: tool-suggest mode with hold-out / cross-validation grouping.
 - `ts-repro`: tool-suggest reproduction mode backed by an existing JSONL repo.
 
-Environment Variables:
-    DOWNLOAD_PROXY: URL for proxy used for loading setup data.
-    LLM provider-specific:
-        - OPENAI_API_KEY and OPENAI_BASE_URL
-        - OPENROUTER_API_KEY
-        - etc, see pydantic ai docs: https://ai.pydantic.dev/models/overview/
+Usage examples:
+```bash
+# Show full CLI help
+uv run run_exp.py --help
+
+# Baseline run on filesystem domain
+uv run run_exp.py basic \
+    --domain fs \
+    --experiment-name basic-fs-smoke \
+    --model openai:gpt-4.1
+
+# Tool-suggest with hold-out split
+uv run run_exp.py ts \
+    --domain pg \
+    --experiment-name ts-pg-ho \
+    --grouper ho \
+    --ho-ratio 0.2
+
+# Tool-suggest with 5-fold CV and bounded task count
+uv run run_exp.py ts \
+    --domain fs \
+    --experiment-name ts-fs-cv \
+    --grouper cv \
+    --cv-splits 5 \
+    --max-tasks 20
+
+# Reproduce from an existing JSONL tool repository
+uv run run_exp.py ts-repro \
+    --domain fs \
+    --experiment-name repro-fs \
+    --jsonl-repo path/to/repo.jsonl
+```
+
+Environment variables:
+- DOWNLOAD_PROXY: URL for proxy used to load setup data.
+- LLM provider-specific credentials, for example:
+    - OPENAI_API_KEY and OPENAI_BASE_URL
+    - OPENROUTER_API_KEY
+    - etc. See pydantic-ai model docs: https://ai.pydantic.dev/models/overview/
 """
 
 import asyncio
