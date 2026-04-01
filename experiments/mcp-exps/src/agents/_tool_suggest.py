@@ -130,6 +130,7 @@ async def tool_suggest_run_result_processor(_task: Task[Any, Any], result: Agent
 
 
 def create_phase_scoped_tool_suggest_deps(
+    experiment_name: str,
     output_dir: Path,
     formatter_max_len: int,
     selection_target_size: int,
@@ -152,8 +153,7 @@ def create_phase_scoped_tool_suggest_deps(
     output_dir.mkdir(parents=True, exist_ok=True)
     embedder = SentenceTransformerEmbedder(device="mps")
 
-    ai_config = OptimizationConfig.from_preset("classic-light")
-    ai_config.logging_config = LoggingConfig(dump_modules=True, clear_ram=True)
+    ai_config = _get_ai_config(experiment_name=experiment_name)
 
     # Mutable ref holding current phase's TSAgentState (or None before first start_training).
     phase_deps_ref: list[TSAgentState | None] = [None]
@@ -226,11 +226,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
     output_dir.mkdir(parents=True, exist_ok=True)
     embedder = SentenceTransformerEmbedder(device="mps")
 
-    ai_config = OptimizationConfig.from_preset("classic-light")
-    ai_config.logging_config = LoggingConfig(
-        dump_modules=True, clear_ram=True, project_dir="./.autointent_runs", run_name=experiment_name
-    )
-
+    ai_config = _get_ai_config(experiment_name=experiment_name)
     is_already_trained = (ai_config.logging_config.dirpath / experiment_name).exists()
 
     phase_deps_ref: list[TSAgentState | None] = [None]
@@ -306,3 +302,11 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
         return cm()
 
     return (deps_maker, start_training, start_testing)
+
+
+def _get_ai_config(experiment_name: str) -> OptimizationConfig:
+    ai_config = OptimizationConfig.from_preset("classic-light")
+    ai_config.logging_config = LoggingConfig(
+        dump_modules=True, clear_ram=True, project_dir="./.autointent_runs", run_name=experiment_name
+    )
+    return ai_config
