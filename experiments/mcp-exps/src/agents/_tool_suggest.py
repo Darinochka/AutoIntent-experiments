@@ -38,6 +38,7 @@ class TSAgentState:
     tool_suggest_client: ToolSuggestClient
     speculations: list[str] = field(default_factory=list)
     tool_return_limit: int = 10_000
+    top_k: int | None = None
 
 
 def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
@@ -82,7 +83,7 @@ async def suggest_tools(ctx: RunContext[TSAgentState], tool_defs: list[ToolDefin
         return tool_defs
     with logfire.span("Gettings suggestions from suggester") as span:
         messages = ctx.messages
-        suggestions = await ctx.deps.tool_suggest_client.suggest(context=messages)
+        suggestions = await ctx.deps.tool_suggest_client.suggest(context=messages, top_k=ctx.deps.top_k)
         names = [s.id for s in suggestions]
         selected = sorted((t for t in tool_defs if t.name in names), key=lambda t: names.index(t.name))
         span.set_attribute("tools_suggested", [s.name for s in selected])
@@ -135,6 +136,7 @@ def create_phase_scoped_tool_suggest_deps(
     formatter_max_len: int,
     selection_target_size: int,
     multilabel: bool = False,
+    top_k: int | None = None,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Build phase-scoped deps: same client/repo for all tasks in a training+testing phase.
 
@@ -178,7 +180,7 @@ def create_phase_scoped_tool_suggest_deps(
             local_backend=backend_config,
         )
         client = ToolSuggestClient(config=config)
-        phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[])
+        phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[], top_k=top_k)
         logger.success("Data collection is set up! (file={})", file_path)
 
     async def start_testing(run_context: EvalsContext) -> None:
@@ -212,6 +214,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
     formatter_max_len: int,
     selection_target_size: int,
     multilabel: bool = False,
+    top_k: int | None = None,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Build tool-suggest deps from an existing JSONL repository.
 
@@ -280,7 +283,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
             local_backend=backend_config,
         )
         client = ToolSuggestClient(config=config)
-        phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[])
+        phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[], top_k=top_k)
 
         if not is_already_trained:
             with logfire.span("Training tool suggester"):
