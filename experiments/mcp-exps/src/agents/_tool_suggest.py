@@ -175,7 +175,9 @@ def create_phase_scoped_tool_suggest_deps(
         formatter = SampleFormatter(max_len=formatter_max_len, token_counter=token_counter)
         backend_config = LocalBackendConfig(
             repository=repository,
-            suggester=AutoIntentSuggester(formatter=formatter, multilabel=multilabel, config=ai_config),
+            suggester=AutoIntentSuggester(
+                formatter=formatter, multilabel=multilabel, config=ai_config, emergency_toolset="full"
+            ),
             selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=selection_target_size),
         )
         config = ToolSuggestConfig(
@@ -280,7 +282,9 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
 
         backend_config = LocalBackendConfig(
             repository=dest_repo,
-            suggester=AutoIntentSuggester(formatter=formatter, multilabel=multilabel, config=ai_config),
+            suggester=AutoIntentSuggester(
+                formatter=formatter, multilabel=multilabel, config=ai_config, emergency_toolset="full"
+            ),
             selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=selection_target_size),
         )
         config = ToolSuggestConfig(
