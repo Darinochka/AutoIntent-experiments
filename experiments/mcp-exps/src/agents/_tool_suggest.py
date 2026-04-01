@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from autointent.configs import OpenaiEmbeddingConfig
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from uuid import UUID
@@ -227,7 +229,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    embedder = SentenceTransformerEmbedder(device="mps")
+    embedder = SentenceTransformerEmbedder(device="mps")  # TODO openai embedder same as in autointent
 
     ai_config = _get_ai_config(experiment_name=experiment_name)
     is_already_trained = (ai_config.logging_config.dirpath / experiment_name).exists()
@@ -242,7 +244,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
         phase_name = run_context.phase_name
         logger.info("Preparing filtered JSONL repo and training suggester (phase={})", phase_name)
         collection_name = _sanitize_phase_name(phase_name)
-        formatter = SampleFormatter(max_len=formatter_max_len)
+        formatter = SampleFormatter(max_len=formatter_max_len)  # TODO tiktoken counter
 
         source_repo = JSONFileRepository(
             collection_name=f"{collection_name}_source",
@@ -312,4 +314,6 @@ def _get_ai_config(experiment_name: str) -> OptimizationConfig:
     ai_config.logging_config = LoggingConfig(
         dump_modules=True, clear_ram=True, project_dir="./.autointent_runs", run_name=experiment_name
     )
+    # ai_config.embedder_config = SentenceTransformerEmbeddingConfig(model_name="Qwen/Qwen3-Embedding-0.6B")
+    ai_config.embedder_config = OpenaiEmbeddingConfig(model_name="text-embedding-3-small")
     return ai_config
