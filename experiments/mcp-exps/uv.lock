@@ -1531,7 +1531,7 @@ requires-dist = [
     { name = "cyclopts", specifier = ">=4.5.1,<5.0.0" },
     { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=3d4b85fa1c61751e911a1896a407868eda6c8bd0" },
     { name = "rich", specifier = ">=14.3.2,<15.0.0" },
-    { name = "tool-suggest", extras = ["local", "autointent"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=99b4983" },
+    { name = "tool-suggest", extras = ["local", "autointent"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=14d637a" },
 ]
 
 [package.metadata.requires-dev]
@@ -3239,7 +3239,7 @@ wheels = [
 [[package]]
 name = "tool-suggest"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=99b4983#99b4983db8b68105d340763c46561702998d6d5e" }
+source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=14d637a#14d637a44ef128aac00a3ca620710dbb3cd325cd" }
 dependencies = [
     { name = "loguru" },
     { name = "numpy" },
