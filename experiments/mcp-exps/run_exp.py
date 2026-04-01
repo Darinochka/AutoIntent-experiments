@@ -46,6 +46,8 @@ app = App(
 
 @dataclass(frozen=True)
 class CommonConfig:
+    """Shared runtime configuration across all modes."""
+
     domain_key: Literal["pg", "fs"]
     experiment_name: str
     model: str = "openai:gpt-4.1"
@@ -58,6 +60,8 @@ class CommonConfig:
 
 @dataclass(frozen=True)
 class TSConfig(CommonConfig):
+    """Runtime configuration for tool-suggest modes."""
+
     grouper_kind: Literal["ho", "cv"] = "ho"
     ho_ratio: float = 0.2
     cv_splits: int = 5
@@ -69,165 +73,114 @@ class TSConfig(CommonConfig):
 
 @dataclass(frozen=True)
 class TSReproConfig(TSConfig):
+    """Runtime configuration for JSONL-backed reproduction mode."""
+
     jsonl_repo: Path = Path()
 
 
-@app.command(name="basic", help="Run baseline basic agent.")
-def basic(
-    *,
+@dataclass(frozen=True, kw_only=True)
+class BasicArgs:
+    """Shared CLI arguments for all experiment modes."""
+
     domain_key: Annotated[
         Literal["pg", "fs"],
         Parameter(name="--domain", help="Domain to run tasks from: 'pg' or 'fs'."),
-    ],
-    experiment_name: Annotated[str, Parameter(help="Experiment name. Use it to differentiate runs.")],
-    model: Annotated[str, Parameter(help="Model name to use (default: 'openai:gpt-4.1').")] = "openai:gpt-4.1",
-    max_tasks: Annotated[int | None, Parameter(help="Limit number of tasks to run.")] = None,
-    tool_retries: Annotated[int, Parameter(help="Tool call retries within each task.")] = 3,
+    ]
+    experiment_name: Annotated[str, Parameter(help="Experiment name. Use it to differentiate runs.")]
+    model: Annotated[str, Parameter(help="Model name to use (default: 'openai:gpt-4.1').")] = "openai:gpt-4.1"
+    max_tasks: Annotated[int | None, Parameter(help="Limit number of tasks to run.")] = None
+    tool_retries: Annotated[int, Parameter(help="Tool call retries within each task.")] = 3
     max_self_correction_retries: Annotated[
         int, Parameter(help="Max self-correction retries when self-correction is enabled.")
-    ] = 3,
+    ] = 3
     self_correction: Annotated[
         bool,
         Parameter(help="Enable self-correction.", negative_bool=()),
-    ] = False,
-    max_concurrency: Annotated[int, Parameter(help="Maximum parallel tasks to run.")] = 1,
-) -> None:
-    _run(
-        CommonConfig(
-            domain_key=domain_key,
-            experiment_name=experiment_name,
-            model=model,
-            max_tasks=max_tasks,
-            tool_retries=tool_retries,
-            max_self_correction_retries=max_self_correction_retries,
-            self_correction=self_correction,
-            max_concurrency=max_concurrency,
-        ),
-        mode="basic",
-    )
+    ] = False
+    max_concurrency: Annotated[int, Parameter(help="Maximum parallel tasks to run.")] = 1
+
+
+@dataclass(frozen=True, kw_only=True)
+class TSArgs(BasicArgs):
+    """CLI arguments for tool-suggest mode."""
+
+    grouper_kind: Annotated[
+        Literal["ho", "cv"],
+        Parameter(name="--grouper", help="Grouper: 'ho' (hold-out) or 'cv' (cross-validation)."),
+    ] = "ho"
+    ho_ratio: Annotated[float, Parameter(help="Hold-out test ratio. Used when --grouper ho.")] = 0.2
+    cv_splits: Annotated[int, Parameter(help="Number of CV folds. Used when --grouper cv.")] = 5
+    random_state: Annotated[int | None, Parameter(help="Random state for train/test splits.")] = None
+    repos_dir: Annotated[
+        Path,
+        Parameter(help="Directory for persistent tool-suggest JSON repositories."),
+    ] = Path("tool_suggest_repos")
+    selection_target_size: Annotated[
+        int,
+        Parameter(help="Upper bound for number of samples used for AutoIntent training."),
+    ] = 100
+    formatter_max_len: Annotated[
+        int,
+        Parameter(help="Maximum number of tokens for a single training sample."),
+    ] = 1000
+
+
+@dataclass(frozen=True, kw_only=True)
+class TSReproArgs(TSArgs):
+    """CLI arguments for JSONL-backed tool-suggest reproduction mode."""
+
+    jsonl_repo: Annotated[Path, Parameter(help="Path to the JSONL repository to reproduce from.")]
+
+
+@app.command(name="basic", help="Run baseline basic agent.")
+def basic(args: Annotated[BasicArgs, Parameter(name="*")]) -> None:
+    """Run baseline basic agent."""
+    _run(_common_cfg_from_args(args), mode="basic")
 
 
 @app.command(name="ts", help="Run tool-suggest mode.")
-def ts(
-    *,
-    domain_key: Annotated[
-        Literal["pg", "fs"],
-        Parameter(name="--domain", help="Domain to run tasks from: 'pg' or 'fs'."),
-    ],
-    experiment_name: Annotated[str, Parameter(help="Experiment name. Use it to differentiate runs.")],
-    model: Annotated[str, Parameter(help="Model name to use (default: 'openai:gpt-4.1').")] = "openai:gpt-4.1",
-    grouper_kind: Annotated[
-        Literal["ho", "cv"],
-        Parameter(name="--grouper", help="Grouper: 'ho' (hold-out) or 'cv' (cross-validation)."),
-    ] = "ho",
-    ho_ratio: Annotated[float, Parameter(help="Hold-out test ratio. Used when --grouper ho.")] = 0.2,
-    cv_splits: Annotated[int, Parameter(help="Number of CV folds. Used when --grouper cv.")] = 5,
-    random_state: Annotated[int | None, Parameter(help="Random state for train/test splits.")] = None,
-    repos_dir: Annotated[
-        Path,
-        Parameter(help="Directory for persistent tool-suggest JSON repositories."),
-    ] = Path("tool_suggest_repos"),
-    max_tasks: Annotated[int | None, Parameter(help="Limit number of tasks to run.")] = None,
-    tool_retries: Annotated[int, Parameter(help="Tool call retries within each task.")] = 3,
-    max_self_correction_retries: Annotated[
-        int, Parameter(help="Max self-correction retries when self-correction is enabled.")
-    ] = 3,
-    self_correction: Annotated[
-        bool,
-        Parameter(help="Enable self-correction.", negative_bool=()),
-    ] = False,
-    max_concurrency: Annotated[int, Parameter(help="Maximum parallel tasks to run.")] = 1,
-    selection_target_size: Annotated[
-        int,
-        Parameter(help="Upper bound for number of samples used for AutoIntent training."),
-    ] = 100,
-    formatter_max_len: Annotated[
-        int,
-        Parameter(help="Maximum number of tokens for a single training sample."),
-    ] = 1000,
-) -> None:
-    _run(
-        TSConfig(
-            domain_key=domain_key,
-            experiment_name=experiment_name,
-            model=model,
-            max_tasks=max_tasks,
-            tool_retries=tool_retries,
-            max_self_correction_retries=max_self_correction_retries,
-            self_correction=self_correction,
-            max_concurrency=max_concurrency,
-            grouper_kind=grouper_kind,
-            ho_ratio=ho_ratio,
-            cv_splits=cv_splits,
-            random_state=random_state,
-            repos_dir=repos_dir,
-            selection_target_size=selection_target_size,
-            formatter_max_len=formatter_max_len,
-        ),
-        mode="ts",
-    )
+def ts(args: Annotated[TSArgs, Parameter(name="*")]) -> None:
+    """Run tool-suggest mode."""
+    _run(_ts_cfg_from_args(args), mode="ts")
 
 
 @app.command(name="ts-repro", help="Run tool-suggest in JSONL reproduction mode.")
-def ts_repro(
-    *,
-    domain_key: Annotated[
-        Literal["pg", "fs"],
-        Parameter(name="--domain", help="Domain to run tasks from: 'pg' or 'fs'."),
-    ],
-    experiment_name: Annotated[str, Parameter(help="Experiment name. Use it to differentiate runs.")],
-    jsonl_repo: Annotated[Path, Parameter(help="Path to the JSONL repository to reproduce from.")],
-    model: Annotated[str, Parameter(help="Model name to use (default: 'openai:gpt-4.1').")] = "openai:gpt-4.1",
-    grouper_kind: Annotated[
-        Literal["ho", "cv"],
-        Parameter(name="--grouper", help="Grouper: 'ho' (hold-out) or 'cv' (cross-validation)."),
-    ] = "ho",
-    ho_ratio: Annotated[float, Parameter(help="Hold-out test ratio. Used when --grouper ho.")] = 0.2,
-    cv_splits: Annotated[int, Parameter(help="Number of CV folds. Used when --grouper cv.")] = 5,
-    random_state: Annotated[int | None, Parameter(help="Random state for train/test splits.")] = None,
-    repos_dir: Annotated[
-        Path,
-        Parameter(help="Directory for persistent tool-suggest JSON repositories."),
-    ] = Path("tool_suggest_repos"),
-    max_tasks: Annotated[int | None, Parameter(help="Limit number of tasks to run.")] = None,
-    tool_retries: Annotated[int, Parameter(help="Tool call retries within each task.")] = 3,
-    max_self_correction_retries: Annotated[
-        int, Parameter(help="Max self-correction retries when self-correction is enabled.")
-    ] = 3,
-    self_correction: Annotated[
-        bool,
-        Parameter(help="Enable self-correction.", negative_bool=()),
-    ] = False,
-    max_concurrency: Annotated[int, Parameter(help="Maximum parallel tasks to run.")] = 1,
-    selection_target_size: Annotated[
-        int,
-        Parameter(help="Upper bound for number of samples used for AutoIntent training."),
-    ] = 100,
-    formatter_max_len: Annotated[
-        int,
-        Parameter(help="Maximum number of tokens for a single training sample."),
-    ] = 1000,
-) -> None:
+def ts_repro(args: Annotated[TSReproArgs, Parameter(name="*")]) -> None:
+    """Run tool-suggest mode using an existing JSONL repository."""
     _run(
         TSReproConfig(
-            domain_key=domain_key,
-            experiment_name=experiment_name,
-            model=model,
-            max_tasks=max_tasks,
-            tool_retries=tool_retries,
-            max_self_correction_retries=max_self_correction_retries,
-            self_correction=self_correction,
-            max_concurrency=max_concurrency,
-            grouper_kind=grouper_kind,
-            ho_ratio=ho_ratio,
-            cv_splits=cv_splits,
-            random_state=random_state,
-            repos_dir=repos_dir,
-            selection_target_size=selection_target_size,
-            formatter_max_len=formatter_max_len,
-            jsonl_repo=jsonl_repo,
+            **_ts_cfg_from_args(args).__dict__,
+            jsonl_repo=args.jsonl_repo,
         ),
         mode="ts-repro",
+    )
+
+
+def _common_cfg_from_args(args: BasicArgs) -> CommonConfig:
+    """Convert shared CLI arguments into runtime config."""
+    return CommonConfig(
+        domain_key=args.domain_key,
+        experiment_name=args.experiment_name,
+        model=args.model,
+        max_tasks=args.max_tasks,
+        tool_retries=args.tool_retries,
+        max_self_correction_retries=args.max_self_correction_retries,
+        self_correction=args.self_correction,
+        max_concurrency=args.max_concurrency,
+    )
+
+
+def _ts_cfg_from_args(args: TSArgs) -> TSConfig:
+    """Convert tool-suggest CLI arguments into runtime config."""
+    return TSConfig(
+        **_common_cfg_from_args(args).__dict__,
+        grouper_kind=args.grouper_kind,
+        ho_ratio=args.ho_ratio,
+        cv_splits=args.cv_splits,
+        random_state=args.random_state,
+        repos_dir=args.repos_dir,
+        selection_target_size=args.selection_target_size,
+        formatter_max_len=args.formatter_max_len,
     )
 
 
