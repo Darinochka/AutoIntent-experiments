@@ -203,7 +203,7 @@ def create_phase_scoped_tool_suggest_deps(
     return (deps_maker, start_training, start_testing)
 
 
-def create_jsonl_repo_tool_suggest_deps(  # noqa: C901
+def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
     experiment_name: str,
     jsonl_path: Path,
     output_dir: Path,
@@ -233,10 +233,12 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901
 
     phase_deps_ref: list[TSAgentState | None] = [None]
 
-    async def start_training(phase_name: str, _run_context: EvalsContext) -> None:
+    async def start_training(run_context: EvalsContext) -> None:
+        phase_name = run_context.phase_name
         logger.info("Skipping setup in start_training for JSONL replay mode (phase={})", phase_name)
 
-    async def start_testing(phase_name: str, run_context: EvalsContext) -> None:
+    async def start_testing(run_context: EvalsContext) -> None:
+        phase_name = run_context.phase_name
         logger.info("Preparing filtered JSONL repo and training suggester (phase={})", phase_name)
         collection_name = _sanitize_phase_name(phase_name)
         formatter = SampleFormatter(max_len=formatter_max_len)
@@ -255,7 +257,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901
         )
 
         if not is_already_trained:
-            train_tasks = run_context["phase_to_tasks"].get(phase_name, [])
+            train_tasks = run_context.get_training_tasks()
             train_case_names = {task.name for task in train_tasks}
             logger.debug("Filtering by case names: {}", train_case_names)
 
