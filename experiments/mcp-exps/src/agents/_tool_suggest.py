@@ -6,26 +6,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from autointent.configs import OpenaiEmbeddingConfig
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
-    from uuid import UUID
-
-    from mcp_evals.task import Task
-    from mcp_evals.types import DepsMaker, TrainingTestingCallback
-    from mcp_evals.types import RunContext as EvalsContext
-    from pydantic_ai.run import AgentRunResult
-
 import logfire
+import tiktoken
 from autointent import OptimizationConfig
-from autointent.configs import LoggingConfig
+from autointent.configs import LoggingConfig, OpenaiEmbeddingConfig
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic_ai import Agent, RunContext, ToolDefinition
 from pydantic_ai.messages import ModelResponse
 from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfig
-from tool_suggest.services.embedder import SentenceTransformerEmbedder
+from tool_suggest.services.embedder import OpenAIEmbedder
 from tool_suggest.services.formatter import SampleFormatter
 from tool_suggest.services.repository import JSONFileRepository
 from tool_suggest.services.selector import GreedySelector
@@ -33,6 +23,15 @@ from tool_suggest.services.suggester import AutoIntentSuggester
 
 from src.history_processors import truncate_tool_returns
 from src.tools import change_output_limit, get_thoughts, record_intermediate_speculations
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Callable
+    from uuid import UUID
+
+    from mcp_evals.task import Task
+    from mcp_evals.types import DepsMaker, TrainingTestingCallback
+    from mcp_evals.types import RunContext as EvalsContext
+    from pydantic_ai.run import AgentRunResult
 
 
 @dataclass
@@ -155,7 +154,9 @@ def create_phase_scoped_tool_suggest_deps(
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    embedder = SentenceTransformerEmbedder(device="mps")
+    embedder_model_name = "text-embedding-3-small"
+    embedder = OpenAIEmbedder(model=embedder_model_name)
+    token_counter = _build_tiktoken_counter(model=embedder_model_name)
 
     ai_config = _get_ai_config(experiment_name=experiment_name)
 
@@ -171,7 +172,7 @@ def create_phase_scoped_tool_suggest_deps(
             collection_name=collection_name,
             file_path=file_path,
         )
-        formatter = SampleFormatter(max_len=formatter_max_len)
+        formatter = SampleFormatter(max_len=formatter_max_len, token_counter=token_counter)
         backend_config = LocalBackendConfig(
             repository=repository,
             suggester=AutoIntentSuggester(formatter=formatter, multilabel=multilabel, config=ai_config),
@@ -229,7 +230,9 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    embedder = SentenceTransformerEmbedder(device="mps")  # TODO openai embedder same as in autointent
+    embedder_model_name = "text-embedding-3-small"
+    embedder = OpenAIEmbedder(model=embedder_model_name)
+    token_counter = _build_tiktoken_counter(model=embedder_model_name)
 
     ai_config = _get_ai_config(experiment_name=experiment_name)
     is_already_trained = (ai_config.logging_config.dirpath / experiment_name).exists()
@@ -244,7 +247,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
         phase_name = run_context.phase_name
         logger.info("Preparing filtered JSONL repo and training suggester (phase={})", phase_name)
         collection_name = _sanitize_phase_name(phase_name)
-        formatter = SampleFormatter(max_len=formatter_max_len)  # TODO tiktoken counter
+        formatter = SampleFormatter(max_len=formatter_max_len, token_counter=token_counter)
 
         source_repo = JSONFileRepository(
             collection_name=f"{collection_name}_source",
@@ -317,3 +320,15 @@ def _get_ai_config(experiment_name: str) -> OptimizationConfig:
     # ai_config.embedder_config = SentenceTransformerEmbeddingConfig(model_name="Qwen/Qwen3-Embedding-0.6B")
     ai_config.embedder_config = OpenaiEmbeddingConfig(model_name="text-embedding-3-small")
     return ai_config
+
+
+def _build_tiktoken_counter(model: str) -> Callable[[str], int]:
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        encoding = tiktoken.get_encoding("cl100k_base")
+
+    def counter(text: str) -> int:
+        return len(encoding.encode(text))
+
+    return counter
