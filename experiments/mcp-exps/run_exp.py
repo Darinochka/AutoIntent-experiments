@@ -45,40 +45,6 @@ app = App(
 
 
 @dataclass(frozen=True)
-class CommonConfig:
-    """Shared runtime configuration across all modes."""
-
-    domain_key: Literal["pg", "fs"]
-    experiment_name: str
-    model: str = "openai:gpt-4.1"
-    max_tasks: int | None = None
-    tool_retries: int = 3
-    max_self_correction_retries: int = 3
-    self_correction: bool = False
-    max_concurrency: int = 1
-
-
-@dataclass(frozen=True)
-class TSConfig(CommonConfig):
-    """Runtime configuration for tool-suggest modes."""
-
-    grouper_kind: Literal["ho", "cv"] = "ho"
-    ho_ratio: float = 0.2
-    cv_splits: int = 5
-    random_state: int | None = None
-    repos_dir: Path = Path("tool_suggest_repos")
-    selection_target_size: int = 100
-    formatter_max_len: int = 1000
-
-
-@dataclass(frozen=True)
-class TSReproConfig(TSConfig):
-    """Runtime configuration for JSONL-backed reproduction mode."""
-
-    jsonl_repo: Path = Path()
-
-
-@dataclass(frozen=True, kw_only=True)
 class BasicArgs:
     """Shared CLI arguments for all experiment modes."""
 
@@ -135,56 +101,22 @@ class TSReproArgs(TSArgs):
 @app.command(name="basic", help="Run baseline basic agent.")
 def basic(args: Annotated[BasicArgs, Parameter(name="*")]) -> None:
     """Run baseline basic agent."""
-    _run(_common_cfg_from_args(args), mode="basic")
+    _run(args, mode="basic")
 
 
 @app.command(name="ts", help="Run tool-suggest mode.")
 def ts(args: Annotated[TSArgs, Parameter(name="*")]) -> None:
     """Run tool-suggest mode."""
-    _run(_ts_cfg_from_args(args), mode="ts")
+    _run(args, mode="ts")
 
 
 @app.command(name="ts-repro", help="Run tool-suggest in JSONL reproduction mode.")
 def ts_repro(args: Annotated[TSReproArgs, Parameter(name="*")]) -> None:
     """Run tool-suggest mode using an existing JSONL repository."""
-    _run(
-        TSReproConfig(
-            **_ts_cfg_from_args(args).__dict__,
-            jsonl_repo=args.jsonl_repo,
-        ),
-        mode="ts-repro",
-    )
+    _run(args, mode="ts-repro")
 
 
-def _common_cfg_from_args(args: BasicArgs) -> CommonConfig:
-    """Convert shared CLI arguments into runtime config."""
-    return CommonConfig(
-        domain_key=args.domain_key,
-        experiment_name=args.experiment_name,
-        model=args.model,
-        max_tasks=args.max_tasks,
-        tool_retries=args.tool_retries,
-        max_self_correction_retries=args.max_self_correction_retries,
-        self_correction=args.self_correction,
-        max_concurrency=args.max_concurrency,
-    )
-
-
-def _ts_cfg_from_args(args: TSArgs) -> TSConfig:
-    """Convert tool-suggest CLI arguments into runtime config."""
-    return TSConfig(
-        **_common_cfg_from_args(args).__dict__,
-        grouper_kind=args.grouper_kind,
-        ho_ratio=args.ho_ratio,
-        cv_splits=args.cv_splits,
-        random_state=args.random_state,
-        repos_dir=args.repos_dir,
-        selection_target_size=args.selection_target_size,
-        formatter_max_len=args.formatter_max_len,
-    )
-
-
-def _run(cfg: CommonConfig, *, mode: Literal["basic", "ts", "ts-repro"]) -> None:
+def _run(cfg: BasicArgs, *, mode: Literal["basic", "ts", "ts-repro"]) -> None:
     _init_logfire()
     agent_obj = _build_agent(mode, cfg.model)
     domain_obj = _build_domain(cfg.domain_key, cfg.tool_retries)
@@ -249,32 +181,32 @@ def _build_agent(mode: Literal["basic", "ts", "ts-repro"], model: str) -> "Agent
     return create_tool_suggest_agent(model=model)
 
 
-def _build_grouper(mode: Literal["basic", "ts", "ts-repro"], cfg: CommonConfig) -> Grouper:
+def _build_grouper(mode: Literal["basic", "ts", "ts-repro"], cfg: BasicArgs) -> Grouper:
     if mode == "basic":
         return PlainGrouper()
-    if not isinstance(cfg, TSConfig):
-        raise TypeError("TS mode requires TSConfig")
+    if not isinstance(cfg, TSArgs):
+        raise TypeError("TS mode requires TSArgs")
     if cfg.grouper_kind == "ho":
         return HoldOutGrouper(test_ratio=cfg.ho_ratio, random_state=cfg.random_state)
     return CVGrouper(n_splits=cfg.cv_splits, random_state=cfg.random_state)
 
 
 def _build_deps(
-    mode: Literal["basic", "ts", "ts-repro"], cfg: CommonConfig
+    mode: Literal["basic", "ts", "ts-repro"], cfg: BasicArgs
 ) -> tuple[Any, "TrainingTestingCallback | None", "TrainingTestingCallback | None"]:
     if mode == "basic":
         return create_basic_deps_maker(), None, None
     if mode == "ts":
-        if not isinstance(cfg, TSConfig):
-            raise TypeError("ts mode requires TSConfig")
+        if not isinstance(cfg, TSArgs):
+            raise TypeError("ts mode requires TSArgs")
         return create_phase_scoped_tool_suggest_deps(
             cfg.repos_dir / cfg.experiment_name,
             multilabel=True,
             formatter_max_len=cfg.formatter_max_len,
             selection_target_size=cfg.selection_target_size,
         )
-    if not isinstance(cfg, TSReproConfig):
-        raise TypeError("ts-repro mode requires TSReproConfig")
+    if not isinstance(cfg, TSReproArgs):
+        raise TypeError("ts-repro mode requires TSReproArgs")
     return create_jsonl_repo_tool_suggest_deps(
         experiment_name=cfg.experiment_name,
         jsonl_path=cfg.jsonl_repo,
