@@ -46,31 +46,6 @@ class TSAgentState:
     top_k: int | None = None
 
 
-def _build_embedding_resources(
-    *, emb_backend: EmbBackend, emb_model: str
-) -> tuple[BaseEmbedder, Callable[[str], int] | None, EmbedderConfig]:
-    """Instantiate embedder(s) and token counter based on CLI settings."""
-    tool_suggest_embedder: BaseEmbedder
-    ai_embedder_config: EmbedderConfig
-    if emb_backend == "openai":
-        tool_suggest_embedder = OpenAIEmbedder(model=emb_model)
-        token_counter = _build_tiktoken_counter(model=emb_model)
-        ai_embedder_config = OpenaiEmbeddingConfig(model_name=emb_model)
-    elif emb_backend == "st":
-        tool_suggest_embedder = SentenceTransformerEmbedder(model_name=emb_model)
-        # SampleFormatter token budget is only an approximation; we keep the default fast counter.
-        token_counter = None
-        ai_embedder_config = SentenceTransformerEmbeddingConfig(model_name=emb_model)
-    else:
-        assert_never(emb_backend)
-
-    return (
-        tool_suggest_embedder,
-        token_counter,
-        ai_embedder_config,
-    )
-
-
 def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
     """Create agent that uses tool suggestion service for reducing context size.
 
@@ -380,3 +355,28 @@ def _build_tiktoken_counter(model: str) -> Callable[[str], int]:
         return len(encoding.encode(text))
 
     return counter
+
+
+def _build_embedding_resources(
+    *, emb_backend: EmbBackend, emb_model: str
+) -> tuple[BaseEmbedder, Callable[[str], int] | None, EmbedderConfig]:
+    """Instantiate embedder(s) and token counter based on CLI settings."""
+    tool_suggest_embedder: BaseEmbedder
+    ai_embedder_config: EmbedderConfig
+    if emb_backend == "openai":
+        tool_suggest_embedder = OpenAIEmbedder(model=emb_model)
+        token_counter = _build_tiktoken_counter(model=emb_model)
+        ai_embedder_config = OpenaiEmbeddingConfig(model_name=emb_model)
+    elif emb_backend == "st":
+        tool_suggest_embedder = SentenceTransformerEmbedder(model_name=emb_model)
+        # SampleFormatter token budget is only an approximation; we keep the default fast counter.
+        token_counter = None
+        ai_embedder_config = SentenceTransformerEmbeddingConfig(model_name=emb_model)
+    else:
+        assert_never(emb_backend)
+
+    return (
+        tool_suggest_embedder,
+        token_counter,
+        ai_embedder_config,
+    )
