@@ -183,7 +183,11 @@ def create_phase_scoped_tool_suggest_deps(
         backend_config = LocalBackendConfig(
             repository=repository,
             suggester=AutoIntentSuggester(
-                formatter=formatter, multilabel=multilabel, config=ai_config, emergency_toolset="full"
+                formatter=formatter,
+                multilabel=multilabel,
+                config=ai_config,
+                emergency_toolset="full",
+                under_represented_behavior="emergency_only",
             ),
             selector=GreedySelector(
                 embedder=embedder,
@@ -298,7 +302,11 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
         backend_config = LocalBackendConfig(
             repository=dest_repo,
             suggester=AutoIntentSuggester(
-                formatter=formatter, multilabel=multilabel, config=ai_config, emergency_toolset="full"
+                formatter=formatter,
+                multilabel=multilabel,
+                config=ai_config,
+                emergency_toolset="full",
+                under_represented_behavior="emergency_only",
             ),
             selector=GreedySelector(
                 embedder=embedder,
