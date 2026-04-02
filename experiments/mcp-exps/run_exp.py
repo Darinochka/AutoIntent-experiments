@@ -142,7 +142,7 @@ class TSArgs(BasicArgs):
     tool_samples: Annotated[
         int,
         Parameter(help="Lower bound for number of samples per tool in AutoIntent training."),
-    ] = 3
+    ] = 4
     formatter_max_len: Annotated[
         int,
         Parameter(help="Maximum number of tokens for a single training sample."),
