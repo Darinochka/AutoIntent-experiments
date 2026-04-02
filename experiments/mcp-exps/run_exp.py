@@ -58,6 +58,7 @@ from mcp_evals import CVGrouper, Domain, DomainRunner, Grouper, HoldOutGrouper, 
 from pydantic_ai import UsageLimits
 
 from src.agents import (
+    EmbBackend,
     create_basic_agent,
     create_basic_deps_maker,
     create_jsonl_repo_tool_suggest_deps,
@@ -154,6 +155,14 @@ class TSArgs(BasicArgs):
         int | None,
         Parameter(help="Maximum number of tools to suggest per step (like top-k retrieval)."),
     ]
+    emb_backend: Annotated[
+        EmbBackend,
+        Parameter(help="Which embedding backend to use for core-set selection and for AutoIntent classifier."),
+    ] = "openai"
+    emb_model: Annotated[
+        str,
+        Parameter(help="Name of embedding model, e.g. 'Qwen/Qwen3-Embedding-0.6B' or 'text-embedding-3-small'."),
+    ] = "text-embedding-3-small"
 
 
 @dataclass(frozen=True, kw_only=True)

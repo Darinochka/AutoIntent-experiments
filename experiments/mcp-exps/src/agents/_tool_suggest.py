@@ -4,7 +4,7 @@ import re
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import logfire
 import tiktoken
@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     from mcp_evals.types import DepsMaker, TrainingTestingCallback
     from mcp_evals.types import RunContext as EvalsContext
     from pydantic_ai.run import AgentRunResult
+
+type EmbBackend = Literal["openai", "st"]
 
 
 @dataclass
@@ -137,6 +139,8 @@ def create_phase_scoped_tool_suggest_deps(
     formatter_max_len: int,
     selection_target_size: int,
     min_samples_per_tool: int = 3,
+    emb_backend: EmbBackend = "openai",
+    emb_model: str = "text-embedding-3-small",
     multilabel: bool = False,
     top_k: int | None = None,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
@@ -224,6 +228,8 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
     output_dir: Path,
     formatter_max_len: int,
     selection_target_size: int,
+    emb_backend: EmbBackend = "openai",
+    emb_model: str = "text-embedding-3-small",
     min_samples_per_tool: int = 3,
     multilabel: bool = False,
     top_k: int | None = None,
