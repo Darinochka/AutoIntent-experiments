@@ -85,18 +85,38 @@ class BasicArgs:
         Literal["pg", "fs"],
         Parameter(name="--domain", help="Domain to run tasks from: 'pg' or 'fs'."),
     ]
-    experiment_name: Annotated[str, Parameter(help="Experiment name. Use it to differentiate runs.")]
-    model: Annotated[str, Parameter(help="Model name to use (default: 'openai:gpt-4.1').")] = "openai:gpt-4.1"
-    max_tasks: Annotated[int | None, Parameter(help="Limit number of tasks to run.")] = None
-    tool_retries: Annotated[int, Parameter(help="Tool call retries within each task.")] = 3
+    experiment_name: Annotated[
+        str,
+        Parameter(help="Experiment name. Use it to differentiate runs."),
+    ]
+    model: Annotated[
+        str,
+        Parameter(help="Model name to use (default: 'openai:gpt-4.1')."),
+    ] = "openai:gpt-4.1"
+    max_tasks: Annotated[
+        int | None,
+        Parameter(help="Limit number of tasks to run."),
+    ] = None
+    tool_retries: Annotated[
+        int,
+        Parameter(help="Tool call retries within each task."),
+    ] = 3
     max_self_correction_retries: Annotated[
-        int, Parameter(help="Max self-correction retries when self-correction is enabled.")
+        int,
+        Parameter(help="Max self-correction retries when self-correction is enabled."),
     ] = 3
     self_correction: Annotated[
         bool,
         Parameter(help="Enable self-correction.", negative_bool=()),
     ] = False
-    max_concurrency: Annotated[int, Parameter(help="Maximum parallel tasks to run.")] = 1
+    max_concurrency: Annotated[
+        int,
+        Parameter(help="Maximum parallel tasks to run."),
+    ] = 1
+    request_limit: Annotated[
+        int,
+        Parameter(help="Maximum number of LLM requests per task."),
+    ] = 50
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -180,7 +200,7 @@ def _run(cfg: BasicArgs, *, mode: Literal["basic", "ts", "ts-repro"]) -> None:
         start_testing=start_testing_cb,
         run_result_processor=run_result_processor,
         max_tasks=cfg.max_tasks,
-        usage_limits=UsageLimits(request_limit=30),
+        usage_limits=UsageLimits(request_limit=cfg.request_limit),
         rerun_start_training_on_resume=True,
         rerun_start_testing_on_resume=is_repro_mode,
         max_concurrency=cfg.max_concurrency,
