@@ -58,6 +58,7 @@ from mcp_evals import CVGrouper, Domain, DomainRunner, Grouper, HoldOutGrouper, 
 from pydantic_ai import UsageLimits
 
 from src.agents import (
+    EmbBackend,
     create_basic_agent,
     create_basic_deps_maker,
     create_jsonl_repo_tool_suggest_deps,
@@ -85,18 +86,38 @@ class BasicArgs:
         Literal["pg", "fs"],
         Parameter(name="--domain", help="Domain to run tasks from: 'pg' or 'fs'."),
     ]
-    experiment_name: Annotated[str, Parameter(help="Experiment name. Use it to differentiate runs.")]
-    model: Annotated[str, Parameter(help="Model name to use (default: 'openai:gpt-4.1').")] = "openai:gpt-4.1"
-    max_tasks: Annotated[int | None, Parameter(help="Limit number of tasks to run.")] = None
-    tool_retries: Annotated[int, Parameter(help="Tool call retries within each task.")] = 3
+    experiment_name: Annotated[
+        str,
+        Parameter(help="Experiment name. Use it to differentiate runs."),
+    ]
+    model: Annotated[
+        str,
+        Parameter(help="Model name to use (default: 'openai:gpt-4.1')."),
+    ] = "openai:gpt-4.1"
+    max_tasks: Annotated[
+        int | None,
+        Parameter(help="Limit number of tasks to run."),
+    ] = None
+    tool_retries: Annotated[
+        int,
+        Parameter(help="Tool call retries within each task."),
+    ] = 3
     max_self_correction_retries: Annotated[
-        int, Parameter(help="Max self-correction retries when self-correction is enabled.")
+        int,
+        Parameter(help="Max self-correction retries when self-correction is enabled."),
     ] = 3
     self_correction: Annotated[
         bool,
         Parameter(help="Enable self-correction.", negative_bool=()),
     ] = False
-    max_concurrency: Annotated[int, Parameter(help="Maximum parallel tasks to run.")] = 1
+    max_concurrency: Annotated[
+        int,
+        Parameter(help="Maximum parallel tasks to run."),
+    ] = 1
+    request_limit: Annotated[
+        int,
+        Parameter(help="Maximum number of LLM requests per task."),
+    ] = 50
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -116,8 +137,12 @@ class TSArgs(BasicArgs):
     ] = Path("tool_suggest_repos")
     selection_target_size: Annotated[
         int,
-        Parameter(help="Upper bound for number of samples used for AutoIntent training."),
+        Parameter(help="Lower bound for number of samples used for AutoIntent training."),
     ] = 100
+    tool_samples: Annotated[
+        int,
+        Parameter(help="Lower bound for number of samples per tool in AutoIntent training."),
+    ] = 4
     formatter_max_len: Annotated[
         int,
         Parameter(help="Maximum number of tokens for a single training sample."),
@@ -130,6 +155,14 @@ class TSArgs(BasicArgs):
         int | None,
         Parameter(help="Maximum number of tools to suggest per step (like top-k retrieval)."),
     ]
+    emb_backend: Annotated[
+        EmbBackend,
+        Parameter(help="Which embedding backend to use for core-set selection and for AutoIntent classifier."),
+    ] = "openai"
+    emb_model: Annotated[
+        str,
+        Parameter(help="Name of embedding model, e.g. 'Qwen/Qwen3-Embedding-0.6B' or 'text-embedding-3-small'."),
+    ] = "text-embedding-3-small"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -176,7 +209,7 @@ def _run(cfg: BasicArgs, *, mode: Literal["basic", "ts", "ts-repro"]) -> None:
         start_testing=start_testing_cb,
         run_result_processor=run_result_processor,
         max_tasks=cfg.max_tasks,
-        usage_limits=UsageLimits(request_limit=50),
+        usage_limits=UsageLimits(request_limit=cfg.request_limit),
         rerun_start_training_on_resume=True,
         rerun_start_testing_on_resume=is_repro_mode,
         max_concurrency=cfg.max_concurrency,
@@ -246,7 +279,10 @@ def _build_deps(
             multilabel=cfg.multilabel,
             formatter_max_len=cfg.formatter_max_len,
             selection_target_size=cfg.selection_target_size,
+            min_samples_per_tool=cfg.tool_samples,
             top_k=cfg.top_k,
+            emb_backend=cfg.emb_backend,
+            emb_model=cfg.emb_model,
         )
     if not isinstance(cfg, TSReproArgs):
         raise TypeError("ts-repro mode requires TSReproArgs")
@@ -257,7 +293,10 @@ def _build_deps(
         multilabel=cfg.multilabel,
         formatter_max_len=cfg.formatter_max_len,
         selection_target_size=cfg.selection_target_size,
+        min_samples_per_tool=cfg.tool_samples,
         top_k=cfg.top_k,
+        emb_backend=cfg.emb_backend,
+        emb_model=cfg.emb_model,
     )
 
 
