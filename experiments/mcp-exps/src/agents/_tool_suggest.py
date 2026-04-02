@@ -4,18 +4,18 @@ import re
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import logfire
 import tiktoken
 from autointent import OptimizationConfig
-from autointent.configs import LoggingConfig, OpenaiEmbeddingConfig
+from autointent.configs import EmbedderConfig, LoggingConfig, OpenaiEmbeddingConfig, SentenceTransformerEmbeddingConfig
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic_ai import Agent, RunContext, ToolDefinition
 from pydantic_ai.messages import ModelResponse
 from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfig
-from tool_suggest.services.embedder import OpenAIEmbedder
+from tool_suggest.services.embedder import OpenAIEmbedder, SentenceTransformerEmbedder
 from tool_suggest.services.formatter import SampleFormatter
 from tool_suggest.services.repository import JSONFileRepository
 from tool_suggest.services.selector import GreedySelector
@@ -28,10 +28,12 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
     from uuid import UUID
 
+    from autointent.configs import EmbedderConfig
     from mcp_evals.task import Task
     from mcp_evals.types import DepsMaker, TrainingTestingCallback
     from mcp_evals.types import RunContext as EvalsContext
     from pydantic_ai.run import AgentRunResult
+    from tool_suggest.services.embedder import BaseEmbedder
 
 type EmbBackend = Literal["openai", "st"]
 
@@ -42,6 +44,31 @@ class TSAgentState:
     speculations: list[str] = field(default_factory=list)
     tool_return_limit: int = 10_000
     top_k: int | None = None
+
+
+def _build_embedding_resources(
+    *, emb_backend: EmbBackend, emb_model: str
+) -> tuple[BaseEmbedder, Callable[[str], int] | None, EmbedderConfig]:
+    """Instantiate embedder(s) and token counter based on CLI settings."""
+    tool_suggest_embedder: BaseEmbedder
+    ai_embedder_config: EmbedderConfig
+    if emb_backend == "openai":
+        tool_suggest_embedder = OpenAIEmbedder(model=emb_model)
+        token_counter = _build_tiktoken_counter(model=emb_model)
+        ai_embedder_config = OpenaiEmbeddingConfig(model_name=emb_model)
+    elif emb_backend == "st":
+        tool_suggest_embedder = SentenceTransformerEmbedder(model_name=emb_model)
+        # SampleFormatter token budget is only an approximation; we keep the default fast counter.
+        token_counter = None
+        ai_embedder_config = SentenceTransformerEmbeddingConfig(model_name=emb_model)
+    else:
+        assert_never(emb_backend)
+
+    return (
+        tool_suggest_embedder,
+        token_counter,
+        ai_embedder_config,
+    )
 
 
 def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
@@ -159,11 +186,11 @@ def create_phase_scoped_tool_suggest_deps(
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    embedder_model_name = "text-embedding-3-small"
-    embedder = OpenAIEmbedder(model=embedder_model_name)
-    token_counter = _build_tiktoken_counter(model=embedder_model_name)
-
-    ai_config = _get_ai_config(experiment_name=experiment_name)
+    embedder, token_counter, emb_config = _build_embedding_resources(emb_backend=emb_backend, emb_model=emb_model)
+    ai_config = _get_ai_config(
+        experiment_name=experiment_name,
+        ai_embedder_config=emb_config,
+    )
 
     # Mutable ref holding current phase's TSAgentState (or None before first start_training).
     phase_deps_ref: list[TSAgentState | None] = [None]
@@ -245,11 +272,11 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    embedder_model_name = "text-embedding-3-small"
-    embedder = OpenAIEmbedder(model=embedder_model_name)
-    token_counter = _build_tiktoken_counter(model=embedder_model_name)
-
-    ai_config = _get_ai_config(experiment_name=experiment_name)
+    embedder, token_counter, emb_config = _build_embedding_resources(emb_backend=emb_backend, emb_model=emb_model)
+    ai_config = _get_ai_config(
+        experiment_name=experiment_name,
+        ai_embedder_config=emb_config,
+    )
     is_already_trained = (ai_config.logging_config.dirpath / experiment_name).exists()
 
     phase_deps_ref: list[TSAgentState | None] = [None]
@@ -334,13 +361,12 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
     return (deps_maker, start_training, start_testing)
 
 
-def _get_ai_config(experiment_name: str) -> OptimizationConfig:
+def _get_ai_config(experiment_name: str, *, ai_embedder_config: EmbedderConfig) -> OptimizationConfig:
     ai_config = OptimizationConfig.from_preset("classic-light")
     ai_config.logging_config = LoggingConfig(
         dump_modules=True, clear_ram=True, project_dir="./.autointent_runs", run_name=experiment_name
     )
-    # ai_config.embedder_config = SentenceTransformerEmbeddingConfig(model_name="Qwen/Qwen3-Embedding-0.6B")
-    ai_config.embedder_config = OpenaiEmbeddingConfig(model_name="text-embedding-3-small")
+    ai_config.embedder_config = ai_embedder_config
     return ai_config
 
 

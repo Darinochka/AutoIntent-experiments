@@ -281,6 +281,8 @@ def _build_deps(
             selection_target_size=cfg.selection_target_size,
             min_samples_per_tool=cfg.tool_samples,
             top_k=cfg.top_k,
+            emb_backend=cfg.emb_backend,
+            emb_model=cfg.emb_model,
         )
     if not isinstance(cfg, TSReproArgs):
         raise TypeError("ts-repro mode requires TSReproArgs")
@@ -293,6 +295,8 @@ def _build_deps(
         selection_target_size=cfg.selection_target_size,
         min_samples_per_tool=cfg.tool_samples,
         top_k=cfg.top_k,
+        emb_backend=cfg.emb_backend,
+        emb_model=cfg.emb_model,
     )
 
 
