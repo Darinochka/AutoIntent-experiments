@@ -116,8 +116,12 @@ class TSArgs(BasicArgs):
     ] = Path("tool_suggest_repos")
     selection_target_size: Annotated[
         int,
-        Parameter(help="Upper bound for number of samples used for AutoIntent training."),
+        Parameter(help="Lower bound for number of samples used for AutoIntent training."),
     ] = 100
+    tool_samples: Annotated[
+        int,
+        Parameter(help="Lower bound for number of samples per tool in AutoIntent training."),
+    ] = 3
     formatter_max_len: Annotated[
         int,
         Parameter(help="Maximum number of tokens for a single training sample."),
@@ -176,7 +180,7 @@ def _run(cfg: BasicArgs, *, mode: Literal["basic", "ts", "ts-repro"]) -> None:
         start_testing=start_testing_cb,
         run_result_processor=run_result_processor,
         max_tasks=cfg.max_tasks,
-        usage_limits=UsageLimits(request_limit=50),
+        usage_limits=UsageLimits(request_limit=30),
         rerun_start_training_on_resume=True,
         rerun_start_testing_on_resume=is_repro_mode,
         max_concurrency=cfg.max_concurrency,
@@ -246,6 +250,7 @@ def _build_deps(
             multilabel=cfg.multilabel,
             formatter_max_len=cfg.formatter_max_len,
             selection_target_size=cfg.selection_target_size,
+            min_samples_per_tool=cfg.tool_samples,
             top_k=cfg.top_k,
         )
     if not isinstance(cfg, TSReproArgs):
@@ -257,6 +262,7 @@ def _build_deps(
         multilabel=cfg.multilabel,
         formatter_max_len=cfg.formatter_max_len,
         selection_target_size=cfg.selection_target_size,
+        min_samples_per_tool=cfg.tool_samples,
         top_k=cfg.top_k,
     )
 

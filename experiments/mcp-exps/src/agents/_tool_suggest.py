@@ -136,6 +136,7 @@ def create_phase_scoped_tool_suggest_deps(
     output_dir: Path,
     formatter_max_len: int,
     selection_target_size: int,
+    min_samples_per_tool: int = 3,
     multilabel: bool = False,
     top_k: int | None = None,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
@@ -178,7 +179,12 @@ def create_phase_scoped_tool_suggest_deps(
             suggester=AutoIntentSuggester(
                 formatter=formatter, multilabel=multilabel, config=ai_config, emergency_toolset="full"
             ),
-            selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=selection_target_size),
+            selector=GreedySelector(
+                embedder=embedder,
+                min_samples_per_tool=min_samples_per_tool,
+                formatter=formatter,
+                min_target_size=selection_target_size,
+            ),
         )
         config = ToolSuggestConfig(
             collection_name=collection_name,
@@ -218,6 +224,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
     output_dir: Path,
     formatter_max_len: int,
     selection_target_size: int,
+    min_samples_per_tool: int = 3,
     multilabel: bool = False,
     top_k: int | None = None,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
@@ -285,7 +292,12 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
             suggester=AutoIntentSuggester(
                 formatter=formatter, multilabel=multilabel, config=ai_config, emergency_toolset="full"
             ),
-            selector=GreedySelector(embedder=embedder, formatter=formatter, target_size=selection_target_size),
+            selector=GreedySelector(
+                embedder=embedder,
+                formatter=formatter,
+                min_samples_per_tool=min_samples_per_tool,
+                min_target_size=selection_target_size,
+            ),
         )
         config = ToolSuggestConfig(
             collection_name=collection_name,
