@@ -36,3 +36,24 @@ ALL_PROXY=http://127.0.0.1:1087 uv run run_exp.py --domain fs --experiment-name 
 - claude haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/7a5a604b-40a8-4349-8c42-fa7b20b2ca5f?spanId=9fa54ec12a1bc28c
 - qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/af5902e4-9911-4f4b-8226-e8c82a8e1328?spanId=9b5c5e16d003484d
 - deepseek v3.2: https://logfire-eu.pydantic.dev/public-trace/33e790ca-d3dc-4c38-9026-b0e79805b1c2?spanId=ab2cb586faf68885
+
+## tool-suggest filesystem
+
+### обучение на примерах опуса:
+
+```bash
+uv run run_exp.py ts-repro \
+    --domain fs \
+    --experiment-name ts-fs-repro-haiku45-openaismall \
+    --tool-retries 5 \
+    --model "openrouter:anthropic/claude-haiku-4.5" \
+    --max-concurrency 5 \
+    --jsonl-repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl \
+    --grouper ho \
+    --top-k 5 \
+    --formatter-max-len 4096 \
+    --selection-target-size 150 \
+    --tool-samples 4
+```
+
+- haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/126db530-1dcd-452e-8221-8469979c1052?spanId=1df26766fdf66753
