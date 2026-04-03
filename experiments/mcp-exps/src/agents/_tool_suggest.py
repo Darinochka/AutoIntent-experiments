@@ -13,7 +13,7 @@ from autointent.configs import EmbedderConfig, LoggingConfig, OpenaiEmbeddingCon
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic_ai import Agent, RunContext, ToolDefinition
-from pydantic_ai.messages import ModelResponse
+from pydantic_ai.messages import ModelResponse, ToolCallPart
 from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfig
 from tool_suggest.services.embedder import OpenAIEmbedder, SentenceTransformerEmbedder
 from tool_suggest.services.formatter import SampleFormatter
@@ -36,6 +36,14 @@ if TYPE_CHECKING:
     from tool_suggest.services.embedder import BaseEmbedder
 
 type EmbBackend = Literal["openai", "st"]
+
+_IGNORED_TOOL_LABELS: frozenset[str] = frozenset(
+    {
+        # pydantic-ai ToolOutput names (final structured output)
+        "final_result",
+        "finish",
+    }
+)
 
 
 @dataclass
@@ -99,7 +107,7 @@ async def suggest_tools(ctx: RunContext[TSAgentState], tool_defs: list[ToolDefin
 
 def _tool_names_from_response(msg: ModelResponse) -> list[str]:
     """Collect tool names from a ModelResponse's tool-call parts."""
-    return [part.tool_name for part in msg.parts if hasattr(part, "tool_name") and part.tool_name]
+    return [part.tool_name for part in msg.parts if isinstance(part, ToolCallPart) and part.tool_name]
 
 
 async def tool_suggest_run_result_processor(_task: Task[Any, Any], result: AgentRunResult[Any], deps: object) -> None:
@@ -112,27 +120,22 @@ async def tool_suggest_run_result_processor(_task: Task[Any, Any], result: Agent
     steps: list[tuple[int, list[str]]] = []
     for i, msg in enumerate(messages):
         if isinstance(msg, ModelResponse):
-            tool_names = _tool_names_from_response(msg)
-            if tool_names:
-                steps.append((i + 1, tool_names))
+            raw_tool_names = _tool_names_from_response(msg)
+            if raw_tool_names:
+                filtered_tool_names = [n for n in raw_tool_names if n not in _IGNORED_TOOL_LABELS]
+                steps.append((i + 1, filtered_tool_names))
     if not steps:
         return
     last_sample_id: UUID | None = None
     prev_end = 0
     for end_idx, selected_tools in steps:
         context_slice = messages[prev_end:end_idx]
-        if last_sample_id is None:
-            sample_id = await client.record(
-                context=context_slice,
-                selected_tools=selected_tools,
-                parent_context=None,
-            )
-        else:
-            sample_id = await client.record(
-                context=context_slice,
-                selected_tools=selected_tools,
-                parent_context=last_sample_id,
-            )
+        sample_id = await client.record(
+            context=context_slice,
+            selected_tools=selected_tools,
+            is_out_of_scope=not selected_tools,
+            parent_context=last_sample_id,
+        )
         last_sample_id = sample_id
         prev_end = end_idx
 
@@ -232,7 +235,7 @@ def create_phase_scoped_tool_suggest_deps(
     return (deps_maker, start_training, start_testing)
 
 
-def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
+def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0913, PLR0915
     experiment_name: str,
     jsonl_path: Path,
     output_dir: Path,
@@ -295,7 +298,20 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: C901, PLR0915
 
             copied_count = 0
             async for batch in source_repo.get_batches(batch_size=64, resolve_links=False):
-                filtered_batch = [s for s in batch if s.data.get("case_name", "") in train_case_names]
+                filtered_batch = []
+                for s in batch:
+                    if s.data.get("case_name", "") not in train_case_names:
+                        continue
+
+                    tools = [t for t in s.tools if t not in _IGNORED_TOOL_LABELS]
+                    filtered_batch.append(
+                        s.model_copy(
+                            update={
+                                "tools": tools,
+                                "is_out_of_scope": not tools,
+                            }
+                        )
+                    )
                 if filtered_batch:
                     await dest_repo.add_bulk(filtered_batch)
                     copied_count += len(filtered_batch)
