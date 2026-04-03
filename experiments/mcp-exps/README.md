@@ -64,3 +64,4 @@ uv run run_exp.py ts-repro \
 - gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/b9cf2ec3-7472-4be2-b6f5-83ac56639204?spanId=aaba1e3fc3380a9b
 - gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/e52cbb3d-3835-4b2d-a25d-845f853d1141?spanId=d501604fb19908ba
 - gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/e52cbb3d-3835-4b2d-a25d-845f853d1141?spanId=d501604fb19908ba
+- qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/d6cf1c72-95dc-4d29-980d-cbd93ba65ff1?spanId=fb70f46151e5130f
