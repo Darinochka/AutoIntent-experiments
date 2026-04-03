@@ -41,6 +41,9 @@ ALL_PROXY=http://127.0.0.1:1087 uv run run_exp.py --domain fs --experiment-name 
 
 ### обучение на примерах опуса:
 
+- эмбединги openai small
+- автоинтент не использует OOS detection
+
 ```bash
 uv run run_exp.py ts-repro \
     --domain fs \
@@ -57,3 +60,4 @@ uv run run_exp.py ts-repro \
 ```
 
 - haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/126db530-1dcd-452e-8221-8469979c1052?spanId=1df26766fdf66753
+- opus-4.6: https://logfire-eu.pydantic.dev/public-trace/d0b29063-dbcf-45cd-bf97-2c4b3d59eb0b?spanId=7f01eefc5c88fd76
