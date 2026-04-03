@@ -288,7 +288,6 @@ def _build_deps(
             top_k=cfg.top_k,
             emb_backend=cfg.emb_backend,
             emb_model=cfg.emb_model,
-            
         )
     if not isinstance(cfg, TSReproArgs):
         raise TypeError("ts-repro mode requires TSReproArgs")
