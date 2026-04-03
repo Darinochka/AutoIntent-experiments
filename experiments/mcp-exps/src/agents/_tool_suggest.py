@@ -92,7 +92,7 @@ async def suggest_tools(ctx: RunContext[TSAgentState], tool_defs: list[ToolDefin
         names = [s.id for s in suggest_result.suggestions]
         selected = sorted((t for t in tool_defs if t.name in names), key=lambda t: names.index(t.name))
         span.set_attribute("tools_suggested", [s.name for s in selected])
-        span.set_attribute("reason", suggest_result.reason)
+        span.set_attribute("reason", suggest_result.reason.value)
         span.set_attribute("explanation_detail", suggest_result.detail)
     return selected
 
