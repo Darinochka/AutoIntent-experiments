@@ -61,3 +61,4 @@ uv run run_exp.py ts-repro \
 
 - haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/126db530-1dcd-452e-8221-8469979c1052?spanId=1df26766fdf66753
 - opus-4.6: https://logfire-eu.pydantic.dev/public-trace/d0b29063-dbcf-45cd-bf97-2c4b3d59eb0b?spanId=7f01eefc5c88fd76
+- gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/b9cf2ec3-7472-4be2-b6f5-83ac56639204?spanId=aaba1e3fc3380a9b
