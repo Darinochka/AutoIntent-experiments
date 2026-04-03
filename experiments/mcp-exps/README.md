@@ -63,3 +63,4 @@ uv run run_exp.py ts-repro \
 - opus-4.6: https://logfire-eu.pydantic.dev/public-trace/d0b29063-dbcf-45cd-bf97-2c4b3d59eb0b?spanId=7f01eefc5c88fd76
 - gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/b9cf2ec3-7472-4be2-b6f5-83ac56639204?spanId=aaba1e3fc3380a9b
 - gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/e52cbb3d-3835-4b2d-a25d-845f853d1141?spanId=d501604fb19908ba
+- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/e52cbb3d-3835-4b2d-a25d-845f853d1141?spanId=d501604fb19908ba
