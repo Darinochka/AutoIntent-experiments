@@ -136,7 +136,7 @@ class TSArgs(BasicArgs):
         Parameter(help="Directory for persistent tool-suggest JSON repositories."),
     ] = Path("tool_suggest_repos")
     selection_target_size: Annotated[
-        int,
+        int | None,
         Parameter(help="Lower bound for number of samples used for AutoIntent training."),
     ] = 100
     tool_samples: Annotated[
@@ -163,6 +163,10 @@ class TSArgs(BasicArgs):
         str,
         Parameter(help="Name of embedding model, e.g. 'Qwen/Qwen3-Embedding-0.6B' or 'text-embedding-3-small'."),
     ] = "text-embedding-3-small"
+    max_oos: Annotated[
+        float,
+        Parameter(help="Maximum fraction of OOS samples to feed to AutoIntentSuggester compared to in-domain data."),
+    ] = 0.2
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -277,12 +281,14 @@ def _build_deps(
             cfg.experiment_name,
             cfg.repos_dir / cfg.experiment_name,
             multilabel=cfg.multilabel,
+            max_oos_fraction=cfg.max_oos,
             formatter_max_len=cfg.formatter_max_len,
             selection_target_size=cfg.selection_target_size,
             min_samples_per_tool=cfg.tool_samples,
             top_k=cfg.top_k,
             emb_backend=cfg.emb_backend,
             emb_model=cfg.emb_model,
+            
         )
     if not isinstance(cfg, TSReproArgs):
         raise TypeError("ts-repro mode requires TSReproArgs")
@@ -291,6 +297,7 @@ def _build_deps(
         jsonl_path=cfg.jsonl_repo,
         output_dir=cfg.repos_dir / cfg.experiment_name,
         multilabel=cfg.multilabel,
+        max_oos_fraction=cfg.max_oos,
         formatter_max_len=cfg.formatter_max_len,
         selection_target_size=cfg.selection_target_size,
         min_samples_per_tool=cfg.tool_samples,
