@@ -38,6 +38,14 @@ load_dotenv()
 
 app = cyclopts.App()
 
+_IGNORED_TOOL_LABELS: frozenset[str] = frozenset(
+    {
+        # pydantic-ai ToolOutput names (final structured output)
+        "final_result",
+        "finish",
+    }
+)
+
 
 @app.default
 async def load(
@@ -173,9 +181,10 @@ def _samples_from_messages(messages: list[ModelMessage], base_data: dict[str, An
     steps: list[tuple[int, list[str]]] = []
     for i, msg in enumerate(messages):
         if isinstance(msg, ModelResponse):
-            tool_names = _tool_names_from_response(msg)
-            if tool_names:
-                steps.append((i + 1, tool_names))
+            raw_tool_names = _tool_names_from_response(msg)
+            if raw_tool_names:
+                filtered_tool_names = [n for n in raw_tool_names if n not in _IGNORED_TOOL_LABELS]
+                steps.append((i + 1, filtered_tool_names))
 
     samples: list[Sample] = []
     last_sample_id = None
@@ -186,6 +195,7 @@ def _samples_from_messages(messages: list[ModelMessage], base_data: dict[str, An
         sample = Sample(
             context=context_slice,
             tools=selected_tools,
+            is_out_of_scope=not selected_tools,
             data=dict(base_data),
             parent_context=last_sample_id,
         )
