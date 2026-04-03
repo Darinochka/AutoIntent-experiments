@@ -88,10 +88,12 @@ async def suggest_tools(ctx: RunContext[TSAgentState], tool_defs: list[ToolDefin
         return tool_defs
     with logfire.span("Gettings suggestions from suggester") as span:
         messages = ctx.messages
-        suggestions = await ctx.deps.tool_suggest_client.suggest(context=messages, top_k=ctx.deps.top_k)
-        names = [s.id for s in suggestions]
+        suggest_result = await ctx.deps.tool_suggest_client.suggest_detailed(context=messages, top_k=ctx.deps.top_k)
+        names = [s.id for s in suggest_result.suggestions]
         selected = sorted((t for t in tool_defs if t.name in names), key=lambda t: names.index(t.name))
         span.set_attribute("tools_suggested", [s.name for s in selected])
+        span.set_attribute("reason", suggest_result.reason)
+        span.set_attribute("explanation_detail", suggest_result.detail)
     return selected
 
 
