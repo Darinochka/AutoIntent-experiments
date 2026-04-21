@@ -9,7 +9,7 @@ from loguru import logger
 from tool_suggest import ToolSuggestClient, ToolSuggestConfig
 
 from .phase_deps import make_phase_deps_maker
-from .phase_names import sanitize_phase_name
+from .phase_names import namespaced_collection_name
 from .types import TSAgentState
 
 if TYPE_CHECKING:
@@ -18,12 +18,14 @@ if TYPE_CHECKING:
 
 
 def create_remote_phase_scoped_tool_suggest_deps(
+    experiment_name: str,
     service_url: str,
     top_k: int | None = None,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Same phase lifecycle as local mode, but storage and ML run on ``service_url``.
 
-    Each eval phase uses ``sanitize_phase_name(phase_name)`` as the remote collection name.
+    Each eval phase uses ``namespaced_collection_name(experiment_name, phase_name)`` so
+    collections from different benchmark runs do not collide on the server.
     Suggester/selector/repository types are whatever the server was configured with.
     """
     base_url = service_url.rstrip("/")
@@ -31,7 +33,7 @@ def create_remote_phase_scoped_tool_suggest_deps(
 
     async def start_training(run_context: EvalsContext) -> None:
         phase_name = run_context.phase_name
-        collection_name = sanitize_phase_name(phase_name)
+        collection_name = namespaced_collection_name(experiment_name, phase_name)
         logger.info(
             "Remote tool-suggest: collect training samples (phase={}, collection={})",
             phase_name,

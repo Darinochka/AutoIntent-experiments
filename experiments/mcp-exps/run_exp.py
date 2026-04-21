@@ -340,6 +340,7 @@ def _build_deps(
         if not isinstance(cfg, TSRemoteArgs):
             raise TypeError("ts-remote mode requires TSRemoteArgs")
         return create_remote_phase_scoped_tool_suggest_deps(
+            experiment_name=cfg.experiment_name,
             service_url=cfg.service_url,
             top_k=cfg.top_k,
         )
