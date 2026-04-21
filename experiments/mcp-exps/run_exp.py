@@ -4,6 +4,7 @@ Subcommands:
 - `basic`: baseline agent with plain task grouping.
 - `ts`: tool-suggest mode with hold-out / cross-validation grouping.
 - `ts-repro`: tool-suggest reproduction mode backed by an existing JSONL repo.
+- `ts-remote`: tool-suggest against a running HTTP service (see tool-suggest README).
 
 Usage examples:
 ```bash
@@ -36,6 +37,14 @@ uv run run_exp.py ts-repro \
     --domain fs \
     --experiment-name repro-fs \
     --jsonl-repo path/to/repo.jsonl
+
+# Tool-suggest with a remote server (suggester/repo configured on the server)
+uv run run_exp.py ts-remote \
+    --domain fs \
+    --experiment-name ts-remote-smoke \
+    --service-url http://127.0.0.1:8000 \
+    --grouper ho \
+    --top-k 8
 ```
 
 Environment variables:
@@ -63,6 +72,7 @@ from src.agents import (
     create_basic_deps_maker,
     create_jsonl_repo_tool_suggest_deps,
     create_phase_scoped_tool_suggest_deps,
+    create_remote_phase_scoped_tool_suggest_deps,
     create_tool_suggest_agent,
     tool_suggest_run_result_processor,
 )
@@ -170,6 +180,27 @@ class TSArgs(BasicArgs):
 
 
 @dataclass(frozen=True, kw_only=True)
+class TSRemoteArgs(BasicArgs):
+    """CLI arguments for remote HTTP tool-suggest (server owns repo + ML)."""
+
+    grouper_kind: Annotated[
+        Literal["ho", "cv"],
+        Parameter(name="--grouper", help="Grouper: 'ho' (hold-out) or 'cv' (cross-validation)."),
+    ] = "ho"
+    ho_ratio: Annotated[float, Parameter(help="Hold-out test ratio. Used when --grouper ho.")] = 0.2
+    cv_splits: Annotated[int, Parameter(help="Number of CV folds. Used when --grouper cv.")] = 5
+    random_state: Annotated[int | None, Parameter(help="Random state for train/test splits.")] = None
+    service_url: Annotated[
+        str,
+        Parameter(help="Base URL of the ToolSuggest HTTP API (e.g. http://127.0.0.1:8000)."),
+    ]
+    top_k: Annotated[
+        int | None,
+        Parameter(help="Maximum number of tools to suggest per step (like top-k retrieval)."),
+    ]
+
+
+@dataclass(frozen=True, kw_only=True)
 class TSReproArgs(TSArgs):
     """CLI arguments for JSONL-backed tool-suggest reproduction mode."""
 
@@ -194,7 +225,13 @@ def ts_repro(args: Annotated[TSReproArgs, Parameter(name="*")]) -> None:
     _run(args, mode="ts-repro")
 
 
-def _run(cfg: BasicArgs, *, mode: Literal["basic", "ts", "ts-repro"]) -> None:
+@app.command(name="ts-remote", help="Run tool-suggest against a remote HTTP service.")
+def ts_remote(args: Annotated[TSRemoteArgs, Parameter(name="*")]) -> None:
+    """Run tool-suggest with collections and training on a ToolSuggest server."""
+    _run(args, mode="ts-remote")
+
+
+def _run(cfg: BasicArgs, *, mode: Literal["basic", "ts", "ts-repro", "ts-remote"]) -> None:
     _init_logfire()
     agent_obj = _build_agent(mode, cfg.model)
     domain_obj = _build_domain(cfg.domain_key, cfg.tool_retries)
@@ -202,7 +239,7 @@ def _run(cfg: BasicArgs, *, mode: Literal["basic", "ts", "ts-repro"]) -> None:
     deps_maker, start_training_cb, start_testing_cb = _build_deps(mode, cfg)
 
     is_repro_mode = mode == "ts-repro"
-    run_result_processor = tool_suggest_run_result_processor if mode != "basic" else None
+    run_result_processor = tool_suggest_run_result_processor if mode in ("ts", "ts-repro", "ts-remote") else None
     runner = DomainRunner(
         agent=agent_obj,
         grouper=grouper_obj,
@@ -252,25 +289,35 @@ def _build_domain(domain_key: Literal["pg", "fs"], tool_retries: int) -> Domain[
     return FilesystemDomain(tool_retries=tool_retries)
 
 
-def _build_agent(mode: Literal["basic", "ts", "ts-repro"], model: str) -> "Agent[Any, Any]":
+def _build_agent(mode: Literal["basic", "ts", "ts-repro", "ts-remote"], model: str) -> "Agent[Any, Any]":
     if mode == "basic":
         return create_basic_agent(model=model)
     logger.debug("Creating ts agent")
     return create_tool_suggest_agent(model=model)
 
 
-def _build_grouper(mode: Literal["basic", "ts", "ts-repro"], cfg: BasicArgs) -> Grouper:
+def _build_grouper(mode: Literal["basic", "ts", "ts-repro", "ts-remote"], cfg: BasicArgs) -> Grouper:
     if mode == "basic":
         return PlainGrouper()
+    if mode == "ts-remote":
+        if not isinstance(cfg, TSRemoteArgs):
+            msg = "ts-remote mode requires TSRemoteArgs"
+            raise TypeError(msg)
+        return _tool_suggest_grouper(cfg)
     if not isinstance(cfg, TSArgs):
-        raise TypeError("TS mode requires TSArgs")
+        msg = "TS mode requires TSArgs"
+        raise TypeError(msg)
+    return _tool_suggest_grouper(cfg)
+
+
+def _tool_suggest_grouper(cfg: TSArgs | TSRemoteArgs) -> Grouper:
     if cfg.grouper_kind == "ho":
         return HoldOutGrouper(test_ratio=cfg.ho_ratio, random_state=cfg.random_state)
     return CVGrouper(n_splits=cfg.cv_splits, random_state=cfg.random_state)
 
 
 def _build_deps(
-    mode: Literal["basic", "ts", "ts-repro"], cfg: BasicArgs
+    mode: Literal["basic", "ts", "ts-repro", "ts-remote"], cfg: BasicArgs
 ) -> tuple[Any, "TrainingTestingCallback | None", "TrainingTestingCallback | None"]:
     if mode == "basic":
         return create_basic_deps_maker(), None, None
@@ -288,6 +335,13 @@ def _build_deps(
             top_k=cfg.top_k,
             emb_backend=cfg.emb_backend,
             emb_model=cfg.emb_model,
+        )
+    if mode == "ts-remote":
+        if not isinstance(cfg, TSRemoteArgs):
+            raise TypeError("ts-remote mode requires TSRemoteArgs")
+        return create_remote_phase_scoped_tool_suggest_deps(
+            service_url=cfg.service_url,
+            top_k=cfg.top_k,
         )
     if not isinstance(cfg, TSReproArgs):
         raise TypeError("ts-repro mode requires TSReproArgs")
