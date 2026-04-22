@@ -55,7 +55,8 @@ def create_remote_phase_scoped_tool_suggest_deps(
             state = phase_deps_ref[0]
             if state is not None:
                 logger.debug("Training via HTTP...")
-                await state.tool_suggest_client.train()
+                await state.tool_suggest_client.train(wait=False)
+                await state.tool_suggest_client.wait_until_trained(timeout_s=300)
                 logger.debug("Trained!")
 
     return (make_phase_deps_maker(phase_deps_ref), start_training, start_testing)
