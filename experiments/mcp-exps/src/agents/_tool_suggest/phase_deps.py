@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +26,10 @@ def make_phase_deps_maker(phase_deps_ref: list[TSAgentState | None]) -> DepsMake
                 msg = "Phase deps not set; start_training must run first."
                 raise RuntimeError(msg)
             state.speculations.clear()
+            if state.use_suggest_session_tracking:
+                state.suggest_session_id = str(uuid.uuid4())
+            else:
+                state.suggest_session_id = None
             yield state
 
         return cm()
