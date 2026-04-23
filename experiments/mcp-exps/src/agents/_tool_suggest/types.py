@@ -17,3 +17,5 @@ class TSAgentState:
     speculations: list[str] = field(default_factory=list)
     tool_return_limit: int = 10_000
     top_k: int | None = None
+    use_suggest_session_tracking: bool = False
+    suggest_session_id: str | None = None
