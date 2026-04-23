@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from tool_suggest.services.embedder import BaseEmbedder
 
 # Decision modules with supports_oos=True in autointent (excludes argmax, adaptive).
-_OOS_DECISION_MODULE_NAMES: frozenset[str] = frozenset({"threshold", "jinoos", "tunable"})
+_OOS_DECISION_MODULE_NAMES: frozenset[str] = frozenset({"threshold"})
 
 
 def _filter_decision_modules_to_oos_only(search_space: list[dict[str, Any]]) -> None:
