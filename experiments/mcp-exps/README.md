@@ -41,8 +41,9 @@ ALL_PROXY=http://127.0.0.1:1087 uv run run_exp.py --domain fs --experiment-name 
 
 ### обучение на примерах опуса:
 
-- эмбединги openai small
-- автоинтент не использует OOS detection
+эмбединги openai small
+
+### без OOS detection
 
 ```bash
 uv run run_exp.py ts-repro \
@@ -66,3 +67,14 @@ uv run run_exp.py ts-repro \
 - gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/ef74786a-0e92-496b-be26-3ab9465d7195?spanId=7c5fe7a6c523d14c
 - qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/d6cf1c72-95dc-4d29-980d-cbd93ba65ff1?spanId=fb70f46151e5130f
 - deepseek-v3.2: https://logfire-eu.pydantic.dev/public-trace/afb0d39e-060b-4bb8-9ecb-a9453e21c030?spanId=78d5cfbeb310d7f2
+
+### с OOS detection
+
+и `under_represented_behavior="always_include" `
+
+- haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/78d1cfc9-9b98-418b-ae57-b777487fd8ea?spanId=48699272a41bf40f
+- opus-4.6: https://logfire-eu.pydantic.dev/public-trace/14256429-7e85-470f-9b1d-6a499c5b098c?spanId=38e5b1c187acafef
+- gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/490e44a1-f403-4cde-b11f-1a86abd93820?spanId=e2769c41b50a0318
+- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/e1a42fb8-9e38-4b63-a922-ffe73453f6dd?spanId=6c7375340663a148
+- qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/c12901fc-566b-4b52-b3bf-281e3e37f26a?spanId=b8bf51d4e734f8b8
+- deepseek-v3.2: https://logfire-eu.pydantic.dev/public-trace/b0de1c01-7570-4ad9-be11-939ad7ae696e?spanId=d7d321051d2664d0
