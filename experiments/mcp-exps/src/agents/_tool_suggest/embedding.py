@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Any, assert_never
 
 import tiktoken
 from autointent import OptimizationConfig
@@ -21,9 +21,28 @@ if TYPE_CHECKING:
 
     from tool_suggest.services.embedder import BaseEmbedder
 
+# Decision modules with supports_oos=True in autointent (excludes argmax, adaptive).
+_OOS_DECISION_MODULE_NAMES: frozenset[str] = frozenset({"threshold", "jinoos", "tunable"})
+
+
+def _filter_decision_modules_to_oos_only(search_space: list[dict[str, Any]]) -> None:
+    """Drop decision modules that cannot emit out-of-scope (None) predictions."""
+    for node in search_space:
+        if node.get("node_type") != "decision":
+            continue
+        inner = node.get("search_space")
+        if not isinstance(inner, list):
+            continue
+        node["search_space"] = [
+            entry
+            for entry in inner
+            if isinstance(entry, dict) and entry.get("module_name") in _OOS_DECISION_MODULE_NAMES
+        ]
+
 
 def get_ai_config(experiment_name: str, *, ai_embedder_config: EmbedderConfig) -> OptimizationConfig:
     ai_config = OptimizationConfig.from_preset("classic-light")
+    _filter_decision_modules_to_oos_only(ai_config.search_space)
     ai_config.logging_config = LoggingConfig(
         dump_modules=True, clear_ram=True, project_dir="./.autointent_runs", run_name=experiment_name
     )
