@@ -1,0 +1,6 @@
+{"experiment_name":"ts-fs-repro-oos-haiku45-openaismall_test_0","trace_id":"019db9c9f2cefcf2e5848a3e0ed57abe","cost":0.0,"input_tokens":0.0,"output_tokens":0.0,"cache_read_tokens":0.0,"requests":0.0,"total_tasks":5,"passed_tasks":0}
+{"case_name":"duplicates_searching","passed":false,"scores":{},"metrics":{"cost":0.0,"input_tokens":0.0,"output_tokens":0.0,"cache_read_tokens":0.0,"requests":0.0}}
+{"case_name":"file_merging","passed":false,"scores":{},"metrics":{"cost":0.0,"input_tokens":0.0,"output_tokens":0.0,"cache_read_tokens":0.0,"requests":0.0}}
+{"case_name":"pattern_matching","passed":false,"scores":{},"metrics":{"cost":0.0,"input_tokens":0.0,"output_tokens":0.0,"cache_read_tokens":0.0,"requests":0.0}}
+{"case_name":"requirements_writing","passed":false,"scores":{},"metrics":{"cost":0.0,"input_tokens":0.0,"output_tokens":0.0,"cache_read_tokens":0.0,"requests":0.0}}
+{"case_name":"uppercase","passed":false,"scores":{},"metrics":{"cost":0.0,"input_tokens":0.0,"output_tokens":0.0,"cache_read_tokens":0.0,"requests":0.0}}

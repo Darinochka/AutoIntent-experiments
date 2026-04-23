@@ -112,7 +112,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: PLR0913
                 multilabel=multilabel,
                 config=ai_config,
                 emergency_toolset="full",
-                under_represented_behavior="emergency_only",
+                under_represented_behavior="always_include",
                 max_oos_fraction=max_oos_fraction,
             ),
             selector=GreedySelector(
