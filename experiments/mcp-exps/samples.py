@@ -140,7 +140,7 @@ async def load(
     samples = _extract_samples_from_rows(rows=rows, experiment_name=experiment)
 
     repo = JSONFileRepository(file_path=output_path, collection_name=experiment)
-    await repo.add_bulk(samples, wait=True)
+    await repo.add_bulk(samples)
 
     logger.success(f"Done! Saved {len(samples)} samples.")
 
