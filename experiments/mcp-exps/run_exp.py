@@ -191,6 +191,18 @@ class TSArgs(BasicArgs):
             ),
         ),
     ] = None
+    custom_qwen_prompt: Annotated[
+        bool,
+        Parameter(
+            name="--custom-qwen-prompt",
+            help=(
+                "When --emb-backend st: set AutoIntent classification and query embedding prompts "
+                "to the built-in tool-interaction instruction (overrides --emb-st-*-prompt). "
+                "Ignored for openai."
+            ),
+            negative_bool=(),
+        ),
+    ] = False
     max_oos: Annotated[
         float,
         Parameter(help="Maximum fraction of OOS samples to feed to AutoIntentSuggester compared to in-domain data."),
@@ -372,6 +384,7 @@ def _build_deps(
             emb_model=cfg.emb_model,
             emb_st_classification_prompt=cfg.emb_st_classification_prompt,
             emb_st_query_prompt=cfg.emb_st_query_prompt,
+            custom_qwen_prompt=cfg.custom_qwen_prompt,
             suggest_session_tracking=cfg.suggest_session_tracking,
         )
     if mode == "ts-remote":
@@ -399,6 +412,7 @@ def _build_deps(
         emb_model=cfg.emb_model,
         emb_st_classification_prompt=cfg.emb_st_classification_prompt,
         emb_st_query_prompt=cfg.emb_st_query_prompt,
+        custom_qwen_prompt=cfg.custom_qwen_prompt,
         suggest_session_tracking=cfg.suggest_session_tracking,
     )
 

@@ -24,6 +24,9 @@ if TYPE_CHECKING:
 # Decision modules with supports_oos=True in autointent (excludes argmax, adaptive).
 _OOS_DECISION_MODULE_NAMES: frozenset[str] = frozenset({"threshold"})
 
+# Shared instruction for Qwen-style embedders on tool-interaction text (query + classification).
+CUSTOM_QWEN_TOOL_SUGGEST_EMBEDDING_PROMPT = "Represent this interaction between an LLM agent and tools:"
+
 
 def _filter_decision_modules_to_oos_only(search_space: list[dict[str, Any]]) -> None:
     """Drop decision modules that cannot emit out-of-scope (None) predictions."""
@@ -68,6 +71,7 @@ def build_embedding_resources(
     emb_model: str,
     st_classification_prompt: str | None = None,
     st_query_prompt: str | None = None,
+    custom_qwen_prompt: bool = False,
 ) -> tuple[BaseEmbedder, Callable[[str], int] | None, EmbedderConfig]:
     """Instantiate embedder(s) and token counter based on CLI settings.
 
@@ -75,6 +79,9 @@ def build_embedding_resources(
     ``SentenceTransformerEmbeddingConfig`` (``classification_prompt`` for linear-style
     ``TaskTypeEnum.classification`` embeddings, ``query_prompt`` for
     ``TaskTypeEnum.query`` / KNN query side). They are ignored for OpenAI embeddings.
+
+    If ``custom_qwen_prompt`` is true, ``CUSTOM_QWEN_TOOL_SUGGEST_EMBEDDING_PROMPT`` is
+    applied to both classification and query (and overrides ``st_*_prompt`` for ST).
     """
     tool_suggest_embedder: BaseEmbedder
     token_counter: Callable[[str], int] | None
@@ -86,10 +93,15 @@ def build_embedding_resources(
     elif emb_backend == "st":
         tool_suggest_embedder = SentenceTransformerEmbedder(model_name=emb_model)
         token_counter = None
+        cls_prompt = st_classification_prompt
+        q_prompt = st_query_prompt
+        if custom_qwen_prompt:
+            cls_prompt = CUSTOM_QWEN_TOOL_SUGGEST_EMBEDDING_PROMPT
+            q_prompt = CUSTOM_QWEN_TOOL_SUGGEST_EMBEDDING_PROMPT
         ai_embedder_config = SentenceTransformerEmbeddingConfig(
             model_name=emb_model,
-            classification_prompt=st_classification_prompt,
-            query_prompt=st_query_prompt,
+            classification_prompt=cls_prompt,
+            query_prompt=q_prompt,
         )
     else:
         assert_never(emb_backend)
