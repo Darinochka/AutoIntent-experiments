@@ -173,6 +173,36 @@ class TSArgs(BasicArgs):
         str,
         Parameter(help="Name of embedding model, e.g. 'Qwen/Qwen3-Embedding-0.6B' or 'text-embedding-3-small'."),
     ] = "text-embedding-3-small"
+    emb_st_classification_prompt: Annotated[
+        str | None,
+        Parameter(
+            help=(
+                "When --emb-backend st: instruction prefix for AutoIntent classification embeddings "
+                "(linear modules using TaskTypeEnum.classification). Ignored for openai."
+            ),
+        ),
+    ] = None
+    emb_st_query_prompt: Annotated[
+        str | None,
+        Parameter(
+            help=(
+                "When --emb-backend st: instruction prefix for AutoIntent query embeddings "
+                "(e.g. KNN vector-index query side). Ignored for openai."
+            ),
+        ),
+    ] = None
+    custom_qwen_prompt: Annotated[
+        bool,
+        Parameter(
+            name="--custom-qwen-prompt",
+            help=(
+                "When --emb-backend st: set AutoIntent classification and query embedding prompts "
+                "to the built-in tool-interaction instruction (overrides --emb-st-*-prompt). "
+                "Ignored for openai."
+            ),
+            negative_bool=(),
+        ),
+    ] = False
     max_oos: Annotated[
         float,
         Parameter(help="Maximum fraction of OOS samples to feed to AutoIntentSuggester compared to in-domain data."),
@@ -352,6 +382,9 @@ def _build_deps(
             top_k=cfg.top_k,
             emb_backend=cfg.emb_backend,
             emb_model=cfg.emb_model,
+            emb_st_classification_prompt=cfg.emb_st_classification_prompt,
+            emb_st_query_prompt=cfg.emb_st_query_prompt,
+            custom_qwen_prompt=cfg.custom_qwen_prompt,
             suggest_session_tracking=cfg.suggest_session_tracking,
         )
     if mode == "ts-remote":
@@ -377,6 +410,9 @@ def _build_deps(
         top_k=cfg.top_k,
         emb_backend=cfg.emb_backend,
         emb_model=cfg.emb_model,
+        emb_st_classification_prompt=cfg.emb_st_classification_prompt,
+        emb_st_query_prompt=cfg.emb_st_query_prompt,
+        custom_qwen_prompt=cfg.custom_qwen_prompt,
         suggest_session_tracking=cfg.suggest_session_tracking,
     )
 
