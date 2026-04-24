@@ -63,9 +63,19 @@ def build_tiktoken_counter(model: str) -> Callable[[str], int]:
 
 
 def build_embedding_resources(
-    *, emb_backend: EmbBackend, emb_model: str
+    *,
+    emb_backend: EmbBackend,
+    emb_model: str,
+    st_classification_prompt: str | None = None,
+    st_query_prompt: str | None = None,
 ) -> tuple[BaseEmbedder, Callable[[str], int] | None, EmbedderConfig]:
-    """Instantiate embedder(s) and token counter based on CLI settings."""
+    """Instantiate embedder(s) and token counter based on CLI settings.
+
+    When ``emb_backend`` is ``"st"``, optional prompts are forwarded to AutoIntent's
+    ``SentenceTransformerEmbeddingConfig`` (``classification_prompt`` for linear-style
+    ``TaskTypeEnum.classification`` embeddings, ``query_prompt`` for
+    ``TaskTypeEnum.query`` / KNN query side). They are ignored for OpenAI embeddings.
+    """
     tool_suggest_embedder: BaseEmbedder
     token_counter: Callable[[str], int] | None
     ai_embedder_config: EmbedderConfig
@@ -76,7 +86,11 @@ def build_embedding_resources(
     elif emb_backend == "st":
         tool_suggest_embedder = SentenceTransformerEmbedder(model_name=emb_model)
         token_counter = None
-        ai_embedder_config = SentenceTransformerEmbeddingConfig(model_name=emb_model)
+        ai_embedder_config = SentenceTransformerEmbeddingConfig(
+            model_name=emb_model,
+            classification_prompt=st_classification_prompt,
+            query_prompt=st_query_prompt,
+        )
     else:
         assert_never(emb_backend)
 
