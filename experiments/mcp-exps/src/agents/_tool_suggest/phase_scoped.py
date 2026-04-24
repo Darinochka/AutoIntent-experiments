@@ -11,6 +11,7 @@ from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfi
 from tool_suggest.services.formatter import SampleFormatter
 from tool_suggest.services.repository import JSONFileRepository
 from tool_suggest.services.selector import GreedySelector
+from tool_suggest.services.session_memory import InMemorySessionMemory
 from tool_suggest.services.suggester import AutoIntentSuggester
 
 from .embedding import build_embedding_resources, get_ai_config
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
     from mcp_evals.types import RunContext as EvalsContext
 
 
-def create_phase_scoped_tool_suggest_deps(
+def create_phase_scoped_tool_suggest_deps(  # noqa: PLR0913
     experiment_name: str,
     output_dir: Path,
     formatter_max_len: int,
@@ -34,6 +35,8 @@ def create_phase_scoped_tool_suggest_deps(
     emb_model: str = "text-embedding-3-small",
     multilabel: bool = False,
     top_k: int | None = None,
+    *,
+    suggest_session_tracking: bool = False,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Build phase-scoped deps: same client/repo for all tasks in a training+testing phase.
 
@@ -63,6 +66,7 @@ def create_phase_scoped_tool_suggest_deps(
             file_path=file_path,
         )
         formatter = SampleFormatter(max_len=formatter_max_len, token_counter=token_counter)
+        session_memory = InMemorySessionMemory() if suggest_session_tracking else None
         backend_config = LocalBackendConfig(
             repository=repository,
             suggester=AutoIntentSuggester(
@@ -79,13 +83,19 @@ def create_phase_scoped_tool_suggest_deps(
                 formatter=formatter,
                 min_target_size=selection_target_size,
             ),
+            session_memory=session_memory,
         )
         config = ToolSuggestConfig(
             collection_name=collection_name,
             local_backend=backend_config,
         )
         client = ToolSuggestClient(config=config)
-        phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[], top_k=top_k)
+        phase_deps_ref[0] = TSAgentState(
+            tool_suggest_client=client,
+            speculations=[],
+            top_k=top_k,
+            use_suggest_session_tracking=suggest_session_tracking,
+        )
         logger.success("Data collection is set up! (file={})", file_path)
 
     async def start_testing(run_context: EvalsContext) -> None:

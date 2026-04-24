@@ -177,6 +177,16 @@ class TSArgs(BasicArgs):
         float,
         Parameter(help="Maximum fraction of OOS samples to feed to AutoIntentSuggester compared to in-domain data."),
     ] = 0.2
+    suggest_session_tracking: Annotated[
+        bool,
+        Parameter(
+            help=(
+                "Use suggest session tracking: merge tools from earlier prepare_tools steps "
+                "into each suggestion (requires session_id support on client/server)."
+            ),
+            negative_bool=(),
+        ),
+    ] = False
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -198,6 +208,13 @@ class TSRemoteArgs(BasicArgs):
         int | None,
         Parameter(help="Maximum number of tools to suggest per step (like top-k retrieval)."),
     ]
+    suggest_session_tracking: Annotated[
+        bool,
+        Parameter(
+            help=("Use suggest session tracking (remote server merges prior-step tools when session_id is sent)."),
+            negative_bool=(),
+        ),
+    ] = False
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -335,6 +352,7 @@ def _build_deps(
             top_k=cfg.top_k,
             emb_backend=cfg.emb_backend,
             emb_model=cfg.emb_model,
+            suggest_session_tracking=cfg.suggest_session_tracking,
         )
     if mode == "ts-remote":
         if not isinstance(cfg, TSRemoteArgs):
@@ -343,6 +361,7 @@ def _build_deps(
             experiment_name=cfg.experiment_name,
             service_url=cfg.service_url,
             top_k=cfg.top_k,
+            suggest_session_tracking=cfg.suggest_session_tracking,
         )
     if not isinstance(cfg, TSReproArgs):
         raise TypeError("ts-repro mode requires TSReproArgs")
@@ -358,6 +377,7 @@ def _build_deps(
         top_k=cfg.top_k,
         emb_backend=cfg.emb_backend,
         emb_model=cfg.emb_model,
+        suggest_session_tracking=cfg.suggest_session_tracking,
     )
 
 

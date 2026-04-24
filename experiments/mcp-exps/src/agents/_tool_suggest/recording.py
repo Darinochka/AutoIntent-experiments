@@ -21,9 +21,7 @@ def _tool_names_from_response(msg: ModelResponse) -> list[str]:
     return [part.tool_name for part in msg.parts if isinstance(part, ToolCallPart) and part.tool_name]
 
 
-async def tool_suggest_run_result_processor(
-    _task: Task[Any, Any], result: AgentRunResult[Any], deps: object
-) -> None:
+async def tool_suggest_run_result_processor(_task: Task[Any, Any], result: AgentRunResult[Any], deps: object) -> None:
     """Record tool-suggest samples from result.all_messages() with parent_context."""
     if not isinstance(deps, TSAgentState):
         return

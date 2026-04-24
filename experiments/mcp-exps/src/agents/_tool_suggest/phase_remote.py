@@ -21,6 +21,8 @@ def create_remote_phase_scoped_tool_suggest_deps(
     experiment_name: str,
     service_url: str,
     top_k: int | None = None,
+    *,
+    suggest_session_tracking: bool = False,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Same phase lifecycle as local mode, but storage and ML run on ``service_url``.
 
@@ -41,7 +43,12 @@ def create_remote_phase_scoped_tool_suggest_deps(
         )
         config = ToolSuggestConfig(collection_name=collection_name, service_url=base_url)
         client = ToolSuggestClient(config=config)
-        phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[], top_k=top_k)
+        phase_deps_ref[0] = TSAgentState(
+            tool_suggest_client=client,
+            speculations=[],
+            top_k=top_k,
+            use_suggest_session_tracking=suggest_session_tracking,
+        )
         logger.success(
             "Remote data collection client ready (service_url={}, collection={})",
             base_url,

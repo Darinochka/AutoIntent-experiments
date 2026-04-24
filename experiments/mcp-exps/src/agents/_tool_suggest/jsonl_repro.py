@@ -11,6 +11,7 @@ from tool_suggest import LocalBackendConfig, ToolSuggestClient, ToolSuggestConfi
 from tool_suggest.services.formatter import SampleFormatter
 from tool_suggest.services.repository import JSONFileRepository
 from tool_suggest.services.selector import GreedySelector
+from tool_suggest.services.session_memory import InMemorySessionMemory
 from tool_suggest.services.suggester import AutoIntentSuggester
 
 from .constants import IGNORED_TOOL_LABELS
@@ -36,6 +37,8 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: PLR0913
     min_samples_per_tool: int = 3,
     multilabel: bool = False,
     top_k: int | None = None,
+    *,
+    suggest_session_tracking: bool = False,
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Build tool-suggest deps from an existing JSONL repository.
 
@@ -105,6 +108,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: PLR0913
         else:
             logger.debug("Skipped repo filtering")
 
+        session_memory = InMemorySessionMemory() if suggest_session_tracking else None
         backend_config = LocalBackendConfig(
             repository=dest_repo,
             suggester=AutoIntentSuggester(
@@ -121,13 +125,19 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: PLR0913
                 min_samples_per_tool=min_samples_per_tool,
                 min_target_size=selection_target_size,
             ),
+            session_memory=session_memory,
         )
         config = ToolSuggestConfig(
             collection_name=collection_name,
             local_backend=backend_config,
         )
         client = ToolSuggestClient(config=config)
-        phase_deps_ref[0] = TSAgentState(tool_suggest_client=client, speculations=[], top_k=top_k)
+        phase_deps_ref[0] = TSAgentState(
+            tool_suggest_client=client,
+            speculations=[],
+            top_k=top_k,
+            use_suggest_session_tracking=suggest_session_tracking,
+        )
 
         if not is_already_trained:
             with logfire.span("Training tool suggester"):
