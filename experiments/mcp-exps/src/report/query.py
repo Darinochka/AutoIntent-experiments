@@ -59,6 +59,26 @@ async def query(
     )
 
 
+def narrow_eval_fetch_to_trace(fetch: LogfireEvalFetchResult, trace_id: str) -> LogfireEvalFetchResult | None:
+    """Keep only rows and leaf metrics for ``trace_id`` (e.g. after resolving a public URL).
+
+    Use when ``query(client, experiment)`` returns multiple traces but ``from-link`` must report one trace.
+    Returns ``None`` if there are no case rows for that trace.
+    """
+    tid = str(trace_id)
+    case_rows = [r for r in fetch.case_rows if str(r.get("trace_id")) == tid]
+    if not case_rows:
+        return None
+    leaf = fetch.leaf_totals_by_trace.get(tid, TraceMetrics())
+    case_leaf = {k: v for k, v in fetch.case_leaf_totals.items() if k[0] == tid}
+    return LogfireEvalFetchResult(
+        case_rows=case_rows,
+        trace_order=[tid],
+        leaf_totals_by_trace={tid: leaf},
+        case_leaf_totals=case_leaf,
+    )
+
+
 async def _partition_chat_metrics(
     client: AsyncLogfireQueryClient,
     trace_ids: list[str],

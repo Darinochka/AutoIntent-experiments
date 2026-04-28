@@ -1,9 +1,10 @@
 """Download and visualize experiment results.
 
-This module contains two CLI commands:
+This module contains CLI commands:
 
 1. Default command: download experiment spans from Logfire and write a JSONL report.
 2. `table` command: read a JSONL report and print a Rich summary.
+3. `from-link` command: resolve experiment name from a public URL (`spanId`) and load it like `load`.
 
 ## Usage examples
 
@@ -25,6 +26,17 @@ not used (they reflect pydantic-evals **averages** across tasks, not experiment-
 ```bash
 uv run report.py table --report-path ./reports/basic-fs.jsonl
 ```
+
+### 3) Load a report using a public trace URL
+Uses ``spanId`` from the URL to resolve the pydantic-evals experiment name (same string as
+``evaluate <name>``), then runs the same ``query`` + JSONL write path as ``load``.
+Assumes ``experiment-name`` is unique per run so ``trace_id`` filtering is unnecessary.
+
+```bash
+uv run report.py from-link "https://logfire-eu.pydantic.dev/public-trace/…?spanId=…"
+```
+Writes ``./<experiment>_<trace-prefix>.jsonl`` by default (``trace-prefix`` from the resolved trace for
+filenames; see ``--help`` for ``--output``).
 """
 
 import os
@@ -39,7 +51,15 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from src.report import CaseRow, ExperimentHeader, query, write_experiment_jsonl
+from src.report import (
+    CaseRow,
+    ExperimentHeader,
+    parse_span_id_from_public_trace_url,
+    query,
+    resolve_experiment_for_span,
+    trace_prefix,
+    write_experiment_jsonl,
+)
 
 load_dotenv()
 
@@ -76,6 +96,61 @@ async def load(
     if bundle is None:
         logger.warning("Logfire query returned no rows.")
         return
+
+    write_experiment_jsonl(output_path, experiment, bundle)
+    logger.success("Done!")
+
+
+@app.command(name="from-link")
+async def from_link(
+    url: Annotated[
+        str,
+        cyclopts.Parameter(help="Logfire public trace URL including ?spanId=… (path UUID is ignored)"),
+    ],
+    output_dir: Annotated[
+        Path | None,
+        cyclopts.Parameter(help="Directory for the JSONL file (default: current working directory)"),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        cyclopts.Parameter(help="Explicit output JSONL path (overrides default `<experiment>_<trace-prefix>.jsonl`)"),
+    ] = None,
+    timeout: Annotated[  # noqa: ASYNC109
+        int,
+        cyclopts.Parameter(help="Query timeout in seconds"),
+    ] = 10,
+) -> None:
+    """Load using a public Logfire link.
+
+    Parses ``spanId``, resolves the pydantic-evals experiment name (``evaluate <name>``) via SQL, then runs the same
+    pipeline as ``load``. Requires ``experiment-name`` to be unique for your runs (same assumption as ``load``).
+    """
+    span_id = parse_span_id_from_public_trace_url(url)
+    logger.info(f"Using span_id={span_id}")
+
+    base_dir = (output_dir or Path.cwd()).resolve()
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    async with AsyncLogfireQueryClient(
+        read_token=os.getenv("LOGFIRE_API_KEY") or "fake",
+        timeout=timeout,  # type: ignore[arg-type]
+    ) as client:
+        trace_id, experiment = await resolve_experiment_for_span(client, span_id)
+        logger.info(f"Resolved experiment={experiment!r} trace_id={trace_id}")
+        bundle = await query(client, experiment)
+
+    if bundle is None:
+        logger.warning("Logfire query returned no rows.")
+        return
+
+    if output is not None:
+        output_path = output.resolve()
+    else:
+        stem = f"{experiment}_{trace_prefix(trace_id)}"
+        output_path = (base_dir / stem).with_suffix(".jsonl")
+
+    logger.info(f"Result will be saved to {output_path}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     write_experiment_jsonl(output_path, experiment, bundle)
     logger.success("Done!")
