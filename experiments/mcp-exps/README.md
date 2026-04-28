@@ -124,3 +124,45 @@ uv run run_exp.py ts-repro \
     - https://logfire-eu.pydantic.dev/public-trace/9b7668e2-5e3b-4e8a-8941-008a38cf2638?spanId=beb2578330b4f46b
     - https://logfire-eu.pydantic.dev/public-trace/551044ed-67bf-41ce-99fc-dbfb713de103?spanId=2b98d3e96a14f1ab
     - https://logfire-eu.pydantic.dev/public-trace/c5a5f727-a8a4-45a6-a3cd-7fb30990f20a?spanId=b0c8914a54606ac8
+
+ну кринж полный
+
+Here is a concise comparison using your current `reports/` JSONL files. I added **`report.py compare-readme`** (implemented in `src/report/compare_readme.py`) so you can regenerate this anytime:
+
+```bash
+cd experiments/mcp-exps && uv run report.py compare-readme
+# optional: uv run report.py compare-readme --reports-dir /path/to/reports
+```
+
+**Pairing:** each row is **basic-fs** (single trace, README baselines) vs **tool-suggest OOS CV** (5-fold aggregate): `cv-readme-*`, except **GPT-5.4 mini** uses your manual merge file **`cv-gpt54-mini-aggregated.jsonl`** (same five links as README mini CV).
+
+### Pass rates
+
+| Model | Hard basic | Hard CV | Soft basic | Soft CV |
+|--------|------------|---------|------------|---------|
+| Haiku 4.5 | 32% | 8% | 80.8% | 19.1% |
+| Opus 4.6 | 72% | 32% | 91.0% | 49.5% |
+| GPT-5.4 | 40% | 20% | 76.5% | 32.6% |
+| GPT-5.4 mini | 16% | 12% | 56.7% | 48.4% |
+| GPT-5.4 nano | 8% | 8% | 58.0% | 27.3% |
+| Qwen3 Coder+ | 16% | 16% | 64.7% | 45.4% |
+| DeepSeek V3.2 | 24% | 4% | 59.8% | 22.2% |
+
+- **Hard** = `passed_tasks / total_tasks` from the JSONL header (all evaluators 1.0 on a task).  
+- **Soft** = fraction of **individual evaluator** scores that equal 1.0 across all cases.
+
+### Usage (header totals)
+
+| Model | In tok basic | In tok CV | Out tok basic | Out tok CV | Req basic | Req CV | Cost basic | Cost CV |
+|--------|--------------|-----------|----------------|------------|-----------|--------|------------|---------|
+| Haiku 4.5 | 0.76M | 3.99M | 9.6k | 26.3k | 20.68 | 16.80 | 0.000 | 0.000 |
+| Opus 4.6 | 0.92M | 4.60M | 6.9k | 58.2k | 9.81 | 9.92 | 0.000 | 0.000 |
+| GPT-5.4 | 0.37M | 1.77M | 1.2k | 13.2k | 7.88 | 7.92 | 0.000 | 4.295 |
+| GPT-5.4 mini | 0.12M | 0.79M | 1.9k | 10.0k | 8.32 | 5.92 | 0.000 | 0.379 |
+| GPT-5.4 nano | 0.13M | 1.22M | 1.6k | 7.4k | 9.88 | 9.40 | 0.000 | 0.174 |
+| Qwen3 Coder+ | 0.47M | 2.16M | 2.3k | 6.3k | 14.24 | 19.92 | 0.000 | 0.000 |
+| DeepSeek V3.2 | 0.71M | 4.03M | 8.3k | 13.0k | 16.12 | 13.12 | 0.000 | 0.000 |
+
+**Caveats:** CV side **sums tokens/cost across five traces** (25 case rows = 5 folds × 5 tasks), while basic is **one** 25-task run—input token totals are not “per-task on equal footing,” they reflect total LLM usage across the aggregated folds. Several **basic** reports still show **cost 0** in the header (older leaf rollup / reporting); CV rows for GPT-5.4 / mini / nano show non-zero cost where metrics were captured.
+
+To point **mini** at a file named like `cv-readme-gpt-5-4-mini.jsonl`, change the triplet in `README_BASIC_VS_CV` in `src/report/compare_readme.py` or regenerate that report and update the stem there.

@@ -6,6 +6,7 @@ This module contains CLI commands:
 2. `table` command: read a JSONL report and print a Rich summary.
 3. `from-link` command: resolve experiment name from a public URL (`spanId`) and load it like `load`.
 4. `aggregate-links` command: merge several public trace URLs into one JSONL (e.g. CV folds).
+5. `compare-readme` command: print basic-fs vs CV-aggregated pass rates and usage for README-aligned report files.
 
 ## Usage examples
 
@@ -73,6 +74,7 @@ from src.report import (
     merge_logfire_eval_fetch_results,
     narrow_eval_fetch_to_trace,
     parse_span_id_from_public_trace_url,
+    print_basic_vs_cv_table,
     query,
     resolve_experiment_for_span,
     trace_prefix,
@@ -330,6 +332,21 @@ def print_table(
             f"{c.metrics.output_tokens:.0f}",
         )
     console.print(per_case)
+
+
+@app.command(name="compare-readme")
+def compare_readme(
+    reports_dir: Annotated[
+        Path,
+        cyclopts.Parameter(help="Directory containing basic-fs-* and cv-readme-* JSONL files"),
+    ] = Path("reports"),
+) -> None:
+    """Compare README-aligned baseline reports to CV-aggregated tool-suggest reports.
+
+    **Hard** pass rate: ``passed_tasks / total_tasks`` from each JSONL header.
+    **Soft** pass rate: fraction of individual evaluator scores equal to 1.0 across all cases.
+    """
+    print_basic_vs_cv_table(reports_dir.resolve())
 
 
 if __name__ == "__main__":
