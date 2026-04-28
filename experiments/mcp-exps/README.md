@@ -120,7 +120,7 @@ uv run run_exp.py ts-repro \
     - https://logfire-eu.pydantic.dev/public-trace/ce805346-1f1a-41b6-a35b-8b3c06838acd?spanId=790b0905f01fd1a0
 - deepseek-v3.2:
     - https://logfire-eu.pydantic.dev/public-trace/ba7d18b9-3574-4900-b870-4a2755167651?spanId=22005625f27fb358
-    - https://logfire-eu.pydantic.dev/public-trace/ba7d18b9-3574-4900-b870-4a2755167651?spanId=22005625f27fb358
+    - https://logfire-eu.pydantic.dev/public-trace/61eda002-a80f-49c9-b149-8197813c26ba?spanId=bc71e6478302978a
     - https://logfire-eu.pydantic.dev/public-trace/9b7668e2-5e3b-4e8a-8941-008a38cf2638?spanId=beb2578330b4f46b
     - https://logfire-eu.pydantic.dev/public-trace/551044ed-67bf-41ce-99fc-dbfb713de103?spanId=2b98d3e96a14f1ab
     - https://logfire-eu.pydantic.dev/public-trace/c5a5f727-a8a4-45a6-a3cd-7fb30990f20a?spanId=b0c8914a54606ac8
