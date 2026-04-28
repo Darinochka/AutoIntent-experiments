@@ -5,6 +5,7 @@ This module contains CLI commands:
 1. Default command: download experiment spans from Logfire and write a JSONL report.
 2. `table` command: read a JSONL report and print a Rich summary.
 3. `from-link` command: resolve experiment name from a public URL (`spanId`) and load it like `load`.
+4. `aggregate-links` command: merge several public trace URLs into one JSONL (e.g. CV folds).
 
 ## Usage examples
 
@@ -37,11 +38,26 @@ uv run report.py from-link "https://logfire-eu.pydantic.dev/public-trace/…?spa
 ```
 Writes ``./<experiment>_<trace-prefix>.jsonl`` by default (``trace-prefix`` from the resolved trace for
 filenames; see ``--help`` for ``--output``).
+
+### 4) Aggregate several public trace URLs (e.g. cross-validation folds)
+Each ``--link`` is resolved like ``from-link``; one trace per link is narrowed and merged. Case rows are
+written as ``{case_name}__{trace_prefix}`` so identical task names across folds stay distinct. Header
+``trace_id`` lists all trace UUIDs separated by ``;``.
+
+Optional ``--inter-link-delay`` (default 20s) spaces Logfire queries when merging many folds. Each link
+runs two SQL queries; ``query`` also waits 10s between them.
+
+```bash
+uv run report.py aggregate-links --name ts-fs-cv-gpt54 \
+  --link "https://logfire-eu.pydantic.dev/public-trace/…?spanId=…" \
+  --link "https://logfire-eu.pydantic.dev/public-trace/…?spanId=…"
+```
 """
 
+import asyncio
 import os
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import cyclopts
 from dotenv import load_dotenv
@@ -54,12 +70,17 @@ from rich.table import Table
 from src.report import (
     CaseRow,
     ExperimentHeader,
+    merge_logfire_eval_fetch_results,
+    narrow_eval_fetch_to_trace,
     parse_span_id_from_public_trace_url,
     query,
     resolve_experiment_for_span,
     trace_prefix,
     write_experiment_jsonl,
 )
+
+if TYPE_CHECKING:
+    from src.report.models import LogfireEvalFetchResult
 
 load_dotenv()
 
@@ -153,6 +174,86 @@ async def from_link(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     write_experiment_jsonl(output_path, experiment, bundle)
+    logger.success("Done!")
+
+
+@app.command(name="aggregate-links")
+async def aggregate_links(
+    name: Annotated[
+        str,
+        cyclopts.Parameter("--name", help="Label for header.experiment_name and default output stem"),
+    ],
+    links: Annotated[
+        list[str],
+        cyclopts.Parameter(
+            "--link",
+            help="Public Logfire trace URL with ?spanId= (repeat per trace to merge)",
+            allow_repeating=True,
+        ),
+    ],
+    output_dir: Annotated[
+        Path | None,
+        cyclopts.Parameter(help="Directory for the JSONL file (default: current working directory)"),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        cyclopts.Parameter(help="Explicit output JSONL path (overrides default `<name>.jsonl`)"),
+    ] = None,
+    timeout: Annotated[  # noqa: ASYNC109
+        int,
+        cyclopts.Parameter(help="Query timeout in seconds"),
+    ] = 10,
+    inter_link_delay: Annotated[
+        float,
+        cyclopts.Parameter(
+            help="Seconds to wait before each link after the first (reduces Logfire rate limits on many CV folds)",
+        ),
+    ] = 20.0,
+) -> None:
+    """Merge several public trace URLs into one JSONL report.
+
+    Resolves each link to ``(trace_id, experiment)``, loads Logfire data with the same pipeline as
+    ``from-link`` (query then narrow to that trace), concatenates bundles, and writes one file. Per-case
+    names are suffixed with ``__<trace-prefix>`` so CV folds do not collide.
+    """
+    if not links:
+        msg = "Provide at least one --link URL"
+        raise ValueError(msg)
+
+    base_dir = (output_dir or Path.cwd()).resolve()
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    narrowed_parts: list[LogfireEvalFetchResult] = []
+    async with AsyncLogfireQueryClient(
+        read_token=os.getenv("LOGFIRE_API_KEY") or "fake",
+        timeout=timeout,  # type: ignore[arg-type]
+    ) as client:
+        for i, url in enumerate(links):
+            if i > 0 and inter_link_delay > 0:
+                logger.info(f"Waiting {inter_link_delay}s before next link (rate limit backoff)")
+                await asyncio.sleep(inter_link_delay)
+            span_id = parse_span_id_from_public_trace_url(url)
+            trace_id, experiment = await resolve_experiment_for_span(client, span_id)
+            logger.info(f"[{i + 1}/{len(links)}] Resolved experiment={experiment!r} trace_id={trace_id}")
+            bundle = await query(client, experiment)
+            if bundle is None:
+                msg = f"Logfire returned no rows for experiment={experiment!r} (link index {i})"
+                raise RuntimeError(msg)
+            narrowed = narrow_eval_fetch_to_trace(bundle, trace_id)
+            if narrowed is None:
+                msg = f"No case rows for trace_id={trace_id!r} after query (link index {i})"
+                raise RuntimeError(msg)
+            narrowed_parts.append(narrowed)
+
+    merged = merge_logfire_eval_fetch_results(narrowed_parts)
+
+    output_path = output.resolve() if output is not None else (base_dir / name).with_suffix(".jsonl")
+
+    logger.info(
+        f"Writing merged report ({len(merged.trace_order)} traces, {len(merged.case_rows)} case rows) to {output_path}"
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_experiment_jsonl(output_path, name, merged, disambiguate_cases_by_trace=True)
     logger.success("Done!")
 
 
