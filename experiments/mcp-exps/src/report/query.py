@@ -1,5 +1,6 @@
 """SQL query to retrieve Logfire span with metrics."""
 
+import asyncio
 from collections import defaultdict
 from typing import Any
 
@@ -47,6 +48,8 @@ async def query(
             seen.add(trace_id_str)
             trace_order.append(trace_id_str)
 
+    # Two SQL queries back-to-back hit Logfire per-minute limits; pause before the heavy spans query.
+    await asyncio.sleep(10)
     leaf_by_trace, case_leaf_totals, chat_counts = await _partition_chat_metrics(client, trace_order)
     for tid in trace_order:
         _warn_leaf_rollup_if_empty(tid, leaf_by_trace.get(tid, TraceMetrics()), chat_counts.get(tid, 0))
