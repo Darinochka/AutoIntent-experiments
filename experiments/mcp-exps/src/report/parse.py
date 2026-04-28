@@ -3,13 +3,69 @@
 import json
 from typing import Any
 
+from .constants import PASSED_EPS
 from .models import TraceMetrics
 from .safe import safe_float
 
 
 def metrics_from_chat_span_attributes(attributes_obj: object) -> TraceMetrics:
-    """Parse ``logfire.metrics`` from one chat span (OpenTelemetry gen_ai + operation.cost)."""
+    """Parse token/cost from a ``chat <model>`` span.
+
+    Pydantic AI records usage as **flat** OpenTelemetry attributes on the span
+    (``gen_ai.usage.input_tokens``, ``gen_ai.usage.output_tokens``, ``operation.cost``, etc.).
+    Logfire may also expose OTel meter data under ``logfire.metrics`` with a nested
+    ``gen_ai.client.token.usage`` shape — we use that only when flat attributes are absent.
+    """
     attrs = _coerce_mapping(attributes_obj)
+    flat = _trace_metrics_from_flat_otel_attributes(attrs)
+    if _has_usage_signal(flat):
+        return flat
+    return _trace_metrics_from_logfire_metrics_blob(attrs)
+
+
+def _has_usage_signal(m: TraceMetrics) -> bool:
+    return (
+        m.cost > PASSED_EPS
+        or m.input_tokens > PASSED_EPS
+        or m.output_tokens > PASSED_EPS
+        or m.cache_read_tokens > PASSED_EPS
+    )
+
+
+def trace_metrics_has_usage(m: TraceMetrics) -> bool:
+    """True if any token/cost field is non-zero (for merging / display)."""
+    return _has_usage_signal(m)
+
+
+def case_name_from_case_span(span_name: str, attributes_obj: object) -> str:
+    """Resolve pydantic-evals ``case_name`` from a ``case: …`` span."""
+    attrs = _coerce_mapping(attributes_obj)
+    raw = attrs.get("case_name")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    sn = span_name.strip()
+    if sn.lower().startswith("case:"):
+        return sn.split(":", 1)[1].strip()
+    return "unknown_case"
+
+
+def _trace_metrics_from_flat_otel_attributes(attrs: dict[str, Any]) -> TraceMetrics:
+    """Read pydantic-ai / OpenTelemetry GenAI semconv attributes stored directly on the span."""
+    input_tokens = safe_float(attrs.get("gen_ai.usage.input_tokens"))
+    output_tokens = safe_float(attrs.get("gen_ai.usage.output_tokens"))
+    cache_read_tokens = safe_float(attrs.get("gen_ai.usage.details.cache_read_tokens"))
+    cost = safe_float(attrs.get("operation.cost"))
+    return TraceMetrics(
+        cost=cost,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read_tokens=cache_read_tokens,
+        requests=0.0,
+    )
+
+
+def _trace_metrics_from_logfire_metrics_blob(attrs: dict[str, Any]) -> TraceMetrics:
+    """Fallback: nested ``logfire.metrics`` structure (e.g. meter rollup in Logfire UI)."""
     blob = _normalize_nested_metrics_field(attrs.get("logfire.metrics"))
 
     usage_dict = _normalize_nested_metrics_field(blob.get("gen_ai.client.token.usage"))

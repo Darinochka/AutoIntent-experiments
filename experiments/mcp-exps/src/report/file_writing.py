@@ -7,6 +7,7 @@ from loguru import logger
 
 from .constants import PASSED_EPS
 from .models import CaseMetrics, CaseRow, EvaluatorResult, ExperimentHeader, LogfireEvalFetchResult, TraceMetrics
+from .parse import trace_metrics_has_usage
 from .safe import safe_float
 
 
@@ -19,6 +20,7 @@ def write_experiment_jsonl(
     rows = fetch.case_rows
     trace_order = fetch.trace_order
     trace_leaf_totals = fetch.leaf_totals_by_trace
+    case_leaf_totals = fetch.case_leaf_totals
     case_by_name: dict[str, CaseRow] = {}
     case_requests_sum = 0.0
     case_requests_count = 0
@@ -27,8 +29,19 @@ def write_experiment_jsonl(
         if row.get("trace_id") is None:
             continue
 
+        trace_id_str = str(row.get("trace_id"))
         case_row = _parse_case_row(row)
         case_name = case_row.case_name
+
+        leaf_for_case = case_leaf_totals.get((trace_id_str, case_name))
+        if leaf_for_case is not None and trace_metrics_has_usage(leaf_for_case):
+            case_row = CaseRow(
+                case_name=case_row.case_name,
+                passed=case_row.passed,
+                scores=case_row.scores,
+                metrics=_case_metrics_from_leaf_chat_totals(case_row.metrics, leaf_for_case),
+            )
+
         case_requests_sum += case_row.metrics.requests
         case_requests_count += 1
 
@@ -66,6 +79,19 @@ def write_experiment_jsonl(
         output_file.write(header.model_dump_json() + "\n")
         for case_name in sorted(case_by_name.keys()):
             output_file.write(case_by_name[case_name].model_dump_json() + "\n")
+
+
+def _case_metrics_from_leaf_chat_totals(pydantic_metrics: CaseMetrics, leaf: TraceMetrics) -> CaseMetrics:
+    """Prefer summed ``chat %`` usage under this case span (covers usage-limit aborts with empty pydantic metrics)."""
+    if not trace_metrics_has_usage(leaf):
+        return pydantic_metrics
+    return CaseMetrics(
+        cost=leaf.cost,
+        input_tokens=leaf.input_tokens,
+        output_tokens=leaf.output_tokens,
+        cache_read_tokens=leaf.cache_read_tokens,
+        requests=pydantic_metrics.requests,
+    )
 
 
 def _parse_case_row(row: dict[str, Any]) -> CaseRow:

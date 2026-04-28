@@ -66,13 +66,17 @@ class CaseRow(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class LogfireEvalFetchResult:
-    """Bundle returned by ``_fetch_eval_rows_and_leaf_totals``.
+    """Bundle returned by ``query``.
 
     ``case_rows``: joined SQL rows (``trace_id``, ``child_attributes``). ``trace_order``: distinct
-    trace ids in first-seen order. ``leaf_totals_by_trace``: summed ``logfire.metrics`` token/cost per
-    trace from spans matching ``ILIKE 'chat %'``.
+    trace ids in first-seen order. ``leaf_totals_by_trace``: sum of all ``chat %`` spans in the trace.
+
+    ``case_leaf_totals``: token/cost summed only over chat spans whose ancestor chain reaches that
+    case's ``case: …`` span (fixes per-task metrics when pydantic-evals task metrics are empty, e.g.
+    usage limit before evaluators ran).
     """
 
     case_rows: list[dict[str, Any]]
     trace_order: list[str]
     leaf_totals_by_trace: dict[str, TraceMetrics]
+    case_leaf_totals: dict[tuple[str, str], TraceMetrics]

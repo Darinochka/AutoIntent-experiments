@@ -8,14 +8,14 @@ from loguru import logger
 
 from .constants import PASSED_EPS
 from .models import LogfireEvalFetchResult, TraceMetrics
-from .parse import metrics_from_chat_span_attributes
+from .parse import case_name_from_case_span, metrics_from_chat_span_attributes
 
 
 async def query(
     client: AsyncLogfireQueryClient,
     experiment: str,
 ) -> LogfireEvalFetchResult | None:
-    """Run the evaluate/case query plus per-trace sums over leaf ``chat %`` spans."""
+    """Run the evaluate/case query plus chat-span metrics (trace totals + per-case attribution)."""
     evaluate_cases_sql = f"""
     SELECT
         parent.trace_id,
@@ -47,7 +47,7 @@ async def query(
             seen.add(trace_id_str)
             trace_order.append(trace_id_str)
 
-    leaf_by_trace, chat_counts = await _query_leaf_chat_metrics(client, trace_order)
+    leaf_by_trace, case_leaf_totals, chat_counts = await _partition_chat_metrics(client, trace_order)
     for tid in trace_order:
         _warn_leaf_rollup_if_empty(tid, leaf_by_trace.get(tid, TraceMetrics()), chat_counts.get(tid, 0))
 
@@ -55,40 +55,107 @@ async def query(
         case_rows=rows,
         trace_order=trace_order,
         leaf_totals_by_trace=leaf_by_trace,
+        case_leaf_totals=case_leaf_totals,
     )
 
 
-async def _query_leaf_chat_metrics(
+async def _partition_chat_metrics(
     client: AsyncLogfireQueryClient,
     trace_ids: list[str],
-) -> tuple[dict[str, TraceMetrics], dict[str, int]]:
-    """Sum token/cost metrics from leaf LLM spans named like ``chat <model>`` within each trace."""
-    per_trace: dict[str, TraceMetrics] = {}
-    counts: dict[str, int] = defaultdict(int)
-
+) -> tuple[dict[str, TraceMetrics], dict[tuple[str, str], TraceMetrics], dict[str, int]]:
+    """Load all spans for traces, sum ``chat %`` metrics per trace and per ``case: …`` subtree."""
     if not trace_ids:
-        return {}, {}
+        return {}, {}, {}
 
     in_list = _sql_in_trace_ids(trace_ids)
     sql = f"""
-    SELECT trace_id, span_name, attributes
+    SELECT trace_id, span_id, parent_span_id, span_name, attributes
     FROM records
     WHERE trace_id IN ({in_list})
-      AND span_name ILIKE 'chat %'
     """  # noqa: S608
 
     json_rows = await client.query_json_rows(sql=sql)
-    for row in json_rows.get("rows", []):
-        tid_raw = row.get("trace_id")
-        if tid_raw is None:
-            continue
-        tid = str(tid_raw)
-        counts[tid] += 1
-        partial = metrics_from_chat_span_attributes(row.get("attributes"))
-        cur = per_trace.get(tid, TraceMetrics())
-        per_trace[tid] = _add_trace_metrics(cur, partial)
+    span_rows = json_rows.get("rows", [])
+    if not isinstance(span_rows, list):
+        return {}, {}, {}
 
-    return per_trace, dict(counts)
+    return _partition_chat_metrics_from_span_rows(span_rows)
+
+
+def _partition_chat_metrics_from_span_rows(
+    span_rows: list[Any],
+) -> tuple[dict[str, TraceMetrics], dict[tuple[str, str], TraceMetrics], dict[str, int]]:
+    per_trace: dict[str, TraceMetrics] = {}
+    case_totals: dict[tuple[str, str], TraceMetrics] = {}
+    counts: dict[str, int] = defaultdict(int)
+
+    by_id: dict[str, dict[str, Any]] = {}
+    for row in span_rows:
+        if not isinstance(row, dict):
+            continue
+        sid_raw = row.get("span_id")
+        if sid_raw is None:
+            continue
+        by_id[str(sid_raw)] = row
+
+    for row in span_rows:
+        if isinstance(row, dict):
+            _accumulate_chat_span_into_totals(row, by_id, per_trace, case_totals, counts)
+
+    return per_trace, dict(case_totals), dict(counts)
+
+
+def _accumulate_chat_span_into_totals(
+    row: dict[str, Any],
+    by_id: dict[str, dict[str, Any]],
+    per_trace: dict[str, TraceMetrics],
+    case_totals: dict[tuple[str, str], TraceMetrics],
+    counts: dict[str, int],
+) -> None:
+    span_name = str(row.get("span_name") or "")
+    if not span_name.lower().startswith("chat "):
+        return
+    tid_raw = row.get("trace_id")
+    if tid_raw is None:
+        return
+    tid = str(tid_raw)
+    sid_raw = row.get("span_id")
+    if sid_raw is None:
+        return
+    chat_sid = str(sid_raw)
+
+    partial = metrics_from_chat_span_attributes(row.get("attributes"))
+    cur_t = per_trace.get(tid, TraceMetrics())
+    per_trace[tid] = _add_trace_metrics(cur_t, partial)
+    counts[tid] += 1
+
+    case_sid = _walk_up_to_case_span_id(chat_sid, by_id)
+    if case_sid is None:
+        return
+    case_row = by_id.get(case_sid)
+    if not case_row:
+        return
+    cn = case_name_from_case_span(str(case_row.get("span_name") or ""), case_row.get("attributes"))
+    key = (tid, cn)
+    cur_c = case_totals.get(key, TraceMetrics())
+    case_totals[key] = _add_trace_metrics(cur_c, partial)
+
+
+def _walk_up_to_case_span_id(start_span_id: str, by_id: dict[str, dict[str, Any]]) -> str | None:
+    """Follow ``parent_span_id`` until we hit a pydantic-evals ``case: …`` span."""
+    sid: str | None = start_span_id
+    visited: set[str] = set()
+    while sid and sid not in visited:
+        visited.add(sid)
+        row = by_id.get(sid)
+        if not row:
+            return None
+        name = str(row.get("span_name") or "")
+        if name.lower().startswith("case:"):
+            return sid
+        pid = row.get("parent_span_id")
+        sid = str(pid) if pid is not None else None
+    return None
 
 
 def _sql_in_trace_ids(trace_ids: list[str]) -> str:
@@ -126,6 +193,6 @@ def _warn_leaf_rollup_if_empty(trace_id: str, leaf: TraceMetrics, n_chat: int) -
         return
     if not has_usage:
         logger.warning(
-            f"{trace_id}: found {n_chat} `chat %` span(s) but no token/cost in `logfire.metrics`; "
+            f"{trace_id}: found {n_chat} `chat %` span(s) but could not parse token/cost from span attributes; "
             "header totals for this trace are 0.",
         )
