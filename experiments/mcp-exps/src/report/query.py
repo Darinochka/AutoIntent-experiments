@@ -16,7 +16,7 @@ async def query(
     experiment: str,
 ) -> LogfireEvalFetchResult | None:
     """Run the evaluate/case query plus per-trace sums over leaf ``chat %`` spans."""
-    query = f"""
+    evaluate_cases_sql = f"""
     SELECT
         parent.trace_id,
         child.attributes AS child_attributes
@@ -30,7 +30,7 @@ async def query(
         AND child.span_name ILIKE 'case: %'
     """  # noqa: S608
 
-    json_rows = await client.query_json_rows(sql=query)
+    json_rows = await client.query_json_rows(sql=evaluate_cases_sql)
     rows_raw = json_rows.get("rows", [])
     if not isinstance(rows_raw, list) or not rows_raw:
         return None

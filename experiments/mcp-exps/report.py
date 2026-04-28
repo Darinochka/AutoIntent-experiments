@@ -46,9 +46,6 @@ load_dotenv()
 app = cyclopts.App(name="Report maker")
 
 
-PASSED_EPS = 1e-9
-
-
 @app.default
 async def load(
     experiment: Annotated[str, cyclopts.Parameter(help="Experiment name (like basic-fs)")],
