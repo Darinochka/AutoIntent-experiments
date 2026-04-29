@@ -19,20 +19,11 @@ import cyclopts
 from dotenv import load_dotenv
 from logfire.query_client import AsyncLogfireQueryClient
 from loguru import logger
-from pydantic_ai.messages import (
-    ModelMessage,
-    ModelRequest,
-    ModelRequestPart,
-    ModelResponse,
-    ModelResponsePart,
-    SystemPromptPart,
-    TextPart,
-    ToolCallPart,
-    ToolReturnPart,
-    UserPromptPart,
-)
+from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from tool_suggest.models import Sample
 from tool_suggest.services.repository import JSONFileRepository
+
+from src.logfire_genai import transcript_from_chat_span
 
 load_dotenv()
 
@@ -82,7 +73,7 @@ async def load(
             s.attributes as case_attributes
         FROM records s
         JOIN root_span r ON s.trace_id = r.trace_id AND s.parent_span_id = r.span_id
-        WHERE s.message LIKE 'case: %'
+        WHERE s.span_name ILIKE 'case: %'
           AND s.otel_scope_name = 'pydantic-evals'
     ),
     chat_spans_ranked AS (
@@ -103,7 +94,7 @@ async def load(
           ON s.trace_id = c.trace_id
           AND s.start_timestamp >= c.start_timestamp
           AND s.start_timestamp <= c.end_timestamp
-        WHERE s.message LIKE 'chat %'
+        WHERE s.span_name ILIKE 'chat %'
           AND s.otel_scope_name = 'pydantic-ai'
     )
     SELECT
@@ -130,7 +121,7 @@ async def load(
         read_token=os.getenv("LOGFIRE_API_KEY") or "fake",
         timeout=timeout,  # type: ignore[arg-type]
     ) as client:
-        json_rows = await client.query_json_rows(sql=query)
+        json_rows = await client.query_json_rows(sql=query, limit=10_000)
 
     rows: list[dict[str, Any]] = json_rows.get("rows", [])
     if not rows:
@@ -153,10 +144,7 @@ def _extract_samples_from_rows(rows: list[dict[str, Any]], experiment_name: str)
         input_messages_raw = row.get("input_messages") or []
         output_messages_raw = row.get("output_messages") or []
 
-        transcript = [
-            *_convert_genai_messages(input_messages_raw),
-            *_convert_genai_messages(output_messages_raw),
-        ]
+        transcript = transcript_from_chat_span(input_messages_raw, output_messages_raw)
 
         case_samples = _samples_from_messages(
             messages=transcript,
@@ -209,53 +197,6 @@ def _samples_from_messages(messages: list[ModelMessage], base_data: dict[str, An
 def _tool_names_from_response(msg: ModelResponse) -> list[str]:
     """Collect tool names from a ModelResponse's tool-call parts."""
     return [part.tool_name for part in msg.parts if isinstance(part, ToolCallPart)]
-
-
-def _convert_genai_messages(raw_messages: list[dict[str, Any]]) -> list[ModelMessage]:  # noqa: C901, PLR0912
-    """Convert Logfire GenAI-format messages to pydantic-ai ModelMessage objects."""
-    result: list[ModelMessage] = []
-    for msg in raw_messages:
-        role = msg.get("role")
-        parts_raw = msg.get("parts", [])
-
-        if role in ("system", "user"):
-            request_parts: list[ModelRequestPart] = []
-            for p in parts_raw:
-                ptype = p.get("type")
-                if ptype == "text":
-                    if role == "system":
-                        request_parts.append(SystemPromptPart(content=p["content"]))
-                    else:
-                        request_parts.append(UserPromptPart(content=p["content"]))
-                elif ptype == "tool_call_response":
-                    request_parts.append(
-                        ToolReturnPart(
-                            tool_name=p["name"],
-                            content=p["result"],
-                            tool_call_id=p.get("id"),
-                        )
-                    )
-            if request_parts:
-                result.append(ModelRequest(parts=request_parts))
-
-        elif role == "assistant":
-            response_parts: list[ModelResponsePart] = []
-            for p in parts_raw:
-                ptype = p.get("type")
-                if ptype == "tool_call":
-                    response_parts.append(
-                        ToolCallPart(
-                            tool_name=p["name"],
-                            args=p["arguments"],
-                            tool_call_id=p.get("id"),
-                        )
-                    )
-                elif ptype == "text":
-                    response_parts.append(TextPart(content=p["content"]))
-            if response_parts:
-                result.append(ModelResponse(parts=response_parts))
-
-    return result
 
 
 if __name__ == "__main__":
