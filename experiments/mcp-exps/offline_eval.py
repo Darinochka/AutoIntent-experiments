@@ -4,26 +4,96 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass
+from pathlib import Path  # noqa: TC003
 from statistics import mean
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import Annotated, Any, Literal
 
 import cyclopts
+from cyclopts import Parameter
 from loguru import logger
 
+from src.agents import EmbBackend  # noqa: TC001
 from src.offline_eval.loading import group_samples_by_task, load_and_normalize
 from src.offline_eval.runner import FoldResult, OfflineEvalConfig, evaluate_fold
 from src.offline_eval.splits import TaskSplit, build_cv_splits, build_holdout_split, samples_for_tasks
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from src.agents._tool_suggest.types import EmbBackend
 
 app = cyclopts.App(
     name="offline-eval",
     help="Offline top-1 / top-k / MRR for tool-suggest (AutoIntent or KNN) on a JSONL sample repository.",
 )
+
+
+@dataclass(frozen=True, kw_only=True)
+class OfflineEvalCliArgs:
+    """Command-line arguments for offline retrieval evaluation."""
+
+    repo: Annotated[Path, Parameter(help="Path to tool-suggest JSONL repository.")]
+    split: Annotated[
+        Literal["cv", "ho"],
+        Parameter(help="Task-level split: k-fold CV or single holdout."),
+    ] = "cv"
+    cv_folds: Annotated[int, Parameter(help="Number of CV folds (split mode=cv).")] = 5
+    test_size: Annotated[
+        float,
+        Parameter(help="Fraction of tasks in the test set (split mode=ho)."),
+    ] = 0.2
+    random_state: Annotated[int, Parameter(help="Random seed for splits.")] = 42
+    suggester: Annotated[
+        Literal["autointent", "knn"],
+        Parameter(help="autointent: same stack as run_exp ts; knn: fast debug baseline."),
+    ] = "autointent"
+    emb_backend: Annotated[EmbBackend, Parameter(help="Embedder backend (matches run_exp).")] = "openai"
+    emb_model: Annotated[str, Parameter(help="Embedding model name.")] = "text-embedding-3-small"
+    experiment_name: Annotated[
+        str,
+        Parameter(help="AutoIntent run name (logging / checkpoints)."),
+    ] = "offline-eval"
+    formatter_max_len: Annotated[
+        int,
+        Parameter(help="SampleFormatter max length (run_exp: formatter-max-len)."),
+    ] = 1000
+    multilabel: Annotated[bool, Parameter(help="AutoIntent multilabel vs multiclass.")] = False
+    max_oos: Annotated[
+        float,
+        Parameter(help="Max OOS fraction for AutoIntent training (run_exp: --max-oos)."),
+    ] = 0.2
+    selection_target_size: Annotated[
+        int | None,
+        Parameter(help="GreedySelector min target size (run_exp: --selection-target-size)."),
+    ] = 100
+    min_samples_per_tool: Annotated[
+        int,
+        Parameter(help="GreedySelector min samples per tool (run_exp: --tool-samples)."),
+    ] = 4
+    knn_neighbors: Annotated[int, Parameter(help="KNN k (neighbor count) when suggester=knn.")] = 5
+    knn_aggregation: Annotated[
+        Literal["weighted", "uniform"],
+        Parameter(help="KNN vote aggregation when suggester=knn."),
+    ] = "weighted"
+    topk_metric: Annotated[int, Parameter(help="k for top-k hit rate (e.g. 5).")] = 5
+    task_key: Annotated[
+        str,
+        Parameter(help="``sample.data`` key for task / case id (e.g. case_name)."),
+    ] = "case_name"
+    json_out: Annotated[Path | None, Parameter(help="Optional path to write full result JSON.")] = None
+
+    def to_offline_eval_config(self, *, experiment_name: str) -> OfflineEvalConfig:
+        """Build :class:`OfflineEvalConfig` for :func:`evaluate_fold` (per-fold name may differ)."""
+        return OfflineEvalConfig(
+            suggester=self.suggester,
+            emb_backend=self.emb_backend,
+            emb_model=self.emb_model,
+            experiment_name=experiment_name,
+            formatter_max_len=self.formatter_max_len,
+            multilabel=self.multilabel,
+            max_oos_fraction=self.max_oos,
+            selection_target_size=self.selection_target_size,
+            min_samples_per_tool=self.min_samples_per_tool,
+            knn_neighbors=self.knn_neighbors,
+            knn_aggregation=self.knn_aggregation,
+            task_key=self.task_key,
+        )
 
 
 def _fold_to_jsonable(fr: FoldResult, *, topk: int) -> dict[str, Any]:
@@ -52,85 +122,28 @@ def _fold_to_jsonable(fr: FoldResult, *, topk: int) -> dict[str, Any]:
     }
 
 
-@app.default
-def main(  # noqa: PLR0913
-    repo: Annotated[Path, cyclopts.Parameter(help="Path to tool-suggest JSONL repository.")],
-    *,
-    split: Annotated[
-        Literal["cv", "ho"], cyclopts.Parameter(help="Task-level split: k-fold CV or single holdout.")
-    ] = "cv",
-    cv_folds: Annotated[int, cyclopts.Parameter(help="Number of CV folds (split mode=cv).")] = 5,
-    test_size: Annotated[
-        float,
-        cyclopts.Parameter(help="Fraction of tasks in the test set (split mode=ho)."),
-    ] = 0.2,
-    random_state: Annotated[int, cyclopts.Parameter(help="Random seed for splits.")] = 42,
-    suggester: Annotated[
-        Literal["autointent", "knn"],
-        cyclopts.Parameter(help="autointent: same stack as run_exp ts; knn: fast debug baseline."),
-    ] = "autointent",
-    emb_backend: Annotated[EmbBackend, cyclopts.Parameter(help="Embedder backend (matches run_exp).")] = "openai",
-    emb_model: Annotated[str, cyclopts.Parameter(help="Embedding model name.")] = "text-embedding-3-small",
-    experiment_name: Annotated[
-        str, cyclopts.Parameter(help="AutoIntent run name (logging / checkpoints).")
-    ] = "offline-eval",
-    formatter_max_len: Annotated[
-        int, cyclopts.Parameter(help="SampleFormatter max length (run_exp: formatter-max-len).")
-    ] = 1000,
-    multilabel: Annotated[bool, cyclopts.Parameter(help="AutoIntent multilabel vs multiclass.")] = False,
-    max_oos: Annotated[
-        float,
-        cyclopts.Parameter(help="Max OOS fraction for AutoIntent training (run_exp: --max-oos)."),
-    ] = 0.2,
-    selection_target_size: Annotated[
-        int | None,
-        cyclopts.Parameter(help="GreedySelector min target size (run_exp: --selection-target-size)."),
-    ] = 100,
-    min_samples_per_tool: Annotated[
-        int,
-        cyclopts.Parameter(help="GreedySelector min samples per tool (run_exp: --tool-samples)."),
-    ] = 4,
-    knn_neighbors: Annotated[int, cyclopts.Parameter(help="KNN k (neighbor count) when suggester=knn.")] = 5,
-    knn_aggregation: Annotated[
-        Literal["weighted", "uniform"],
-        cyclopts.Parameter(help="KNN vote aggregation when suggester=knn."),
-    ] = "weighted",
-    topk_metric: Annotated[int, cyclopts.Parameter(help="k for top-k hit rate (e.g. 5).")] = 5,
-    task_key: Annotated[
-        str, cyclopts.Parameter(help="``sample.data`` key for task / case id (e.g. case_name).")
-    ] = "case_name",
-    json_out: Annotated[Path | None, cyclopts.Parameter(help="Optional path to write full result JSON.")] = None,
-) -> None:
+def run_offline_eval(a: OfflineEvalCliArgs) -> None:
     """Evaluate retrieval metrics with task-level CV or holdout; retrain on each train split."""
-    samples = load_and_normalize(repo)
+    samples = load_and_normalize(a.repo)
     if not samples:
-        logger.error("No samples loaded from {}", repo)
+        logger.error("No samples loaded from {}", a.repo)
         return
 
-    task_to_samples = group_samples_by_task(samples, task_key=task_key)
+    task_to_samples = group_samples_by_task(samples, task_key=a.task_key)
     n_tasks = len(task_to_samples)
-    logger.info("Loaded {} samples in {} task groups (key={})", len(samples), n_tasks, task_key)
+    logger.info("Loaded {} samples in {} task groups (key={})", len(samples), n_tasks, a.task_key)
 
-    base_cfg = OfflineEvalConfig(
-        suggester=suggester,
-        emb_backend=emb_backend,
-        emb_model=emb_model,
-        experiment_name=experiment_name,
-        formatter_max_len=formatter_max_len,
-        multilabel=multilabel,
-        max_oos_fraction=max_oos,
-        selection_target_size=selection_target_size,
-        min_samples_per_tool=min_samples_per_tool,
-        knn_neighbors=knn_neighbors,
-        knn_aggregation=knn_aggregation,
-        task_key=task_key,
-    )
+    base_cfg = a.to_offline_eval_config(experiment_name=a.experiment_name)
 
     fold_list: list[TaskSplit]
-    if split == "ho":
-        fold_list = [build_holdout_split(task_to_samples, test_size=test_size, random_state=random_state)]
+    if a.split == "ho":
+        fold_list = [build_holdout_split(task_to_samples, test_size=a.test_size, random_state=a.random_state)]
     else:
-        fold_list = build_cv_splits(task_to_samples, n_splits=cv_folds, random_state=random_state)
+        fold_list = build_cv_splits(
+            task_to_samples,
+            n_splits=a.cv_folds,
+            random_state=a.random_state,
+        )
 
     results: list[FoldResult] = []
 
@@ -138,13 +151,13 @@ def main(  # noqa: PLR0913
         for i, fsp in enumerate(fold_list):
             train_s = samples_for_tasks(task_to_samples, fsp.train_task_ids)
             test_s = samples_for_tasks(task_to_samples, fsp.test_task_ids)
-            name = f"{experiment_name}-fold{i}" if len(fold_list) > 1 else experiment_name
-            cfg = replace(base_cfg, experiment_name=name)
+            name = f"{a.experiment_name}-fold{i}" if len(fold_list) > 1 else a.experiment_name
+            cfg = a.to_offline_eval_config(experiment_name=name)
             r = await evaluate_fold(
                 train_s,
                 test_s,
                 cfg,
-                topk_value=topk_metric,
+                topk_value=a.topk_metric,
                 fold_index=i,
             )
             results.append(r)
@@ -169,24 +182,30 @@ def main(  # noqa: PLR0913
                 "mean over folds: {} = {:.4f} (topk_metric k={}, split={})",
                 mname,
                 v,
-                topk_metric,
-                split,
+                a.topk_metric,
+                a.split,
             )
 
     out_obj: dict[str, Any] = {
-        "repo": str(repo.resolve()),
-        "split": split,
-        "cv_folds": cv_folds if split == "cv" else None,
-        "test_size": test_size if split == "ho" else None,
-        "random_state": random_state,
-        "topk_metric": topk_metric,
+        "repo": str(a.repo.resolve()),
+        "split": a.split,
+        "cv_folds": a.cv_folds if a.split == "cv" else None,
+        "test_size": a.test_size if a.split == "ho" else None,
+        "random_state": a.random_state,
+        "topk_metric": a.topk_metric,
         "config": asdict(base_cfg),
-        "folds": [_fold_to_jsonable(fr, topk=topk_metric) for fr in results],
+        "folds": [_fold_to_jsonable(fr, topk=a.topk_metric) for fr in results],
     }
-    if json_out is not None:
-        json_out.parent.mkdir(parents=True, exist_ok=True)
-        json_out.write_text(json.dumps(out_obj, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        logger.info("Wrote {}", json_out)
+    if a.json_out is not None:
+        a.json_out.parent.mkdir(parents=True, exist_ok=True)
+        a.json_out.write_text(json.dumps(out_obj, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        logger.info("Wrote {}", a.json_out)
+
+
+@app.default
+def main(args: Annotated[OfflineEvalCliArgs, Parameter(name="*")]) -> None:
+    """CLI entry: parse into :class:`OfflineEvalCliArgs` and run."""
+    run_offline_eval(args)
 
 
 if __name__ == "__main__":
