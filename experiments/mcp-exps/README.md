@@ -166,3 +166,26 @@ cd experiments/mcp-exps && uv run report.py compare-readme
 **Caveats:** CV side **sums tokens/cost across five traces** (25 case rows = 5 folds × 5 tasks), while basic is **one** 25-task run—input token totals are not “per-task on equal footing,” they reflect total LLM usage across the aggregated folds. Several **basic** reports still show **cost 0** in the header (older leaf rollup / reporting); CV rows for GPT-5.4 / mini / nano show non-zero cost where metrics were captured.
 
 To point **mini** at a file named like `cv-readme-gpt-5-4-mini.jsonl`, change the triplet in `README_BASIC_VS_CV` in `src/report/compare_readme.py` or regenerate that report and update the stem there.
+
+### offline metrics
+
+#### knn (for debug)
+
+|        | top1   | topk   | mrr    |
+|--------|--------|--------|--------|
+| micro  | 0.6249 | 0.8812 | 0.7452 |
+| macro  | 0.6071 | 0.8710 | 0.7233 |
+
+```bash
+uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl \
+  --split cv \
+  --cv-folds 5 \
+  --suggester knn \
+  --emb-backend openai \
+  --emb-model text-embedding-3-small \
+  --formatter-max-len 4096 \
+  --knn-neighbors 5 \
+  --knn-aggregation weighted \
+  --topk-metric 5 \
+  --task-key case_name
+```
