@@ -1343,6 +1343,7 @@ dependencies = [
     { name = "cyclopts" },
     { name = "mcp-evals", extra = ["domain-filesystem"] },
     { name = "rich" },
+    { name = "scikit-learn" },
     { name = "tool-suggest", extra = ["autointent", "client"] },
 ]
 
@@ -1357,6 +1358,7 @@ requires-dist = [
     { name = "cyclopts", specifier = ">=4.5.1,<5.0.0" },
     { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=78dddf7" },
     { name = "rich", specifier = ">=14.3.2,<15.0.0" },
+    { name = "scikit-learn", specifier = ">=1.5.0" },
     { name = "tool-suggest", extras = ["autointent", "client"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=87f9137" },
 ]
 
