@@ -169,6 +169,8 @@ To point **mini** at a file named like `cv-readme-gpt-5-4-mini.jsonl`, change th
 
 ### offline metrics
 
+на примерах опуса
+
 #### knn (for debug)
 
 |        | top1   | topk   | mrr    |
@@ -188,4 +190,23 @@ uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl
   --knn-aggregation weighted \
   --topk-metric 5 \
   --task-key case_name
+```
+
+#### autointent
+
+|        | top1   | topk   | mrr    |
+|--------|--------|--------|--------|
+| micro  | 0.7986 | 0.9338 | 0.8590 |
+| macro  | 0.8106 | 0.9501 | 0.8758 |
+
+```bash
+uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl \
+  --split cv --cv-folds 5 --random-state 42 \
+  --suggester autointent \
+  --emb-backend openai --emb-model text-embedding-3-small \
+  --formatter-max-len 4096 \
+  --selection-target-size 90 --min-samples-per-tool 4 --max-oos 0.2 \
+  --no-multilabel \
+  --experiment-name offline-fs-opus-autointent \
+  --topk-metric 5 --task-key case_name
 ```
