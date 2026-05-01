@@ -221,3 +221,18 @@ uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl
   --topk-metric 5 --task-key case_name
 ```
 
+## REDO
+
+заново бейзлайн на опусе: https://logfire-eu.pydantic.dev/public-trace/65b87987-89b6-451f-9195-a592854fbf2f?spanId=4ec2c13a9ad85099
+
+## cv autointent oos
+
+- gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/750b65b7-62d8-4edc-9d52-a16313dcf723?spanId=578aba01ead3aa70
+- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/21f8b151-2c45-4e20-823a-6ef688a03b10?spanId=e6b055ffa95320e1
+- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/ee9722e6-7d95-41e6-b5cf-4bd5d2e9e6e5?spanId=79751e9da3fba556
+- qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/b7895224-63f9-4d5a-af37-ff53af2c9c0b?spanId=f3b0dbe311f691c8
+- deepseek-v3.2: 
+
+### с аккумуляцией
+
+
