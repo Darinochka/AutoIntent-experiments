@@ -15,6 +15,7 @@ uv run samples.py --experiment basic-fs --output-dir ./tool_suggest_repos
 """
 
 import os
+from collections import Counter
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -191,6 +192,38 @@ async def load(
     await repo.add_bulk(samples)
 
     logger.success(f"Done! Saved {len(samples)} samples.")
+    _log_loaded_sample_summary(samples)
+
+
+def _log_loaded_sample_summary(samples: list[Sample]) -> None:
+    """Log counts for quick validation (cases, tools, per-tool micro frequencies)."""
+    if not samples:
+        logger.info("Sample summary: empty list")
+        return
+
+    case_keys: set[str] = set()
+    for s in samples:
+        raw = s.data.get("case_name") if isinstance(s.data, dict) else None
+        case_keys.add(str(raw) if raw is not None and str(raw) else "__missing_case_name__")
+
+    tool_counts: Counter[str] = Counter()
+    for s in samples:
+        for name in s.tools:
+            tool_counts[name] += 1
+
+    logger.info("Sample summary: {} rows (tool-step samples)", len(samples))
+    logger.info(
+        "Distinct case_name (from sample.data): {} — {}",
+        len(case_keys),
+        ", ".join(sorted(case_keys)),
+    )
+    if not tool_counts:
+        logger.info("No tool labels on samples (unexpected unless export was empty steps)")
+        return
+
+    logger.info("Distinct tool names: {}", len(tool_counts))
+    ordered = ", ".join(f"{n}={tool_counts[n]}" for n in sorted(tool_counts, key=lambda t: (-tool_counts[t], t)))
+    logger.info("Tool occurrences (micro — one row with [a,b] counts both): {}", ordered)
 
 
 def _extract_samples_from_rows(rows: list[dict[str, Any]], experiment_name: str) -> list[Sample]:
