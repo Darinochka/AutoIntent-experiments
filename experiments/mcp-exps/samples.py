@@ -4,6 +4,9 @@ This script loads experiment spans from Logfire, finds the last `chat %` span
 inside each `case: %` span, reconstructs the transcript from that chat's input
 and output messages, then writes tool-suggest `Sample` objects to JSONL.
 
+All traces whose root message is ``evaluate <experiment>`` are considered (e.g. retries).
+For each ``case_name``, the row from the **latest** evaluate root (by root start time) wins.
+
 Usage example:
 ```bash
 export LOGFIRE_API_KEY="..."
@@ -38,6 +41,110 @@ _IGNORED_TOOL_LABELS: frozenset[str] = frozenset(
 )
 
 
+def _sql_single_quoted_literal(value: str) -> str:
+    """Escape a string for safe use inside a single-quoted SQL literal."""
+    return value.replace("'", "''")
+
+
+def _evaluate_message_literal(experiment: str) -> str:
+    return _sql_single_quoted_literal(f"evaluate {experiment}")
+
+
+def _build_samples_query(*, evaluate_message_sql: str) -> str:
+    """SQL: all evaluate roots for this experiment; dedupe ``case_name`` to latest root."""
+    return f"""
+    WITH evaluate_roots AS (
+        SELECT trace_id, span_id, start_timestamp AS root_start_ts
+        FROM records
+        WHERE message = '{evaluate_message_sql}'
+          AND otel_scope_name = 'pydantic-evals'
+    ),
+    case_spans AS (
+        SELECT
+            r.root_start_ts,
+            s.trace_id,
+            s.span_id,
+            s.start_timestamp AS case_start_ts,
+            s.end_timestamp,
+            s.attributes->>'case_name' AS case_name,
+            s.attributes->>'task_name' AS task_name,
+            s.attributes AS case_attributes
+        FROM records s
+        INNER JOIN evaluate_roots r
+          ON s.trace_id = r.trace_id AND s.parent_span_id = r.span_id
+        WHERE s.span_name ILIKE 'case: %'
+          AND s.otel_scope_name = 'pydantic-evals'
+    ),
+    chat_spans_ranked AS (
+        SELECT
+            c.root_start_ts,
+            c.case_start_ts,
+            c.case_name,
+            c.task_name,
+            c.trace_id,
+            c.span_id AS case_span_id,
+            c.case_attributes,
+            s.span_id AS chat_span_id,
+            s.attributes->'gen_ai.input.messages' AS input_messages,
+            s.attributes->'gen_ai.output.messages' AS output_messages,
+            s.attributes->'gen_ai.request.model' AS request_model,
+            s.attributes->'gen_ai.response.model' AS response_model,
+            ROW_NUMBER() OVER (
+                PARTITION BY c.span_id ORDER BY s.start_timestamp DESC
+            ) AS rank
+        FROM records s
+        INNER JOIN case_spans c
+          ON s.trace_id = c.trace_id
+          AND s.start_timestamp >= c.case_start_ts
+          AND s.start_timestamp <= c.end_timestamp
+        WHERE s.span_name ILIKE 'chat %'
+          AND s.otel_scope_name = 'pydantic-ai'
+    ),
+    best_chat_per_case_span AS (
+        SELECT *
+        FROM chat_spans_ranked
+        WHERE rank = 1
+    ),
+    winner_per_case_name AS (
+        SELECT *
+        FROM (
+            SELECT
+                bc.root_start_ts,
+                bc.case_start_ts,
+                bc.case_name,
+                bc.task_name,
+                bc.trace_id,
+                bc.case_span_id,
+                bc.case_attributes,
+                bc.chat_span_id,
+                bc.input_messages,
+                bc.output_messages,
+                bc.request_model,
+                bc.response_model,
+                ROW_NUMBER() OVER (
+                    PARTITION BY bc.case_name
+                    ORDER BY bc.root_start_ts DESC, bc.case_start_ts DESC
+                ) AS case_name_rank
+            FROM best_chat_per_case_span bc
+        ) ranked
+        WHERE case_name_rank = 1
+    )
+    SELECT
+        case_name,
+        task_name,
+        trace_id,
+        case_span_id,
+        case_attributes,
+        chat_span_id,
+        input_messages,
+        output_messages,
+        request_model,
+        response_model
+    FROM winner_per_case_name
+    ORDER BY case_name
+    """  # noqa: S608
+
+
 @app.default
 async def load(
     experiment: Annotated[str, cyclopts.Parameter(help="Experiment name (like basic-fs)")],
@@ -54,63 +161,8 @@ async def load(
     output_path = ((output_dir or Path.cwd()).resolve() / experiment).with_suffix(".jsonl")
     logger.info(f"Samples will be saved to {output_path}")
 
-    query = f"""
-    WITH root_span AS (
-        SELECT trace_id, span_id
-        FROM records
-        WHERE message = 'evaluate {experiment}'
-          AND otel_scope_name = 'pydantic-evals'
-        LIMIT 1
-    ),
-    case_spans AS (
-        SELECT
-            s.trace_id,
-            s.span_id,
-            s.start_timestamp,
-            s.end_timestamp,
-            s.attributes->>'case_name' as case_name,
-            s.attributes->>'task_name' as task_name,
-            s.attributes as case_attributes
-        FROM records s
-        JOIN root_span r ON s.trace_id = r.trace_id AND s.parent_span_id = r.span_id
-        WHERE s.span_name ILIKE 'case: %'
-          AND s.otel_scope_name = 'pydantic-evals'
-    ),
-    chat_spans_ranked AS (
-        SELECT
-            c.case_name,
-            c.task_name,
-            c.trace_id,
-            c.span_id as case_span_id,
-            c.case_attributes,
-            s.span_id as chat_span_id,
-            s.attributes->'gen_ai.input.messages' as input_messages,
-            s.attributes->'gen_ai.output.messages' as output_messages,
-            s.attributes->'gen_ai.request.model' as request_model,
-            s.attributes->'gen_ai.response.model' as response_model,
-            ROW_NUMBER() OVER (PARTITION BY c.span_id ORDER BY s.start_timestamp DESC) as rank
-        FROM records s
-        JOIN case_spans c
-          ON s.trace_id = c.trace_id
-          AND s.start_timestamp >= c.start_timestamp
-          AND s.start_timestamp <= c.end_timestamp
-        WHERE s.span_name ILIKE 'chat %'
-          AND s.otel_scope_name = 'pydantic-ai'
-    )
-    SELECT
-        case_name,
-        task_name,
-        trace_id,
-        case_span_id,
-        case_attributes,
-        chat_span_id,
-        input_messages,
-        output_messages,
-        request_model,
-        response_model
-    FROM chat_spans_ranked
-    WHERE rank = 1
-    """  # noqa: S608
+    evaluate_msg = _evaluate_message_literal(experiment)
+    query = _build_samples_query(evaluate_message_sql=evaluate_msg)
 
     if output_path.exists():
         raise FileExistsError
@@ -127,6 +179,11 @@ async def load(
     if not rows:
         logger.warning("Logfire query returned no rows")
         return
+
+    logger.info(
+        "After merging duplicate case_name across traces: {} case row(s)",
+        len(rows),
+    )
 
     samples = _extract_samples_from_rows(rows=rows, experiment_name=experiment)
 
