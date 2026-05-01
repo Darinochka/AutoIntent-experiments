@@ -1317,31 +1317,12 @@ wheels = [
 ]
 
 [[package]]
-name = "mcp-evals"
-version = "0.0.1"
-source = { git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=78dddf7#78dddf7a2b699ff20490304610291f2df9540aaf" }
-dependencies = [
-    { name = "anyio" },
-    { name = "loguru" },
-    { name = "pydantic-ai" },
-    { name = "pydantic-settings" },
-]
-
-[package.optional-dependencies]
-domain-filesystem = [
-    { name = "aiofiles" },
-    { name = "appdirs" },
-    { name = "httpx" },
-    { name = "tqdm" },
-]
-
-[[package]]
 name = "mcp-exps"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "cyclopts" },
-    { name = "mcp-evals", extra = ["domain-filesystem"] },
+    { name = "pydantic-ai-mcp-evals", extra = ["domain-filesystem"] },
     { name = "rich" },
     { name = "scikit-learn" },
     { name = "tool-suggest", extra = ["autointent", "client"] },
@@ -1356,7 +1337,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cyclopts", specifier = ">=4.5.1,<5.0.0" },
-    { name = "mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=78dddf7" },
+    { name = "pydantic-ai-mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=8137d66" },
     { name = "rich", specifier = ">=14.3.2,<15.0.0" },
     { name = "scikit-learn", specifier = ">=1.5.0" },
     { name = "tool-suggest", extras = ["autointent", "client"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=87f9137" },
@@ -2121,6 +2102,25 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b6/96/aaaadefd68960fc5bde4f3cef6555ee0a33156599c8d08b123b5571d8b2e/pydantic_ai-1.75.0.tar.gz", hash = "sha256:06cbe1843a3a584ba071e7ed9219a2637ab158a6d6c4df5e4163d0a396358c0e", size = 12659, upload-time = "2026-04-01T00:38:20.831Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0d/c9/713a9ac62072c1c63ce624cd3d017d292d3300dc888ab08335915422036f/pydantic_ai-1.75.0-py3-none-any.whl", hash = "sha256:9e267c7e86b5f77f9e9e2cd3b3d658f89905e504716da55f91fe4cbea1cb1a17", size = 7551, upload-time = "2026-04-01T00:38:11.78Z" },
+]
+
+[[package]]
+name = "pydantic-ai-mcp-evals"
+version = "0.1.0"
+source = { git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=8137d66#8137d66fd3b0870c6cc5ecc3ec12d20d033a5e52" }
+dependencies = [
+    { name = "anyio" },
+    { name = "loguru" },
+    { name = "pydantic-ai" },
+    { name = "pydantic-settings" },
+]
+
+[package.optional-dependencies]
+domain-filesystem = [
+    { name = "aiofiles" },
+    { name = "appdirs" },
+    { name = "httpx" },
+    { name = "tqdm" },
 ]
 
 [[package]]

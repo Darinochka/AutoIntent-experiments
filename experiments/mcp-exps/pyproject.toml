@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = "==3.13.*"
 dependencies = [
     "tool_suggest[autointent,client] @ git+ssh://git@github.com/DeepPavlov/tool-suggest.git@87f9137",
-    "mcp_evals[domain-filesystem] @ git+ssh://git@github.com/DeepPavlov/mcp-evals.git@78dddf7",
+    "pydantic-ai-mcp-evals[domain-filesystem] @ git+ssh://git@github.com/DeepPavlov/mcp-evals.git@8137d66",
     "cyclopts>=4.5.1,<5.0.0",
     "rich>=14.3.2,<15.0.0",
     "scikit-learn>=1.5.0",
