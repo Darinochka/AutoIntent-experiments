@@ -8,6 +8,7 @@
 ## Logfire Note
 
 Pydantic-ai tech stack includes awesome [Logfire](https://logfire.pydantic.dev/docs/) --- observability tool for inspecting LLM tool calls and responces. However, if you want to use it, you'd better use some non-Russian proxy, so your spans are sent without any problem. Like this:
+
 ```bash
 ALL_PROXY=http://127.0.0.1:1087 uv run run_exp.py --domain fs --experiment-name basic-fs-smoke --agent basic --model gpt-4.1
 ```
@@ -18,12 +19,12 @@ ALL_PROXY=http://127.0.0.1:1087 uv run run_exp.py --domain fs --experiment-name 
 - basic agent filesystem self-correction: https://logfire-eu.pydantic.dev/public-trace/5cd5e7b1-2fb1-4357-93c5-83df22d773c1?spanId=edeab683c1cfbbe5
 
 Промежуточный итог:
+
 - ~~нужно добавить code execution, потому что некоторые задачи съедают очень много токенов так как требуют от ллм вручную делать дата процессинг (типа разделить большой файл на три части)~~
 - убрать таски которые требует от ллм ручной дата процессинг:
-    - file_splitting
-    - dataset_comparison
-    - все задачи с фикстурой LEGAL_DOCUMENT
-
+  - file_splitting
+  - dataset_comparison
+  - все задачи с фикстурой LEGAL_DOCUMENT
 
 ## бейзлайны filesystem
 
@@ -70,7 +71,7 @@ uv run run_exp.py ts-repro \
 
 ### с OOS detection
 
-и `under_represented_behavior="always_include" `
+и `under_represented_behavior="always_include"` 
 
 - haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/78d1cfc9-9b98-418b-ae57-b777487fd8ea?spanId=48699272a41bf40f
 - opus-4.6: https://logfire-eu.pydantic.dev/public-trace/14256429-7e85-470f-9b1d-6a499c5b098c?spanId=38e5b1c187acafef
@@ -127,26 +128,28 @@ uv run run_exp.py ts-repro \
 
 ну кринж полный
 
-Here is a concise comparison using your current `reports/` JSONL files. **`report.py compare-readme`** (see `src/report/compare_readme.py`) prints the tables below; regenerate anytime:
+Here is a concise comparison using your current `reports/` JSONL files. `**report.py compare-readme**` (see `src/report/compare_readme.py`) prints the tables below; regenerate anytime:
 
 ```bash
 cd experiments/mcp-exps && uv run report.py compare-readme
 # optional: uv run report.py compare-readme --reports-dir /path/to/reports
 ```
 
-**Pairing:** each row is **basic-fs** (one trace, 25 tasks) vs **tool-suggest OOS CV** (merged 5-fold aggregate): `cv-readme-*.jsonl`. **GPT-5.4 mini** uses **`cv-gpt54-mini-aggregated.jsonl`** (same five public links as in the mini CV list above).
+**Pairing:** each row is **basic-fs** (one trace, 25 tasks) vs **tool-suggest OOS CV** (merged 5-fold aggregate): `cv-readme-*.jsonl`. **GPT-5.4 mini** uses `**cv-gpt54-mini-aggregated.jsonl`** (same five public links as in the mini CV list above).
 
 ### Pass rates
 
-| Model | Hard basic | Hard CV | Soft basic | Soft CV |
-|--------|------------|---------|------------|---------|
-| Haiku 4.5 | 32% | 8% | 80.8% | 19.1% |
-| Opus 4.6 | 72% | 32% | 91.0% | 49.5% |
-| GPT-5.4 | 40% | 20% | 76.5% | 32.6% |
-| GPT-5.4 mini | 16% | 12% | 56.7% | 48.4% |
-| GPT-5.4 nano | 8% | 8% | 58.0% | 27.3% |
-| Qwen3 Coder+ | 16% | 16% | 64.7% | 45.4% |
-| DeepSeek V3.2 | 24% | 4% | 59.8% | 22.2% |
+
+| Model         | Hard basic | Hard CV | Soft basic | Soft CV |
+| ------------- | ---------- | ------- | ---------- | ------- |
+| Haiku 4.5     | 32%        | 8%      | 80.8%      | 19.1%   |
+| Opus 4.6      | 72%        | 32%     | 91.0%      | 49.5%   |
+| GPT-5.4       | 40%        | 20%     | 76.5%      | 32.6%   |
+| GPT-5.4 mini  | 16%        | 12%     | 56.7%      | 48.4%   |
+| GPT-5.4 nano  | 8%         | 8%      | 58.0%      | 27.3%   |
+| Qwen3 Coder+  | 16%        | 16%     | 64.7%      | 45.4%   |
+| DeepSeek V3.2 | 24%        | 4%      | 59.8%      | 22.2%   |
+
 
 - **Hard** = `passed_tasks / total_tasks` from each JSONL header (all evaluators 1.0 on a task).  
 - **Soft** = fraction of **individual evaluator** scores that equal 1.0 across all case rows.  
@@ -156,15 +159,17 @@ cd experiments/mcp-exps && uv run report.py compare-readme
 
 Averaging **per-task** `input_tokens` / `output_tokens` / `requests` / `cost` from the JSONL case lines (not merged **header** sums: CV headers add all five traces, which is misleading next to a single-trace basic run).
 
-| Model | in tok basic | in tok CV | out tok basic | out tok CV | req basic | req CV | cost basic | cost CV |
-|--------|--------------|-----------|---------------|------------|----------|--------|------------|---------|
-| Haiku 4.5 | 422k | 394k | 4.6k | 5.4k | 20.68 | 16.80 | 0.0000 | 0.0000 |
-| Opus 4.6 | 343k | 192k | 6.4k | 4.0k | 14.52 | 9.92 | 0.0000 | 0.0000 |
-| GPT-5.4 | 135k | 127k | 1.3k | 1.0k | 7.88 | 7.92 | 0.0000 | 0.3077 |
-| GPT-5.4 mini | 63k | 57k | 1.0k | 0.6k | 8.32 | 5.92 | 0.0000 | 0.0294 |
-| GPT-5.4 nano | 63k | 79k | 0.7k | 0.6k | 9.88 | 9.40 | 0.0000 | 0.0122 |
-| Qwen3 Coder+ | 151k | 307k | 1.2k | 1.2k | 14.24 | 19.92 | 0.0000 | 0.0000 |
-| DeepSeek V3.2 | 285k | 357k | 2.2k | 1.1k | 16.12 | 13.12 | 0.0000 | 0.0000 |
+
+| Model         | in tok basic | in tok CV | out tok basic | out tok CV | req basic | req CV | cost basic | cost CV |
+| ------------- | ------------ | --------- | ------------- | ---------- | --------- | ------ | ---------- | ------- |
+| Haiku 4.5     | 422k         | 394k      | 4.6k          | 5.4k       | 20.68     | 16.80  | 0.0000     | 0.0000  |
+| Opus 4.6      | 343k         | 192k      | 6.4k          | 4.0k       | 14.52     | 9.92   | 0.0000     | 0.0000  |
+| GPT-5.4       | 135k         | 127k      | 1.3k          | 1.0k       | 7.88      | 7.92   | 0.0000     | 0.3077  |
+| GPT-5.4 mini  | 63k          | 57k       | 1.0k          | 0.6k       | 8.32      | 5.92   | 0.0000     | 0.0294  |
+| GPT-5.4 nano  | 63k          | 79k       | 0.7k          | 0.6k       | 9.88      | 9.40   | 0.0000     | 0.0122  |
+| Qwen3 Coder+  | 151k         | 307k      | 1.2k          | 1.2k       | 14.24     | 19.92  | 0.0000     | 0.0000  |
+| DeepSeek V3.2 | 285k         | 357k      | 2.2k          | 1.1k       | 16.12     | 13.12  | 0.0000     | 0.0000  |
+
 
 For raw **header** totals (e.g. summed CV trace usage), use `uv run report.py table --report-path reports/<name>.jsonl`. Some **basic** runs still show **cost 0** in rollups; GPT-5.4 / mini / nano show non-zero cost in CV where Logfire captured it.
 
@@ -174,10 +179,12 @@ For raw **header** totals (e.g. summed CV trace usage), use `uv run report.py ta
 
 #### knn (for debug)
 
-|        | top1   | topk   | mrr    |
-|--------|--------|--------|--------|
-| micro  | 0.6249 | 0.8812 | 0.7452 |
-| macro  | 0.6071 | 0.8710 | 0.7233 |
+
+|       | top1   | topk   | mrr    |
+| ----- | ------ | ------ | ------ |
+| micro | 0.6249 | 0.8812 | 0.7452 |
+| macro | 0.6071 | 0.8710 | 0.7233 |
+
 
 ```bash
 uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl \
@@ -195,10 +202,12 @@ uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl
 
 #### autointent
 
-|        | top1   | topk   | mrr    |
-|--------|--------|--------|--------|
-| micro  | 0.7986 | 0.9338 | 0.8590 |
-| macro  | 0.8106 | 0.9501 | 0.8758 |
+
+|       | top1   | topk   | mrr    |
+| ----- | ------ | ------ | ------ |
+| micro | 0.7986 | 0.9338 | 0.8590 |
+| macro | 0.8106 | 0.9501 | 0.8758 |
+
 
 ```bash
 uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl \
@@ -211,3 +220,4 @@ uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl
   --experiment-name offline-fs-opus-autointent \
   --topk-metric 5 --task-key case_name
 ```
+
