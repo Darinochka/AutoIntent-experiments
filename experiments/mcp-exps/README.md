@@ -223,16 +223,26 @@ uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl
 
 ## REDO
 
-заново бейзлайн на опусе: https://logfire-eu.pydantic.dev/public-trace/65b87987-89b6-451f-9195-a592854fbf2f?spanId=4ec2c13a9ad85099
+### бейзлайны
+
+- opus-4.6: https://logfire-eu.pydantic.dev/public-trace/65b87987-89b6-451f-9195-a592854fbf2f?spanId=4ec2c13a9ad85099
+- haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/40ad8bf9-9319-4a77-9bcb-7ae671043991?spanId=b4a7f5e3d9b18fe9
+- qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/4b8f7d77-1ad2-4f4d-ba9c-ed78ec1590aa?spanId=6b987945dfb22a17
+- deepseek-v3.2: https://logfire-eu.pydantic.dev/public-trace/257a80b0-9656-446e-a5d3-26fbf668728d?spanId=19b82f7200458728
+- gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/07463937-1663-43d9-8124-615050dc08c7?spanId=3723e97f3824fb6c
+- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/6cfff4b7-a579-4730-8628-9ed080cddbbd?spanId=d579b60257c95154
+- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/4c4c5935-79fe-4d3d-a357-face0b523c8e?spanId=da9495595dcea3aa
 
 ## cv autointent oos
+
+### без аккумуляции
 
 - gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/750b65b7-62d8-4edc-9d52-a16313dcf723?spanId=578aba01ead3aa70
 - gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/21f8b151-2c45-4e20-823a-6ef688a03b10?spanId=e6b055ffa95320e1
 - gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/ee9722e6-7d95-41e6-b5cf-4bd5d2e9e6e5?spanId=79751e9da3fba556
 - qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/b7895224-63f9-4d5a-af37-ff53af2c9c0b?spanId=f3b0dbe311f691c8
-- deepseek-v3.2: 
+- deepseek-v3.2: https://logfire-eu.pydantic.dev/public-trace/efc48d5c-a2df-4465-ae34-7cba00989892?spanId=e8302299f914b300
+
 
 ### с аккумуляцией
-
 
