@@ -290,3 +290,31 @@ uv run run_exp.py ts-repro \
     --selection-target-size 150 \
     --tool-samples 4 --suggest-session-tracking
 ```
+
+
+### Pass rates (REDO)
+
+
+| Model | Hard basic | Hard CV (OOS) | Hard CV+accum | Soft basic | Soft CV (OOS) | Soft CV+accum |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Opus 4.6 | 60.0% | — | — | 88.5% | — | — |
+| Haiku 4.5 | 32.0% | — | 28.0% | 88.3% | — | 74.6% |
+| GPT-5.4 | 40.0% | 24.0% | 36.0% | 77.5% | 34.8% | 68.8% |
+| GPT-5.4 mini | 12.0% | 4.0% | 8.0% | 54.3% | 32.0% | 50.7% |
+| GPT-5.4 nano | 4.0% | 8.0% | 8.0% | 51.4% | 35.5% | 51.4% |
+| Qwen3 Coder+ | 12.0% | 0.0% | 20.0% | 56.7% | 27.1% | 65.5% |
+| DeepSeek V3.2 | 8.0% | 0.0% | — | 33.3% | 17.4% | — |
+
+### Usage — per-case mean over case rows (REDO)
+
+Means are over **case lines** in each JSONL (fair vs merged CV headers), same spirit as the old “Usage” table. **N** = number of case rows in that file (25 where present).
+
+| Model | N_b | N_cv | N_acc | in tok B | in tok CV | in tok acc | out tok B | out tok CV | out tok acc | req B | req CV | req acc | cost B | cost CV | cost acc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Opus 4.6 | 25 | — | — | 480k | — | — | 5.5k | — | — | 12.80 | — | — | 0.0000 | — | — |
+| Haiku 4.5 | 25 | — | 25 | 519k | — | 677k | 4.9k | — | 6.9k | 11.92 | — | 14.64 | 0.0000 | — | 0.0000 |
+| GPT-5.4 | 25 | 25 | 25 | 145k | 175k | 222k | 1.5k | 1.1k | 1.5k | 8.44 | 7.60 | 7.08 | 0.1837 | 0.5029 | 0.5320 |
+| GPT-5.4 mini | 25 | 25 | 25 | 86k | 73k | 155k | 0.9k | 0.8k | 1.0k | 9.88 | 6.28 | 8.92 | 0.0346 | 0.0520 | 0.0813 |
+| GPT-5.4 nano | 25 | 25 | 25 | 62k | 75k | 110k | 0.7k | 0.7k | 0.7k | 8.52 | 8.96 | 8.72 | 0.0069 | 0.0135 | 0.0182 |
+| Qwen3 Coder+ | 25 | 25 | 25 | 429k | 659k | 763k | 1.9k | 2.5k | 1.9k | 16.72 | 13.84 | 14.32 | 0.0000 | 0.0000 | 0.0000 |
+| DeepSeek V3.2 | 25 | 25 | — | 281k | 405k | — | 2.3k | 1.1k | — | 13.16 | 12.80 | — | 0.0000 | 0.0000 | — |

@@ -1,5 +1,6 @@
 """Compare baseline `basic-fs-*` JSONL reports to CV-aggregated tool-suggest reports (README filenames)."""
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -190,4 +191,227 @@ def print_basic_vs_cv_table(reports_dir: Path) -> None:
         console.print()
         console.print("[yellow]Missing files (skipped rows):[/yellow]")
         for m in missing:
+            console.print(f"  {m}")
+
+
+def _redo_jsonl(reports_dir: Path, stem_prefix: str | None) -> Path | None:
+    """Newest JSONL under ``reports_dir`` with name starting with ``stem_prefix``.
+
+    Include ``_test`` in the prefix so ``gpt54`` does not match ``gpt54mini`` / ``gpt54nano``.
+    """
+    if stem_prefix is None:
+        return None
+    candidates = list(reports_dir.glob(f"{stem_prefix}*.jsonl"))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+# (display label, basic stem prefix, OOS CV stem prefix, accum CV stem prefix) — None skips that column.
+# Stem prefixes match files like ``basic-fs-redo-gpt54_test_0_<trace>.jsonl`` (see README REDO section).
+README_REDO_TRIPLET: list[tuple[str, str | None, str | None, str | None]] = [
+    ("Opus 4.6", "basic-fs-redo-opus46_test", None, None),
+    ("Haiku 4.5", "basic-fs-redo-haiku45_test", None, "ts-fs-repro-redo-oos-accum-cv-haiku45_test"),
+    (
+        "GPT-5.4",
+        "basic-fs-redo-gpt54_test",
+        "ts-fs-repro-redo-oos-cv-gpt54_test",
+        "ts-fs-repro-redo-oos-accum-cv-gpt54_test",
+    ),
+    (
+        "GPT-5.4 mini",
+        "basic-fs-redo-gpt54mini_test",
+        "ts-fs-repro-redo-oos-cv-gpt54mini_test",
+        "ts-fs-repro-redo-oos-accum-cv-gpt54mini_test",
+    ),
+    (
+        "GPT-5.4 nano",
+        "basic-fs-redo-gpt54nano_test",
+        "ts-fs-repro-redo-oos-cv-gpt54nano_test",
+        "ts-fs-repro-redo-oos-accum-cv-gpt54nano_test",
+    ),
+    (
+        "Qwen3 Coder+",
+        "basic-fs-redo-qwen3coder_test",
+        "ts-fs-repro-redo-oos-cv-qwen3coderplus_test",
+        "ts-fs-repro-redo-oos-accum-cv-qwen3coderplus_test",
+    ),
+    ("DeepSeek V3.2", "basic-fs-redo-deepseekv32_test", "ts-fs-repro-redo-oos-cv-deepseekv32_test", None),
+]
+
+
+def _fmt_redo_usage_cells(u: _CaseUsageAgg | None) -> tuple[str, str, str, str, str]:
+    if u is None or u.n == 0:
+        return "—", "—", "—", "—", "—"
+    return (
+        str(u.n),
+        f"{u.mean_in / 1e3:.0f}k",
+        f"{u.mean_out / 1e3:.1f}k",
+        f"{u.mean_req:.2f}",
+        f"{u.mean_cost:.4f}",
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _RedoReadmeBundle:
+    pass_rows: list[list[str]]
+    use_rows: list[list[str]]
+    missing: list[str]
+
+
+def _collect_redo_readme_rows(reports_dir: Path) -> _RedoReadmeBundle:
+    missing: list[str] = []
+    pass_rows: list[list[str]] = []
+    use_rows: list[list[str]] = []
+
+    for label, b_pre, cv_pre, acc_pre in README_REDO_TRIPLET:
+        b_path = _redo_jsonl(reports_dir, b_pre)
+        cv_path = _redo_jsonl(reports_dir, cv_pre)
+        acc_path = _redo_jsonl(reports_dir, acc_pre)
+        for kind, pre, p in ("basic", b_pre, b_path), ("cv", cv_pre, cv_path), ("accum", acc_pre, acc_pre and acc_path):
+            if pre and p is None:
+                missing.append(f"{label} / {kind}: {reports_dir}/{pre}*.jsonl")
+
+        hs_b, ss_b = "—", "—"
+        ub: _CaseUsageAgg | None = None
+        if b_path is not None:
+            bh, bc = load_report_jsonl(b_path)
+            hs_b = f"{hard_pass_rate(bh):.1%}"
+            ss_b = f"{soft_pass_rate(bc):.1%}"
+            ub = _aggregate_case_usage(bc)
+
+        hs_cv, ss_cv = "—", "—"
+        uc: _CaseUsageAgg | None = None
+        if cv_path is not None:
+            ch, cc = load_report_jsonl(cv_path)
+            hs_cv = f"{hard_pass_rate(ch):.1%}"
+            ss_cv = f"{soft_pass_rate(cc):.1%}"
+            uc = _aggregate_case_usage(cc)
+
+        hs_a, ss_a = "—", "—"
+        ua: _CaseUsageAgg | None = None
+        if acc_path is not None:
+            ah, ac = load_report_jsonl(acc_path)
+            hs_a = f"{hard_pass_rate(ah):.1%}"
+            ss_a = f"{soft_pass_rate(ac):.1%}"
+            ua = _aggregate_case_usage(ac)
+
+        pass_rows.append([label, hs_b, hs_cv, hs_a, ss_b, ss_cv, ss_a])
+
+        b_u, cv_u, a_u = _fmt_redo_usage_cells(ub), _fmt_redo_usage_cells(uc), _fmt_redo_usage_cells(ua)
+        use_rows.append(
+            [
+                label,
+                b_u[0],
+                cv_u[0],
+                a_u[0],
+                b_u[1],
+                cv_u[1],
+                a_u[1],
+                b_u[2],
+                cv_u[2],
+                a_u[2],
+                b_u[3],
+                cv_u[3],
+                a_u[3],
+                b_u[4],
+                cv_u[4],
+                a_u[4],
+            ]
+        )
+
+    return _RedoReadmeBundle(pass_rows=pass_rows, use_rows=use_rows, missing=missing)
+
+
+def _write_redo_markdown(bundle: _RedoReadmeBundle) -> None:
+    out = sys.stdout
+    lines = [
+        "### Pass rates (REDO)\n",
+        "| Model | Hard basic | Hard CV (OOS) | Hard CV+accum | Soft basic | Soft CV (OOS) | Soft CV+accum |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        *[f"| {' | '.join(row)} |" for row in bundle.pass_rows],
+        "",
+        (
+            "- **Hard** = `passed_tasks / total_tasks` from each JSONL header. "
+            "**Soft** = fraction of evaluator scores equal to 1.0 across all case rows."
+        ),
+        "",
+        "### Usage — per-case mean over case rows (REDO)\n",
+        (
+            "| Model | N_b | N_cv | N_acc | in tok B | in tok CV | in tok acc | "
+            "out tok B | out tok CV | out tok acc | req B | req CV | req acc | "
+            "cost B | cost CV | cost acc |"
+        ),
+        (
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
+            "---: | ---: | ---: | ---: | ---: | ---: |"
+        ),
+        *[f"| {' | '.join(row)} |" for row in bundle.use_rows],
+        "",
+        (
+            "Per-case means (not merged CV header totals). Some **basic** runs still show **cost 0** "
+            "in rollups when Logfire did not attribute spend to leaf spans."
+        ),
+    ]
+    out.write("\n".join(lines))
+    if bundle.missing:
+        out.write("\n\nMissing (expected for models not run in a condition):\n\n")
+        out.write("\n".join(f"- {m}" for m in bundle.missing))
+    out.write("\n")
+
+
+def print_redo_readme_table(reports_dir: Path, *, markdown: bool = False) -> None:
+    """Baseline ``basic-fs-redo-*`` vs OOS CV vs accum CV (REDO experiment names; trace suffix ignored)."""
+    bundle = _collect_redo_readme_rows(reports_dir)
+    if markdown:
+        _write_redo_markdown(bundle)
+        return
+
+    console = Console(width=140, soft_wrap=True)
+    pass_tbl = Table(
+        title="Pass rates: REDO basic-fs vs ts-repro OOS CV vs ts-repro accum CV",
+        box=box.SIMPLE,
+        width=140,
+    )
+    pass_tbl.add_column("Model", max_width=16)
+    for col in ("hard_B", "hard_CV", "hard_acc", "soft_B", "soft_CV", "soft_acc"):
+        pass_tbl.add_column(col, justify="right", no_wrap=True)
+
+    use_tbl = Table(
+        title="Usage per case (mean) — N and means for basic / OOS CV / accum CV",
+        box=box.SIMPLE,
+        width=140,
+    )
+    use_tbl.add_column("Model", overflow="fold", max_width=12)
+    for col in (
+        "N_b",
+        "N_cv",
+        "N_a",
+        "in_B",
+        "in_CV",
+        "in_a",
+        "out_B",
+        "out_CV",
+        "out_a",
+        "req_B",
+        "req_CV",
+        "req_a",
+        "cst_B",
+        "cst_CV",
+        "cst_a",
+    ):
+        use_tbl.add_column(col, justify="right", no_wrap=True)
+
+    for row in bundle.pass_rows:
+        pass_tbl.add_row(*row)
+    for row in bundle.use_rows:
+        use_tbl.add_row(*row)
+
+    console.print(pass_tbl)
+    console.print()
+    console.print(use_tbl)
+    if bundle.missing:
+        console.print()
+        console.print("[dim]Missing paths (no JSONL matched):[/dim]")
+        for m in bundle.missing:
             console.print(f"  {m}")

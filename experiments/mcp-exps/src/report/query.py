@@ -160,6 +160,7 @@ def _accumulate_chat_span_into_totals(
     counts[tid] += 1
 
     case_sid = _walk_up_to_case_span_id(chat_sid, by_id)
+    cn: str | None
     if case_sid is not None:
         case_row = by_id.get(case_sid)
         if not case_row:
