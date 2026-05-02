@@ -233,6 +233,15 @@ uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl
 - gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/6cfff4b7-a579-4730-8628-9ed080cddbbd?spanId=d579b60257c95154
 - gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/4c4c5935-79fe-4d3d-a357-face0b523c8e?spanId=da9495595dcea3aa
 
+```bash
+uv run run_exp.py basic \
+  --domain fs \
+  --experiment-name basic-fs-redo-gpt54nano \
+  --model "openai:gpt-5.4-nano" \
+  --tool-retries 5 --max-concurrency 7 \
+  --request-limit 50
+```
+
 ## cv autointent oos
 
 ### без аккумуляции
@@ -243,6 +252,41 @@ uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl
 - qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/b7895224-63f9-4d5a-af37-ff53af2c9c0b?spanId=f3b0dbe311f691c8
 - deepseek-v3.2: https://logfire-eu.pydantic.dev/public-trace/efc48d5c-a2df-4465-ae34-7cba00989892?spanId=e8302299f914b300
 
+```bash
+uv run run_exp.py ts-repro \
+    --domain fs \
+    --experiment-name ts-fs-repro-redo-oos-cv-deepseekv32 \
+    --tool-retries 5 \
+    --model "openrouter:deepseek/deepseek-v3.2" \
+    --max-concurrency 7 \
+    --jsonl-repo exported_repos/basic-fs-redo-opus46_test_0.jsonl \
+    --grouper cv \
+    --top-k 5 \
+    --formatter-max-len 4096 \
+    --selection-target-size 150 \
+    --tool-samples 4
+```
 
 ### с аккумуляцией
 
+- deepseek-v3.2:
+- qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/23cf61c4-db2c-4ca4-8122-b7d50ae0a0a7?spanId=9d059cc0eb9c725d
+- haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/0e283e08-84dc-4a4b-96a6-5957c8af5ce4?spanId=4d19b5ab51da5d12
+- gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/22b1ab9f-630f-47e3-b596-196d195f45e7?spanId=1cce67f66efc9f20
+- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/f6b1b02d-763d-450f-ac31-b6df9761f65c?spanId=216c4eef318a6e03
+- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/5c409fda-4228-4097-87d6-bc4214259d39?spanId=48b0bf4caddbc9b4
+
+```bash
+uv run run_exp.py ts-repro \
+    --domain fs \
+    --experiment-name ts-fs-repro-redo-oos-accum-cv-qwen3coderplus \
+    --tool-retries 5 \
+    --model "openrouter:qwen/qwen3-coder-plus" \
+    --max-concurrency 3 \
+    --jsonl-repo exported_repos/basic-fs-redo-opus46_test_0.jsonl \
+    --grouper cv \
+    --top-k 5 \
+    --formatter-max-len 4096 \
+    --selection-target-size 150 \
+    --tool-samples 4 --suggest-session-tracking
+```
