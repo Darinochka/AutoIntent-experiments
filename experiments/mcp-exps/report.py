@@ -6,7 +6,8 @@ This module contains CLI commands:
 2. `table` command: read a JSONL report and print a Rich summary.
 3. `from-link` command: resolve experiment name from a public URL (`spanId`) and load it like `load`.
 4. `aggregate-links` command: merge several public trace URLs into one JSONL (e.g. CV folds).
-5. `compare-readme` command: print basic-fs vs CV-aggregated pass rates and usage for README-aligned report files.
+5. `compare-readme` command: print basic-fs vs CV-aggregated pass rates and **per-case mean** token/cost
+   usage (fair: uses case-row rollups, not raw headers — CV merged headers sum all traces).
 
 ## Usage examples
 
@@ -345,6 +346,8 @@ def compare_readme(
 
     **Hard** pass rate: ``passed_tasks / total_tasks`` from each JSONL header.
     **Soft** pass rate: fraction of individual evaluator scores equal to 1.0 across all cases.
+    **Usage:** means of per-case ``input_tokens`` / ``output_tokens`` / ``requests`` / ``cost`` (not raw
+    headers: merged CV headers sum every trace, which is unfair vs a single-trace baseline).
     """
     print_basic_vs_cv_table(reports_dir.resolve())
 

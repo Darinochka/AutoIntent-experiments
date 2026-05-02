@@ -1,5 +1,6 @@
 """Compare baseline `basic-fs-*` JSONL reports to CV-aggregated tool-suggest reports (README filenames)."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from rich import box
@@ -8,6 +9,42 @@ from rich.table import Table
 
 from .constants import PASSED_EPS
 from .models import CaseRow, ExperimentHeader
+
+
+@dataclass(frozen=True, slots=True)
+class _CaseUsageAgg:
+    n: int
+    mean_in: float
+    mean_out: float
+    mean_req: float
+    mean_cost: float
+    sum_in: float
+    sum_out: float
+    sum_req: float
+    sum_cost: float
+
+
+def _aggregate_case_usage(cases: list[CaseRow]) -> _CaseUsageAgg:
+    """Token/cost sums and per-row means (fair across single-run vs N-trace CV merge)."""
+    n = len(cases)
+    if n == 0:
+        return _CaseUsageAgg(0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    sin = sum(c.metrics.input_tokens for c in cases)
+    sout = sum(c.metrics.output_tokens for c in cases)
+    sreq = sum(c.metrics.requests for c in cases)
+    scst = sum(c.metrics.cost for c in cases)
+    return _CaseUsageAgg(
+        n=n,
+        mean_in=sin / n,
+        mean_out=sout / n,
+        mean_req=sreq / n,
+        mean_cost=scst / n,
+        sum_in=sin,
+        sum_out=sout,
+        sum_req=sreq,
+        sum_cost=scst,
+    )
+
 
 # (label, basic stem without .jsonl, cv stem without .jsonl) — matches reports/ + README baselines / CV script names.
 README_BASIC_VS_CV: list[tuple[str, str, str]] = [
@@ -60,7 +97,13 @@ def hard_pass_rate(header: ExperimentHeader) -> float:
 
 
 def print_basic_vs_cv_table(reports_dir: Path) -> None:
-    """Print Rich tables: pass rates, then usage (basic vs CV per model)."""
+    """Print Rich tables: pass rates, then per-case mean usage (fair) and optional sanity totals.
+
+    For CV, ``aggregate-links`` / merged JSONL **headers** sum `chat` metrics over **every** merged
+    ``trace_id``, while a single `basic` run is one trace — comparing raw header tokens to a baseline
+    is misleading. Here we compare **means (and sums) of per-case rows**, which are comparable when
+    both files list one row per task execution (e.g. 25 rows).
+    """
     console = Console(width=120, soft_wrap=True)
     missing: list[str] = []
 
@@ -75,16 +118,22 @@ def print_basic_vs_cv_table(reports_dir: Path) -> None:
     pass_tbl.add_column("soft_B", justify="right", no_wrap=True)
     pass_tbl.add_column("soft_CV", justify="right", no_wrap=True)
 
-    use_tbl = Table(title="Usage (header totals): basic vs CV", box=box.SIMPLE, width=120)
-    use_tbl.add_column("Model", overflow="fold", max_width=14)
-    use_tbl.add_column("in_B", justify="right", no_wrap=True)
-    use_tbl.add_column("in_CV", justify="right", no_wrap=True)
-    use_tbl.add_column("out_B", justify="right", no_wrap=True)
-    use_tbl.add_column("out_CV", justify="right", no_wrap=True)
-    use_tbl.add_column("req_B", justify="right", no_wrap=True)
-    use_tbl.add_column("req_CV", justify="right", no_wrap=True)
-    use_tbl.add_column("cost_B", justify="right", no_wrap=True)
-    use_tbl.add_column("cost_CV", justify="right", no_wrap=True)
+    use_mean_tbl = Table(
+        title="Usage per case (mean over case rows) — use for model comparison; both sides: N = row count",
+        box=box.SIMPLE,
+        width=120,
+    )
+    use_mean_tbl.add_column("Model", overflow="fold", max_width=12)
+    use_mean_tbl.add_column("N_b", justify="right", no_wrap=True)
+    use_mean_tbl.add_column("N_c", justify="right", no_wrap=True)
+    use_mean_tbl.add_column("in_mB", justify="right", no_wrap=True)
+    use_mean_tbl.add_column("in_mC", justify="right", no_wrap=True)
+    use_mean_tbl.add_column("out_mB", justify="right", no_wrap=True)
+    use_mean_tbl.add_column("out_mC", justify="right", no_wrap=True)
+    use_mean_tbl.add_column("req_mB", justify="right", no_wrap=True)
+    use_mean_tbl.add_column("req_mC", justify="right", no_wrap=True)
+    use_mean_tbl.add_column("cst_mB", justify="right", no_wrap=True)
+    use_mean_tbl.add_column("cst_mC", justify="right", no_wrap=True)
 
     for label, basic_stem, cv_stem in README_BASIC_VS_CV:
         basic_path = (reports_dir / basic_stem).with_suffix(".jsonl")
@@ -98,6 +147,8 @@ def print_basic_vs_cv_table(reports_dir: Path) -> None:
 
         bh, bc = load_report_jsonl(basic_path)
         ch, cc = load_report_jsonl(cv_path)
+        ub = _aggregate_case_usage(bc)
+        uc = _aggregate_case_usage(cc)
 
         hb = hard_pass_rate(bh)
         hc = hard_pass_rate(ch)
@@ -111,21 +162,30 @@ def print_basic_vs_cv_table(reports_dir: Path) -> None:
             f"{sb:.1%}",
             f"{sc:.1%}",
         )
-        use_tbl.add_row(
+        use_mean_tbl.add_row(
             label,
-            f"{bh.input_tokens / 1e6:.2f}M",
-            f"{ch.input_tokens / 1e6:.2f}M",
-            f"{bh.output_tokens / 1e3:.1f}k",
-            f"{ch.output_tokens / 1e3:.1f}k",
-            f"{bh.requests:.2f}",
-            f"{ch.requests:.2f}",
-            f"{bh.cost:.3f}",
-            f"{ch.cost:.3f}",
+            f"{ub.n}",
+            f"{uc.n}",
+            f"{ub.mean_in / 1e3:.0f}k",
+            f"{uc.mean_in / 1e3:.0f}k",
+            f"{ub.mean_out / 1e3:.1f}k",
+            f"{uc.mean_out / 1e3:.1f}k",
+            f"{ub.mean_req:.2f}",
+            f"{uc.mean_req:.2f}",
+            f"{ub.mean_cost:.4f}",
+            f"{uc.mean_cost:.4f}",
         )
 
     console.print(pass_tbl)
     console.print()
-    console.print(use_tbl)
+    console.print(use_mean_tbl)
+    console.print(
+        "\n[dim]Sanity: sum of per-case inputs should match JSONL header totals when leaf metrics were "
+        "attributed. CV headers sum all merged traces and should match Σ per-case. "
+        "The old table compared basic header to CV header, which is unfair when the CV file merges K traces "
+        "(K = trace_id segments). Compare means above instead. If you need raw header totals, run: "
+        "`uv run report.py table` on each file.[/dim]"
+    )
     if missing:
         console.print()
         console.print("[yellow]Missing files (skipped rows):[/yellow]")

@@ -2,6 +2,7 @@
 
 import asyncio
 from collections import defaultdict
+from datetime import datetime
 from typing import Any
 
 from logfire.query_client import AsyncLogfireQueryClient
@@ -10,6 +11,9 @@ from loguru import logger
 from .constants import PASSED_EPS
 from .models import LogfireEvalFetchResult, TraceMetrics
 from .parse import case_name_from_case_span, metrics_from_chat_span_attributes
+
+_MULTIPLE_CANDIDATE_CASE_WINDOWS = 2
+_QUERY_ROW_LIMIT = 10_000
 
 
 async def query(
@@ -31,7 +35,7 @@ async def query(
         AND child.span_name ILIKE 'case: %'
     """  # noqa: S608
 
-    json_rows = await client.query_json_rows(sql=evaluate_cases_sql)
+    json_rows = await client.query_json_rows(sql=evaluate_cases_sql, limit=_QUERY_ROW_LIMIT)
     rows_raw = json_rows.get("rows", [])
     if not isinstance(rows_raw, list) or not rows_raw:
         return None
@@ -92,12 +96,12 @@ async def _partition_chat_metrics(
 
     in_list = _sql_in_trace_ids(trace_ids)
     sql = f"""
-    SELECT trace_id, span_id, parent_span_id, span_name, attributes
+    SELECT trace_id, span_id, parent_span_id, span_name, attributes, otel_scope_name, start_timestamp, end_timestamp
     FROM records
     WHERE trace_id IN ({in_list})
     """  # noqa: S608
 
-    json_rows = await client.query_json_rows(sql=sql)
+    json_rows = await client.query_json_rows(sql=sql, limit=_QUERY_ROW_LIMIT)
     span_rows = json_rows.get("rows", [])
     if not isinstance(span_rows, list):
         return {}, {}, {}
@@ -121,9 +125,11 @@ def _partition_chat_metrics_from_span_rows(
             continue
         by_id[str(sid_raw)] = row
 
+    case_windows = _build_case_windows_by_trace(span_rows)
+
     for row in span_rows:
         if isinstance(row, dict):
-            _accumulate_chat_span_into_totals(row, by_id, per_trace, case_totals, counts)
+            _accumulate_chat_span_into_totals(row, by_id, case_windows, per_trace, case_totals, counts)
 
     return per_trace, dict(case_totals), dict(counts)
 
@@ -131,6 +137,7 @@ def _partition_chat_metrics_from_span_rows(
 def _accumulate_chat_span_into_totals(
     row: dict[str, Any],
     by_id: dict[str, dict[str, Any]],
+    case_windows_by_trace: dict[str, list[tuple[str, datetime, datetime | None]]],
     per_trace: dict[str, TraceMetrics],
     case_totals: dict[tuple[str, str], TraceMetrics],
     counts: dict[str, int],
@@ -153,12 +160,22 @@ def _accumulate_chat_span_into_totals(
     counts[tid] += 1
 
     case_sid = _walk_up_to_case_span_id(chat_sid, by_id)
-    if case_sid is None:
-        return
-    case_row = by_id.get(case_sid)
-    if not case_row:
-        return
-    cn = case_name_from_case_span(str(case_row.get("span_name") or ""), case_row.get("attributes"))
+    if case_sid is not None:
+        case_row = by_id.get(case_sid)
+        if not case_row:
+            return
+        cn = case_name_from_case_span(str(case_row.get("span_name") or ""), case_row.get("attributes"))
+    else:
+        # Fallback for failure paths where chat spans are in the same trace and case time range
+        # but not linked under `case:` via parent_span_id.
+        cn = _infer_case_name_by_time_window(
+            row=row,
+            trace_id=tid,
+            case_windows_by_trace=case_windows_by_trace,
+        )
+        if cn is None:
+            return
+
     key = (tid, cn)
     cur_c = case_totals.get(key, TraceMetrics())
     case_totals[key] = _add_trace_metrics(cur_c, partial)
@@ -179,6 +196,92 @@ def _walk_up_to_case_span_id(start_span_id: str, by_id: dict[str, dict[str, Any]
         pid = row.get("parent_span_id")
         sid = str(pid) if pid is not None else None
     return None
+
+
+def _build_case_windows_by_trace(
+    span_rows: list[Any],
+) -> dict[str, list[tuple[str, datetime, datetime | None]]]:
+    windows_by_trace: dict[str, list[tuple[str, datetime, datetime | None]]] = defaultdict(list)
+    for row in span_rows:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("span_name") or "")
+        if not name.lower().startswith("case:"):
+            continue
+        if str(row.get("otel_scope_name") or "") != "pydantic-evals":
+            continue
+
+        tid_raw = row.get("trace_id")
+        if tid_raw is None:
+            continue
+        start_ts = _parse_timestamp_like(row.get("start_timestamp"))
+        if start_ts is None:
+            continue
+        end_ts = _parse_timestamp_like(row.get("end_timestamp"))
+        case_name = case_name_from_case_span(name, row.get("attributes"))
+        windows_by_trace[str(tid_raw)].append((case_name, start_ts, end_ts))
+    return dict(windows_by_trace)
+
+
+def _infer_case_name_by_time_window(
+    *,
+    row: dict[str, Any],
+    trace_id: str,
+    case_windows_by_trace: dict[str, list[tuple[str, datetime, datetime | None]]],
+) -> str | None:
+    start_ts = _parse_timestamp_like(row.get("start_timestamp"))
+    if start_ts is None:
+        return None
+
+    windows = case_windows_by_trace.get(trace_id, [])
+    candidates = [w for w in windows if _timestamp_in_case_window(start_ts, w[1], w[2])]
+    if len(candidates) == 1:
+        return candidates[0][0]
+    if len(candidates) < _MULTIPLE_CANDIDATE_CASE_WINDOWS:
+        return None
+
+    # If windows overlap, pick the most specific one (smallest known duration).
+    candidates_sorted = sorted(candidates, key=_case_window_sort_key)
+    first = candidates_sorted[0]
+    second = candidates_sorted[1]
+    if _case_window_sort_key(first) == _case_window_sort_key(second):
+        return None
+    return first[0]
+
+
+def _timestamp_in_case_window(
+    value: datetime,
+    start: datetime,
+    end: datetime | None,
+) -> bool:
+    if value < start:
+        return False
+    if end is None:
+        return True
+    return value <= end
+
+
+def _case_window_sort_key(window: tuple[str, datetime, datetime | None]) -> tuple[float, float]:
+    _, start, end = window
+    if end is None:
+        return (float("inf"), start.timestamp())
+    return ((end - start).total_seconds(), start.timestamp())
+
+
+def _parse_timestamp_like(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = f"{raw[:-1]}+00:00"
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
 
 
 def _sql_in_trace_ids(trace_ids: list[str]) -> str:
