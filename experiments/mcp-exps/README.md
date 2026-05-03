@@ -242,6 +242,54 @@ uv run run_exp.py basic \
   --request-limit 50
 ```
 
+### offline metrics (REDO)
+
+Тот же стек, что в [offline metrics](#offline-metrics) выше, но репозиторий — `exported_repos/basic-fs-redo-opus46_test_0.jsonl` (экспорт Opus для REDO-бейзлайна).
+
+#### knn (for debug)
+
+
+|       | top1   | topk   | mrr    |
+| ----- | ------ | ------ | ------ |
+| micro | 0.5517 | 0.8336 | 0.6852 |
+| macro | 0.5128 | 0.8046 | 0.6500 |
+
+
+```bash
+uv run offline_eval.py --repo exported_repos/basic-fs-redo-opus46_test_0.jsonl \
+  --split cv \
+  --cv-folds 5 \
+  --suggester knn \
+  --emb-backend openai \
+  --emb-model text-embedding-3-small \
+  --formatter-max-len 4096 \
+  --knn-neighbors 5 \
+  --knn-aggregation weighted \
+  --topk-metric 5 \
+  --task-key case_name
+```
+
+#### autointent
+
+
+|       | top1   | topk   | mrr    |
+| ----- | ------ | ------ | ------ |
+| micro | 0.8090 | 0.9651 | 0.8795 |
+| macro | 0.7832 | 0.9697 | 0.8667 |
+
+
+```bash
+uv run offline_eval.py --repo exported_repos/basic-fs-redo-opus46_test_0.jsonl \
+  --split cv --cv-folds 5 --random-state 42 \
+  --suggester autointent \
+  --emb-backend openai --emb-model text-embedding-3-small \
+  --formatter-max-len 4096 \
+  --selection-target-size 90 --min-samples-per-tool 4 --max-oos 0.2 \
+  --no-multilabel \
+  --experiment-name offline-fs-redo-opus-autointent \
+  --topk-metric 5 --task-key case_name
+```
+
 ## cv autointent oos
 
 ### без аккумуляции
