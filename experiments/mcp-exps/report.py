@@ -6,7 +6,10 @@ This module contains CLI commands:
 2. `table` command: read a JSONL report and print a Rich summary.
 3. `from-link` command: resolve experiment name from a public URL (`spanId`) and load it like `load`.
 4. `aggregate-links` command: merge several public trace URLs into one JSONL (e.g. CV folds).
-5. `compare-readme` command: print basic-fs vs CV-aggregated pass rates and usage for README-aligned report files.
+5. `compare-readme` command: print basic-fs vs CV-aggregated pass rates and **per-case mean** token/cost
+   usage (fair: uses case-row rollups, not raw headers — CV merged headers sum all traces).
+6. `compare-readme-redo` command: same style for **REDO** reports (`basic-fs-redo-*`, `ts-fs-repro-redo-oos-cv-*`,
+   `ts-fs-repro-redo-oos-accum-cv-*` under ``reports/``).
 
 ## Usage examples
 
@@ -75,6 +78,7 @@ from src.report import (
     narrow_eval_fetch_to_trace,
     parse_span_id_from_public_trace_url,
     print_basic_vs_cv_table,
+    print_redo_readme_table,
     query,
     resolve_experiment_for_span,
     trace_prefix,
@@ -345,8 +349,28 @@ def compare_readme(
 
     **Hard** pass rate: ``passed_tasks / total_tasks`` from each JSONL header.
     **Soft** pass rate: fraction of individual evaluator scores equal to 1.0 across all cases.
+    **Usage:** means of per-case ``input_tokens`` / ``output_tokens`` / ``requests`` / ``cost`` (not raw
+    headers: merged CV headers sum every trace, which is unfair vs a single-trace baseline).
     """
     print_basic_vs_cv_table(reports_dir.resolve())
+
+
+@app.command(name="compare-readme-redo")
+def compare_readme_redo(
+    reports_dir: Annotated[
+        Path,
+        cyclopts.Parameter(help="Directory containing basic-fs-redo-* and ts-fs-repro-redo-*.jsonl files"),
+    ] = Path("reports"),
+    markdown: Annotated[
+        bool,
+        cyclopts.Parameter(help="Print GitHub-flavored markdown tables to stdout"),
+    ] = False,
+) -> None:
+    """Compare REDO baseline vs OOS CV vs accum CV (see README ``## REDO``).
+
+    Matches the newest JSONL per stem prefix (trace id suffix in filenames is ignored).
+    """
+    print_redo_readme_table(reports_dir.resolve(), markdown=markdown)
 
 
 if __name__ == "__main__":
