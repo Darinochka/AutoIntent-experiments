@@ -33,6 +33,9 @@ def create_phase_scoped_tool_suggest_deps(  # noqa: PLR0913
     min_samples_per_tool: int = 3,
     emb_backend: EmbBackend = "openai",
     emb_model: str = "text-embedding-3-small",
+    emb_st_classification_prompt: str | None = None,
+    emb_st_query_prompt: str | None = None,
+    custom_qwen_prompt: bool = False,
     multilabel: bool = False,
     top_k: int | None = None,
     *,
@@ -48,7 +51,13 @@ def create_phase_scoped_tool_suggest_deps(  # noqa: PLR0913
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    embedder, token_counter, emb_config = build_embedding_resources(emb_backend=emb_backend, emb_model=emb_model)
+    embedder, token_counter, emb_config = build_embedding_resources(
+        emb_backend=emb_backend,
+        emb_model=emb_model,
+        st_classification_prompt=emb_st_classification_prompt,
+        st_query_prompt=emb_st_query_prompt,
+        custom_qwen_prompt=custom_qwen_prompt,
+    )
     ai_config = get_ai_config(
         experiment_name=experiment_name,
         ai_embedder_config=emb_config,

@@ -314,9 +314,7 @@ async def download(  # noqa: C901, PLR0912, PLR0915
     query_row_limit: Annotated[
         int,
         cyclopts.Parameter(
-            help=(
-                "Max rows for the trace span query (API max 10_000). Required for parent-span walks."
-            ),
+            help=("Max rows for the trace span query (API max 10_000). Required for parent-span walks."),
         ),
     ] = _DEFAULT_QUERY_ROW_LIMIT,
 ) -> None:
