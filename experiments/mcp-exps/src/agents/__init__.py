@@ -8,6 +8,7 @@ from ._tool_suggest import (
     create_phase_scoped_tool_suggest_deps,
     create_remote_phase_scoped_tool_suggest_deps,
     create_tool_suggest_agent,
+    create_tool_suggest_highlighter_agent,
     tool_suggest_run_result_processor,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "create_phase_scoped_tool_suggest_deps",
     "create_remote_phase_scoped_tool_suggest_deps",
     "create_tool_suggest_agent",
+    "create_tool_suggest_highlighter_agent",
     "tool_suggest_run_result_processor",
 ]
