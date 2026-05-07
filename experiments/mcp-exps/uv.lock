@@ -1324,6 +1324,7 @@ dependencies = [
     { name = "cyclopts" },
     { name = "pydantic-ai-mcp-evals", extra = ["domain-filesystem"] },
     { name = "rich" },
+    { name = "scikit-learn" },
     { name = "tool-suggest", extra = ["autointent", "client"] },
 ]
 
@@ -1336,8 +1337,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cyclopts", specifier = ">=4.5.1,<5.0.0" },
-    { name = "pydantic-ai-mcp-evals", extras = ["domain-filesystem"] },
+    { name = "pydantic-ai-mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=aa56408" },
     { name = "rich", specifier = ">=14.3.2,<15.0.0" },
+    { name = "scikit-learn", specifier = ">=1.5.0" },
     { name = "tool-suggest", extras = ["autointent", "client"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=87f9137" },
 ]
 
@@ -2105,16 +2107,12 @@ wheels = [
 [[package]]
 name = "pydantic-ai-mcp-evals"
 version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=aa56408#aa56408fdaa4bd56348b8f9608b5526a6d0c2b0a" }
 dependencies = [
     { name = "anyio" },
     { name = "loguru" },
     { name = "pydantic-ai" },
     { name = "pydantic-settings" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/05/5a/73f89db7e0250b8605961ffb288f7d73f4e73186419788aba088e56e819d/pydantic_ai_mcp_evals-0.1.0.tar.gz", hash = "sha256:22a5291f79f7ecbeaaeba0c019ff264ff975d6ba77a3c41378c9617551f3baa5", size = 192098, upload-time = "2026-04-21T10:44:58.149Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/37/58/818b6bdba9b1f5f8a69e11bbc83e5f3e09e85b3934a52cee05dc91d506bd/pydantic_ai_mcp_evals-0.1.0-py3-none-any.whl", hash = "sha256:2df600c8181b4af287bb85f95fd02d0743af72395681989a6af79a10fafad6cd", size = 392037, upload-time = "2026-04-21T10:44:55.931Z" },
 ]
 
 [package.optional-dependencies]

@@ -4,6 +4,9 @@ This script loads experiment spans from Logfire, finds the last `chat %` span
 inside each `case: %` span, reconstructs the transcript from that chat's input
 and output messages, then writes tool-suggest `Sample` objects to JSONL.
 
+All traces whose root message is ``evaluate <experiment>`` are considered (e.g. retries).
+For each ``case_name``, the row from the **latest** evaluate root (by root start time) wins.
+
 Usage example:
 ```bash
 export LOGFIRE_API_KEY="..."
@@ -12,6 +15,7 @@ uv run samples.py --experiment basic-fs --output-dir ./tool_suggest_repos
 """
 
 import os
+from collections import Counter
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -19,20 +23,11 @@ import cyclopts
 from dotenv import load_dotenv
 from logfire.query_client import AsyncLogfireQueryClient
 from loguru import logger
-from pydantic_ai.messages import (
-    ModelMessage,
-    ModelRequest,
-    ModelRequestPart,
-    ModelResponse,
-    ModelResponsePart,
-    SystemPromptPart,
-    TextPart,
-    ToolCallPart,
-    ToolReturnPart,
-    UserPromptPart,
-)
+from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from tool_suggest.models import Sample
 from tool_suggest.services.repository import JSONFileRepository
+
+from src.logfire_genai import transcript_from_chat_span
 
 load_dotenv()
 
@@ -45,6 +40,110 @@ _IGNORED_TOOL_LABELS: frozenset[str] = frozenset(
         "finish",
     }
 )
+
+
+def _sql_single_quoted_literal(value: str) -> str:
+    """Escape a string for safe use inside a single-quoted SQL literal."""
+    return value.replace("'", "''")
+
+
+def _evaluate_message_literal(experiment: str) -> str:
+    return _sql_single_quoted_literal(f"evaluate {experiment}")
+
+
+def _build_samples_query(*, evaluate_message_sql: str) -> str:
+    """SQL: all evaluate roots for this experiment; dedupe ``case_name`` to latest root."""
+    return f"""
+    WITH evaluate_roots AS (
+        SELECT trace_id, span_id, start_timestamp AS root_start_ts
+        FROM records
+        WHERE message = '{evaluate_message_sql}'
+          AND otel_scope_name = 'pydantic-evals'
+    ),
+    case_spans AS (
+        SELECT
+            r.root_start_ts,
+            s.trace_id,
+            s.span_id,
+            s.start_timestamp AS case_start_ts,
+            s.end_timestamp,
+            s.attributes->>'case_name' AS case_name,
+            s.attributes->>'task_name' AS task_name,
+            s.attributes AS case_attributes
+        FROM records s
+        INNER JOIN evaluate_roots r
+          ON s.trace_id = r.trace_id AND s.parent_span_id = r.span_id
+        WHERE s.span_name ILIKE 'case: %'
+          AND s.otel_scope_name = 'pydantic-evals'
+    ),
+    chat_spans_ranked AS (
+        SELECT
+            c.root_start_ts,
+            c.case_start_ts,
+            c.case_name,
+            c.task_name,
+            c.trace_id,
+            c.span_id AS case_span_id,
+            c.case_attributes,
+            s.span_id AS chat_span_id,
+            s.attributes->'gen_ai.input.messages' AS input_messages,
+            s.attributes->'gen_ai.output.messages' AS output_messages,
+            s.attributes->'gen_ai.request.model' AS request_model,
+            s.attributes->'gen_ai.response.model' AS response_model,
+            ROW_NUMBER() OVER (
+                PARTITION BY c.span_id ORDER BY s.start_timestamp DESC
+            ) AS rank
+        FROM records s
+        INNER JOIN case_spans c
+          ON s.trace_id = c.trace_id
+          AND s.start_timestamp >= c.case_start_ts
+          AND s.start_timestamp <= c.end_timestamp
+        WHERE s.span_name ILIKE 'chat %'
+          AND s.otel_scope_name = 'pydantic-ai'
+    ),
+    best_chat_per_case_span AS (
+        SELECT *
+        FROM chat_spans_ranked
+        WHERE rank = 1
+    ),
+    winner_per_case_name AS (
+        SELECT *
+        FROM (
+            SELECT
+                bc.root_start_ts,
+                bc.case_start_ts,
+                bc.case_name,
+                bc.task_name,
+                bc.trace_id,
+                bc.case_span_id,
+                bc.case_attributes,
+                bc.chat_span_id,
+                bc.input_messages,
+                bc.output_messages,
+                bc.request_model,
+                bc.response_model,
+                ROW_NUMBER() OVER (
+                    PARTITION BY bc.case_name
+                    ORDER BY bc.root_start_ts DESC, bc.case_start_ts DESC
+                ) AS case_name_rank
+            FROM best_chat_per_case_span bc
+        ) ranked
+        WHERE case_name_rank = 1
+    )
+    SELECT
+        case_name,
+        task_name,
+        trace_id,
+        case_span_id,
+        case_attributes,
+        chat_span_id,
+        input_messages,
+        output_messages,
+        request_model,
+        response_model
+    FROM winner_per_case_name
+    ORDER BY case_name
+    """  # noqa: S608
 
 
 @app.default
@@ -63,63 +162,8 @@ async def load(
     output_path = ((output_dir or Path.cwd()).resolve() / experiment).with_suffix(".jsonl")
     logger.info(f"Samples will be saved to {output_path}")
 
-    query = f"""
-    WITH root_span AS (
-        SELECT trace_id, span_id
-        FROM records
-        WHERE message = 'evaluate {experiment}'
-          AND otel_scope_name = 'pydantic-evals'
-        LIMIT 1
-    ),
-    case_spans AS (
-        SELECT
-            s.trace_id,
-            s.span_id,
-            s.start_timestamp,
-            s.end_timestamp,
-            s.attributes->>'case_name' as case_name,
-            s.attributes->>'task_name' as task_name,
-            s.attributes as case_attributes
-        FROM records s
-        JOIN root_span r ON s.trace_id = r.trace_id AND s.parent_span_id = r.span_id
-        WHERE s.message LIKE 'case: %'
-          AND s.otel_scope_name = 'pydantic-evals'
-    ),
-    chat_spans_ranked AS (
-        SELECT
-            c.case_name,
-            c.task_name,
-            c.trace_id,
-            c.span_id as case_span_id,
-            c.case_attributes,
-            s.span_id as chat_span_id,
-            s.attributes->'gen_ai.input.messages' as input_messages,
-            s.attributes->'gen_ai.output.messages' as output_messages,
-            s.attributes->'gen_ai.request.model' as request_model,
-            s.attributes->'gen_ai.response.model' as response_model,
-            ROW_NUMBER() OVER (PARTITION BY c.span_id ORDER BY s.start_timestamp DESC) as rank
-        FROM records s
-        JOIN case_spans c
-          ON s.trace_id = c.trace_id
-          AND s.start_timestamp >= c.start_timestamp
-          AND s.start_timestamp <= c.end_timestamp
-        WHERE s.message LIKE 'chat %'
-          AND s.otel_scope_name = 'pydantic-ai'
-    )
-    SELECT
-        case_name,
-        task_name,
-        trace_id,
-        case_span_id,
-        case_attributes,
-        chat_span_id,
-        input_messages,
-        output_messages,
-        request_model,
-        response_model
-    FROM chat_spans_ranked
-    WHERE rank = 1
-    """  # noqa: S608
+    evaluate_msg = _evaluate_message_literal(experiment)
+    query = _build_samples_query(evaluate_message_sql=evaluate_msg)
 
     if output_path.exists():
         raise FileExistsError
@@ -130,12 +174,17 @@ async def load(
         read_token=os.getenv("LOGFIRE_API_KEY") or "fake",
         timeout=timeout,  # type: ignore[arg-type]
     ) as client:
-        json_rows = await client.query_json_rows(sql=query)
+        json_rows = await client.query_json_rows(sql=query, limit=10_000)
 
     rows: list[dict[str, Any]] = json_rows.get("rows", [])
     if not rows:
         logger.warning("Logfire query returned no rows")
         return
+
+    logger.info(
+        "After merging duplicate case_name across traces: {} case row(s)",
+        len(rows),
+    )
 
     samples = _extract_samples_from_rows(rows=rows, experiment_name=experiment)
 
@@ -143,6 +192,38 @@ async def load(
     await repo.add_bulk(samples)
 
     logger.success(f"Done! Saved {len(samples)} samples.")
+    _log_loaded_sample_summary(samples)
+
+
+def _log_loaded_sample_summary(samples: list[Sample]) -> None:
+    """Log counts for quick validation (cases, tools, per-tool micro frequencies)."""
+    if not samples:
+        logger.info("Sample summary: empty list")
+        return
+
+    case_keys: set[str] = set()
+    for s in samples:
+        raw = s.data.get("case_name") if isinstance(s.data, dict) else None
+        case_keys.add(str(raw) if raw is not None and str(raw) else "__missing_case_name__")
+
+    tool_counts: Counter[str] = Counter()
+    for s in samples:
+        for name in s.tools:
+            tool_counts[name] += 1
+
+    logger.info("Sample summary: {} rows (tool-step samples)", len(samples))
+    logger.info(
+        "Distinct case_name (from sample.data): {} — {}",
+        len(case_keys),
+        ", ".join(sorted(case_keys)),
+    )
+    if not tool_counts:
+        logger.info("No tool labels on samples (unexpected unless export was empty steps)")
+        return
+
+    logger.info("Distinct tool names: {}", len(tool_counts))
+    ordered = ", ".join(f"{n}={tool_counts[n]}" for n in sorted(tool_counts, key=lambda t: (-tool_counts[t], t)))
+    logger.info("Tool occurrences (micro — one row with [a,b] counts both): {}", ordered)
 
 
 def _extract_samples_from_rows(rows: list[dict[str, Any]], experiment_name: str) -> list[Sample]:
@@ -153,10 +234,7 @@ def _extract_samples_from_rows(rows: list[dict[str, Any]], experiment_name: str)
         input_messages_raw = row.get("input_messages") or []
         output_messages_raw = row.get("output_messages") or []
 
-        transcript = [
-            *_convert_genai_messages(input_messages_raw),
-            *_convert_genai_messages(output_messages_raw),
-        ]
+        transcript = transcript_from_chat_span(input_messages_raw, output_messages_raw)
 
         case_samples = _samples_from_messages(
             messages=transcript,
@@ -209,53 +287,6 @@ def _samples_from_messages(messages: list[ModelMessage], base_data: dict[str, An
 def _tool_names_from_response(msg: ModelResponse) -> list[str]:
     """Collect tool names from a ModelResponse's tool-call parts."""
     return [part.tool_name for part in msg.parts if isinstance(part, ToolCallPart)]
-
-
-def _convert_genai_messages(raw_messages: list[dict[str, Any]]) -> list[ModelMessage]:  # noqa: C901, PLR0912
-    """Convert Logfire GenAI-format messages to pydantic-ai ModelMessage objects."""
-    result: list[ModelMessage] = []
-    for msg in raw_messages:
-        role = msg.get("role")
-        parts_raw = msg.get("parts", [])
-
-        if role in ("system", "user"):
-            request_parts: list[ModelRequestPart] = []
-            for p in parts_raw:
-                ptype = p.get("type")
-                if ptype == "text":
-                    if role == "system":
-                        request_parts.append(SystemPromptPart(content=p["content"]))
-                    else:
-                        request_parts.append(UserPromptPart(content=p["content"]))
-                elif ptype == "tool_call_response":
-                    request_parts.append(
-                        ToolReturnPart(
-                            tool_name=p["name"],
-                            content=p["result"],
-                            tool_call_id=p.get("id"),
-                        )
-                    )
-            if request_parts:
-                result.append(ModelRequest(parts=request_parts))
-
-        elif role == "assistant":
-            response_parts: list[ModelResponsePart] = []
-            for p in parts_raw:
-                ptype = p.get("type")
-                if ptype == "tool_call":
-                    response_parts.append(
-                        ToolCallPart(
-                            tool_name=p["name"],
-                            args=p["arguments"],
-                            tool_call_id=p.get("id"),
-                        )
-                    )
-                elif ptype == "text":
-                    response_parts.append(TextPart(content=p["content"]))
-            if response_parts:
-                result.append(ModelResponse(parts=response_parts))
-
-    return result
 
 
 if __name__ == "__main__":

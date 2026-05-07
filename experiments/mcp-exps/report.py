@@ -1,9 +1,15 @@
 """Download and visualize experiment results.
 
-This module contains two CLI commands:
+This module contains CLI commands:
 
 1. Default command: download experiment spans from Logfire and write a JSONL report.
 2. `table` command: read a JSONL report and print a Rich summary.
+3. `from-link` command: resolve experiment name from a public URL (`spanId`) and load it like `load`.
+4. `aggregate-links` command: merge several public trace URLs into one JSONL (e.g. CV folds).
+5. `compare-readme` command: print basic-fs vs CV-aggregated pass rates and **per-case mean** token/cost
+   usage (fair: uses case-row rollups, not raw headers — CV merged headers sum all traces).
+6. `compare-readme-redo` command: same style for **REDO** reports (`basic-fs-redo-*`, `ts-fs-repro-redo-oos-cv-*`,
+   `ts-fs-repro-redo-oos-accum-cv-*` under ``reports/``).
 
 ## Usage examples
 
@@ -17,92 +23,74 @@ The output will be saved as `./reports/basic-fs.jsonl` (one JSON object per line
 - first line: experiment header (trace id + aggregated metrics)
 - following lines: per-case rows (evaluator scores)
 
+Header **token and cost** totals are the **sum** over leaf LLM spans whose names match `chat <model>`
+(e.g. `chat gpt-5.4-mini`), using each span's `logfire.metrics` rollup. Parent evaluate-span metrics are
+not used (they reflect pydantic-evals **averages** across tasks, not experiment-wide totals).
+
 ### 2) Pretty-print the report
 ```bash
 uv run report.py table --report-path ./reports/basic-fs.jsonl
 ```
+
+### 3) Load a report using a public trace URL
+Uses ``spanId`` from the URL to resolve the pydantic-evals experiment name (same string as
+``evaluate <name>``), then runs the same ``query`` + JSONL write path as ``load``.
+Assumes ``experiment-name`` is unique per run so ``trace_id`` filtering is unnecessary.
+
+```bash
+uv run report.py from-link "https://logfire-eu.pydantic.dev/public-trace/…?spanId=…"
+```
+Writes ``./<experiment>_<trace-prefix>.jsonl`` by default (``trace-prefix`` from the resolved trace for
+filenames; see ``--help`` for ``--output``).
+
+### 4) Aggregate several public trace URLs (e.g. cross-validation folds)
+Each ``--link`` is resolved like ``from-link``; one trace per link is narrowed and merged. Case rows are
+written as ``{case_name}__{trace_prefix}`` so identical task names across folds stay distinct. Header
+``trace_id`` lists all trace UUIDs separated by ``;``.
+
+Optional ``--inter-link-delay`` (default 20s) spaces Logfire queries when merging many folds. Each link
+runs two SQL queries; ``query`` also waits 10s between them.
+
+```bash
+uv run report.py aggregate-links --name ts-fs-cv-gpt54 \
+  --link "https://logfire-eu.pydantic.dev/public-trace/…?spanId=…" \
+  --link "https://logfire-eu.pydantic.dev/public-trace/…?spanId=…"
+```
 """
 
+import asyncio
 import os
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import cyclopts
 from dotenv import load_dotenv
 from logfire.query_client import AsyncLogfireQueryClient
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
-load_dotenv()
-
-app = cyclopts.App(
-    # name="pipeline",
-    # help="ETL pipeline for offers reranker: load, parse, and split data",
+from src.report import (
+    CaseRow,
+    ExperimentHeader,
+    merge_logfire_eval_fetch_results,
+    narrow_eval_fetch_to_trace,
+    parse_span_id_from_public_trace_url,
+    print_basic_vs_cv_table,
+    print_redo_readme_table,
+    query,
+    resolve_experiment_for_span,
+    trace_prefix,
+    write_experiment_jsonl,
 )
 
+if TYPE_CHECKING:
+    from src.report.models import LogfireEvalFetchResult
 
-PASSED_EPS = 1e-9
+load_dotenv()
 
-
-class ExperimentHeader(BaseModel):
-    """Outpu JSONL file header."""
-
-    experiment_name: str = "unknown"
-    trace_id: str
-    cost: float
-    input_tokens: float
-    output_tokens: float
-    cache_read_tokens: float
-    requests: float
-    total_tasks: int = 0
-    passed_tasks: int = 0
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class TraceMetrics(BaseModel):
-    """Aggregated metrics."""
-
-    cost: float = 0.0
-    input_tokens: float = 0.0
-    output_tokens: float = 0.0
-    cache_read_tokens: float = 0.0
-    requests: float = 0.0
-
-    model_config = ConfigDict(extra="allow")
-
-
-class CaseMetrics(BaseModel):
-    """Single case metrics."""
-
-    cost: float = 0.0
-    input_tokens: float = 0.0
-    output_tokens: float = 0.0
-    cache_read_tokens: float = 0.0
-    requests: float = 0.0
-
-    model_config = ConfigDict(extra="allow")
-
-
-class EvaluatorResult(BaseModel):
-    """One evaluator result object inside Logfire `scores`."""
-
-    name: str | None = None
-    value: float | None = None
-    reason: str | None = None
-    source: Any | None = None
-
-
-class CaseRow(BaseModel):
-    """Output from logfire API."""
-
-    case_name: str
-    passed: bool
-    scores: dict[str, EvaluatorResult] = Field(default_factory=dict)
-    metrics: CaseMetrics
+app = cyclopts.App(name="Report maker")
 
 
 @app.default
@@ -124,96 +112,154 @@ async def load(
     """
     output_path = ((output_dir or Path.cwd()).resolve() / experiment).with_suffix(".jsonl")
     logger.info(f"Result will be saved to {output_path}")
-
-    query = f"""
-    SELECT
-        parent.trace_id,
-        parent.attributes AS parent_attributes,
-        child.attributes AS child_attributes
-    FROM records parent
-    JOIN records child
-        ON child.trace_id = parent.trace_id
-    WHERE
-        parent.message = 'evaluate {experiment}'
-        AND parent.otel_scope_name = 'pydantic-evals'
-        AND child.otel_scope_name = 'pydantic-evals'
-        AND child.span_name ILIKE 'case: %'
-    """  # noqa: S608
-
-    # Ensure output directory exists.
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     async with AsyncLogfireQueryClient(
         read_token=os.getenv("LOGFIRE_API_KEY") or "fake",
         timeout=timeout,  # type: ignore[arg-type]
     ) as client:
-        json_rows = await client.query_json_rows(sql=query)
+        bundle = await query(client, experiment)
 
-    with output_path.open("w", encoding="utf-8") as output_file:
-        rows: list[dict[str, Any]] = json_rows.get("rows", [])
-        if not rows:
-            logger.warning("Logfire query returned no rows.")
-            return
+    if bundle is None:
+        logger.warning("Logfire query returned no rows.")
+        return
 
-        # JSONL format:
-        # 1) single header line (trace_id + aggregated cost/tokens over unique traces)
-        # 2) per-case lines (verbatim per-evaluator scores + aggregate `passed`)
+    write_experiment_jsonl(output_path, experiment, bundle)
+    logger.success("Done!")
 
-        trace_totals: dict[str, TraceMetrics] = {}
-        trace_order: list[str] = []
-        case_by_name: dict[str, CaseRow] = {}
-        case_requests_sum: float = 0.0
-        case_requests_count: int = 0
 
-        for row in rows:
-            trace_id = row.get("trace_id")
-            if trace_id is None:
-                continue
-            trace_id_str = str(trace_id)
+@app.command(name="from-link")
+async def from_link(
+    url: Annotated[
+        str,
+        cyclopts.Parameter(help="Logfire public trace URL including ?spanId=… (path UUID is ignored)"),
+    ],
+    output_dir: Annotated[
+        Path | None,
+        cyclopts.Parameter(help="Directory for the JSONL file (default: current working directory)"),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        cyclopts.Parameter(help="Explicit output JSONL path (overrides default `<experiment>_<trace-prefix>.jsonl`)"),
+    ] = None,
+    timeout: Annotated[  # noqa: ASYNC109
+        int,
+        cyclopts.Parameter(help="Query timeout in seconds"),
+    ] = 10,
+) -> None:
+    """Load using a public Logfire link.
 
-            if trace_id_str not in trace_totals:
-                trace_totals[trace_id_str] = _extract_parent_metrics(row)
-                trace_order.append(trace_id_str)
+    Parses ``spanId``, resolves the pydantic-evals experiment name (``evaluate <name>``) via SQL, then runs the same
+    pipeline as ``load``. Requires ``experiment-name`` to be unique for your runs (same assumption as ``load``).
+    """
+    span_id = parse_span_id_from_public_trace_url(url)
+    logger.info(f"Using span_id={span_id}")
 
-            case_row = _parse_case_row(row)
-            case_name = case_row.case_name
-            case_requests_sum += case_row.metrics.requests
-            case_requests_count += 1
+    base_dir = (output_dir or Path.cwd()).resolve()
+    base_dir.mkdir(parents=True, exist_ok=True)
 
-            # Merge by case_name: prefer a passing version if we see duplicates.
-            # TODO(voorhs): is it ok?
-            if case_name not in case_by_name:
-                case_by_name[case_name] = case_row
-            elif (not case_by_name[case_name].passed) and case_row.passed:
-                logger.warning(f"Duplicate case info found: {case_name}")
-                case_by_name[case_name] = case_row
+    async with AsyncLogfireQueryClient(
+        read_token=os.getenv("LOGFIRE_API_KEY") or "fake",
+        timeout=timeout,  # type: ignore[arg-type]
+    ) as client:
+        trace_id, experiment = await resolve_experiment_for_span(client, span_id)
+        logger.info(f"Resolved experiment={experiment!r} trace_id={trace_id}")
+        bundle = await query(client, experiment)
 
-        merged_cost = sum(t.cost for t in trace_totals.values())
-        merged_input_tokens = sum(t.input_tokens for t in trace_totals.values())
-        merged_output_tokens = sum(t.output_tokens for t in trace_totals.values())
-        merged_cache_read_tokens = sum(t.cache_read_tokens for t in trace_totals.values())
-        merged_requests = case_requests_sum / case_requests_count if case_requests_count else 0.0
+    if bundle is None:
+        logger.warning("Logfire query returned no rows.")
+        return
 
-        total_tasks = len(case_by_name)
-        passed_tasks = sum(1 for c in case_by_name.values() if c.passed)
+    if output is not None:
+        output_path = output.resolve()
+    else:
+        stem = f"{experiment}_{trace_prefix(trace_id)}"
+        output_path = (base_dir / stem).with_suffix(".jsonl")
 
-        header_trace_id = trace_order[0] if trace_order else "unknown_trace"
-        header = ExperimentHeader(
-            experiment_name=experiment,
-            trace_id=header_trace_id,
-            cost=merged_cost,
-            input_tokens=merged_input_tokens,
-            output_tokens=merged_output_tokens,
-            cache_read_tokens=merged_cache_read_tokens,
-            requests=merged_requests,
-            total_tasks=total_tasks,
-            passed_tasks=passed_tasks,
-        )
-        output_file.write(header.model_dump_json() + "\n")
+    logger.info(f"Result will be saved to {output_path}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        for case_name in sorted(case_by_name.keys()):
-            output_file.write(case_by_name[case_name].model_dump_json() + "\n")
+    write_experiment_jsonl(output_path, experiment, bundle)
+    logger.success("Done!")
 
+
+@app.command(name="aggregate-links")
+async def aggregate_links(
+    name: Annotated[
+        str,
+        cyclopts.Parameter("--name", help="Label for header.experiment_name and default output stem"),
+    ],
+    links: Annotated[
+        list[str],
+        cyclopts.Parameter(
+            "--link",
+            help="Public Logfire trace URL with ?spanId= (repeat per trace to merge)",
+            allow_repeating=True,
+        ),
+    ],
+    output_dir: Annotated[
+        Path | None,
+        cyclopts.Parameter(help="Directory for the JSONL file (default: current working directory)"),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        cyclopts.Parameter(help="Explicit output JSONL path (overrides default `<name>.jsonl`)"),
+    ] = None,
+    timeout: Annotated[  # noqa: ASYNC109
+        int,
+        cyclopts.Parameter(help="Query timeout in seconds"),
+    ] = 10,
+    inter_link_delay: Annotated[
+        float,
+        cyclopts.Parameter(
+            help="Seconds to wait before each link after the first (reduces Logfire rate limits on many CV folds)",
+        ),
+    ] = 20.0,
+) -> None:
+    """Merge several public trace URLs into one JSONL report.
+
+    Resolves each link to ``(trace_id, experiment)``, loads Logfire data with the same pipeline as
+    ``from-link`` (query then narrow to that trace), concatenates bundles, and writes one file. Per-case
+    names are suffixed with ``__<trace-prefix>`` so CV folds do not collide.
+    """
+    if not links:
+        msg = "Provide at least one --link URL"
+        raise ValueError(msg)
+
+    base_dir = (output_dir or Path.cwd()).resolve()
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    narrowed_parts: list[LogfireEvalFetchResult] = []
+    async with AsyncLogfireQueryClient(
+        read_token=os.getenv("LOGFIRE_API_KEY") or "fake",
+        timeout=timeout,  # type: ignore[arg-type]
+    ) as client:
+        for i, url in enumerate(links):
+            if i > 0 and inter_link_delay > 0:
+                logger.info(f"Waiting {inter_link_delay}s before next link (rate limit backoff)")
+                await asyncio.sleep(inter_link_delay)
+            span_id = parse_span_id_from_public_trace_url(url)
+            trace_id, experiment = await resolve_experiment_for_span(client, span_id)
+            logger.info(f"[{i + 1}/{len(links)}] Resolved experiment={experiment!r} trace_id={trace_id}")
+            bundle = await query(client, experiment)
+            if bundle is None:
+                msg = f"Logfire returned no rows for experiment={experiment!r} (link index {i})"
+                raise RuntimeError(msg)
+            narrowed = narrow_eval_fetch_to_trace(bundle, trace_id)
+            if narrowed is None:
+                msg = f"No case rows for trace_id={trace_id!r} after query (link index {i})"
+                raise RuntimeError(msg)
+            narrowed_parts.append(narrowed)
+
+    merged = merge_logfire_eval_fetch_results(narrowed_parts)
+
+    output_path = output.resolve() if output is not None else (base_dir / name).with_suffix(".jsonl")
+
+    logger.info(
+        f"Writing merged report ({len(merged.trace_order)} traces, {len(merged.case_rows)} case rows) to {output_path}"
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_experiment_jsonl(output_path, name, merged, disambiguate_cases_by_trace=True)
     logger.success("Done!")
 
 
@@ -292,64 +338,39 @@ def print_table(
     console.print(per_case)
 
 
-def _safe_float(v: object) -> float:
-    """Best-effort float conversion for metrics/scores coming from Logfire."""
-    if v is None:
-        return 0.0
-    if isinstance(v, (int, float)):
-        return float(v)
-    try:
-        return float(str(v))
-    except ValueError:
-        return 0.0
+@app.command(name="compare-readme")
+def compare_readme(
+    reports_dir: Annotated[
+        Path,
+        cyclopts.Parameter(help="Directory containing basic-fs-* and cv-readme-* JSONL files"),
+    ] = Path("reports"),
+) -> None:
+    """Compare README-aligned baseline reports to CV-aggregated tool-suggest reports.
 
-
-def _extract_parent_metrics(row: dict[str, Any]) -> TraceMetrics:
-    """Extract cost/tokens from `parent_attributes` for a single trace.
-
-    The query joins experiment parent span (which contains aggregated metrics) with each case span,
-    so these totals must be deduped per `trace_id` and not accumulated per case.
+    **Hard** pass rate: ``passed_tasks / total_tasks`` from each JSONL header.
+    **Soft** pass rate: fraction of individual evaluator scores equal to 1.0 across all cases.
+    **Usage:** means of per-case ``input_tokens`` / ``output_tokens`` / ``requests`` / ``cost`` (not raw
+    headers: merged CV headers sum every trace, which is unfair vs a single-trace baseline).
     """
-    parent_attributes = row.get("parent_attributes") or {}
-    logfire_meta = parent_attributes.get("logfire.experiment.metadata") or {}
-    averages = logfire_meta.get("averages") or {}
-    metrics = averages.get("metrics") or {}
-    return TraceMetrics(
-        cost=_safe_float(metrics.get("cost")),
-        input_tokens=_safe_float(metrics.get("input_tokens")),
-        output_tokens=_safe_float(metrics.get("output_tokens")),
-        cache_read_tokens=_safe_float(metrics.get("cache_read_tokens")),
-        requests=_safe_float(metrics.get("requests")),
-    )
+    print_basic_vs_cv_table(reports_dir.resolve())
 
 
-def _parse_case_row(row: dict[str, Any]) -> CaseRow:
-    """Extract a `CaseRow` from a case span.
+@app.command(name="compare-readme-redo")
+def compare_readme_redo(
+    reports_dir: Annotated[
+        Path,
+        cyclopts.Parameter(help="Directory containing basic-fs-redo-* and ts-fs-repro-redo-*.jsonl files"),
+    ] = Path("reports"),
+    markdown: Annotated[
+        bool,
+        cyclopts.Parameter(help="Print GitHub-flavored markdown tables to stdout"),
+    ] = False,
+) -> None:
+    """Compare REDO baseline vs OOS CV vs accum CV (see README ``## REDO``).
 
-    Scores are copied (as `EvaluatorResult` models); we compute only the aggregate `passed` boolean.
+    Matches the newest JSONL per stem prefix (trace id suffix in filenames is ignored).
     """
-    child_attributes = row.get("child_attributes") or {}
-    case_name = child_attributes.get("case_name") or "unknown_case"
-    scores_raw_obj = child_attributes.get("scores") or {}
-    metrics_raw_obj = child_attributes.get("metrics") or {}
-
-    scores_raw: dict[str, Any] = scores_raw_obj if isinstance(scores_raw_obj, dict) else {}
-    metrics_raw: dict[str, Any] = metrics_raw_obj if isinstance(metrics_raw_obj, dict) else {}
-
-    scores = {
-        str(eval_name): (
-            EvaluatorResult.model_validate(eval_result)
-            if isinstance(eval_result, dict)
-            else EvaluatorResult(value=_safe_float(eval_result))
-        )
-        for eval_name, eval_result in scores_raw.items()
-    }
-    case_metrics = CaseMetrics.model_validate(metrics_raw)
-
-    passed = bool(scores) and all(
-        (score.value is not None) and abs(score.value - 1.0) < PASSED_EPS for score in scores.values()
-    )
-    return CaseRow(case_name=str(case_name), passed=passed, scores=scores, metrics=case_metrics)
+    print_redo_readme_table(reports_dir.resolve(), markdown=markdown)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@
 ## Logfire Note
 
 Pydantic-ai tech stack includes awesome [Logfire](https://logfire.pydantic.dev/docs/) --- observability tool for inspecting LLM tool calls and responces. However, if you want to use it, you'd better use some non-Russian proxy, so your spans are sent without any problem. Like this:
+
 ```bash
 ALL_PROXY=http://127.0.0.1:1087 uv run run_exp.py --domain fs --experiment-name basic-fs-smoke --agent basic --model gpt-4.1
 ```
@@ -18,12 +19,12 @@ ALL_PROXY=http://127.0.0.1:1087 uv run run_exp.py --domain fs --experiment-name 
 - basic agent filesystem self-correction: https://logfire-eu.pydantic.dev/public-trace/5cd5e7b1-2fb1-4357-93c5-83df22d773c1?spanId=edeab683c1cfbbe5
 
 Промежуточный итог:
+
 - ~~нужно добавить code execution, потому что некоторые задачи съедают очень много токенов так как требуют от ллм вручную делать дата процессинг (типа разделить большой файл на три части)~~
 - убрать таски которые требует от ллм ручной дата процессинг:
-    - file_splitting
-    - dataset_comparison
-    - все задачи с фикстурой LEGAL_DOCUMENT
-
+  - file_splitting
+  - dataset_comparison
+  - все задачи с фикстурой LEGAL_DOCUMENT
 
 ## бейзлайны filesystem
 
@@ -70,7 +71,7 @@ uv run run_exp.py ts-repro \
 
 ### с OOS detection
 
-и `under_represented_behavior="always_include" `
+и `under_represented_behavior="always_include"` 
 
 - haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/78d1cfc9-9b98-418b-ae57-b777487fd8ea?spanId=48699272a41bf40f
 - opus-4.6: https://logfire-eu.pydantic.dev/public-trace/14256429-7e85-470f-9b1d-6a499c5b098c?spanId=38e5b1c187acafef
@@ -120,7 +121,248 @@ uv run run_exp.py ts-repro \
     - https://logfire-eu.pydantic.dev/public-trace/ce805346-1f1a-41b6-a35b-8b3c06838acd?spanId=790b0905f01fd1a0
 - deepseek-v3.2:
     - https://logfire-eu.pydantic.dev/public-trace/ba7d18b9-3574-4900-b870-4a2755167651?spanId=22005625f27fb358
-    - https://logfire-eu.pydantic.dev/public-trace/ba7d18b9-3574-4900-b870-4a2755167651?spanId=22005625f27fb358
+    - https://logfire-eu.pydantic.dev/public-trace/61eda002-a80f-49c9-b149-8197813c26ba?spanId=bc71e6478302978a
     - https://logfire-eu.pydantic.dev/public-trace/9b7668e2-5e3b-4e8a-8941-008a38cf2638?spanId=beb2578330b4f46b
     - https://logfire-eu.pydantic.dev/public-trace/551044ed-67bf-41ce-99fc-dbfb713de103?spanId=2b98d3e96a14f1ab
     - https://logfire-eu.pydantic.dev/public-trace/c5a5f727-a8a4-45a6-a3cd-7fb30990f20a?spanId=b0c8914a54606ac8
+
+ну кринж полный
+
+Here is a concise comparison using your current `reports/` JSONL files. `**report.py compare-readme**` (see `src/report/compare_readme.py`) prints the tables below; regenerate anytime:
+
+```bash
+cd experiments/mcp-exps && uv run report.py compare-readme
+# optional: uv run report.py compare-readme --reports-dir /path/to/reports
+```
+
+**Pairing:** each row is **basic-fs** (one trace, 25 tasks) vs **tool-suggest OOS CV** (merged 5-fold aggregate): `cv-readme-*.jsonl`. **GPT-5.4 mini** uses `**cv-gpt54-mini-aggregated.jsonl`** (same five public links as in the mini CV list above).
+
+### Pass rates
+
+
+| Model         | Hard basic | Hard CV | Soft basic | Soft CV |
+| ------------- | ---------- | ------- | ---------- | ------- |
+| Haiku 4.5     | 32%        | 8%      | 80.8%      | 19.1%   |
+| Opus 4.6      | 72%        | 32%     | 91.0%      | 49.5%   |
+| GPT-5.4       | 40%        | 20%     | 76.5%      | 32.6%   |
+| GPT-5.4 mini  | 16%        | 12%     | 56.7%      | 48.4%   |
+| GPT-5.4 nano  | 8%         | 8%      | 58.0%      | 27.3%   |
+| Qwen3 Coder+  | 16%        | 16%     | 64.7%      | 45.4%   |
+| DeepSeek V3.2 | 24%        | 4%      | 59.8%      | 22.2%   |
+
+
+- **Hard** = `passed_tasks / total_tasks` from each JSONL header (all evaluators 1.0 on a task).  
+- **Soft** = fraction of **individual evaluator** scores that equal 1.0 across all case rows.  
+- Both sides use **N = 25** case rows (full domain × CV disambiguation).
+
+### Usage (per-case mean over case rows; comparable basic vs CV)
+
+Averaging **per-task** `input_tokens` / `output_tokens` / `requests` / `cost` from the JSONL case lines (not merged **header** sums: CV headers add all five traces, which is misleading next to a single-trace basic run).
+
+
+| Model         | in tok basic | in tok CV | out tok basic | out tok CV | req basic | req CV | cost basic | cost CV |
+| ------------- | ------------ | --------- | ------------- | ---------- | --------- | ------ | ---------- | ------- |
+| Haiku 4.5     | 422k         | 394k      | 4.6k          | 5.4k       | 20.68     | 16.80  | 0.0000     | 0.0000  |
+| Opus 4.6      | 343k         | 192k      | 6.4k          | 4.0k       | 14.52     | 9.92   | 0.0000     | 0.0000  |
+| GPT-5.4       | 135k         | 127k      | 1.3k          | 1.0k       | 7.88      | 7.92   | 0.0000     | 0.3077  |
+| GPT-5.4 mini  | 63k          | 57k       | 1.0k          | 0.6k       | 8.32      | 5.92   | 0.0000     | 0.0294  |
+| GPT-5.4 nano  | 63k          | 79k       | 0.7k          | 0.6k       | 9.88      | 9.40   | 0.0000     | 0.0122  |
+| Qwen3 Coder+  | 151k         | 307k      | 1.2k          | 1.2k       | 14.24     | 19.92  | 0.0000     | 0.0000  |
+| DeepSeek V3.2 | 285k         | 357k      | 2.2k          | 1.1k       | 16.12     | 13.12  | 0.0000     | 0.0000  |
+
+
+For raw **header** totals (e.g. summed CV trace usage), use `uv run report.py table --report-path reports/<name>.jsonl`. Some **basic** runs still show **cost 0** in rollups; GPT-5.4 / mini / nano show non-zero cost in CV where Logfire captured it.
+
+### offline metrics
+
+на примерах опуса
+
+#### knn (for debug)
+
+
+|       | top1   | topk   | mrr    |
+| ----- | ------ | ------ | ------ |
+| micro | 0.6249 | 0.8812 | 0.7452 |
+| macro | 0.6071 | 0.8710 | 0.7233 |
+
+
+```bash
+uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl \
+  --split cv \
+  --cv-folds 5 \
+  --suggester knn \
+  --emb-backend openai \
+  --emb-model text-embedding-3-small \
+  --formatter-max-len 4096 \
+  --knn-neighbors 5 \
+  --knn-aggregation weighted \
+  --topk-metric 5 \
+  --task-key case_name
+```
+
+#### autointent
+
+
+|       | top1   | topk   | mrr    |
+| ----- | ------ | ------ | ------ |
+| micro | 0.7986 | 0.9338 | 0.8590 |
+| macro | 0.8106 | 0.9501 | 0.8758 |
+
+
+```bash
+uv run offline_eval.py --repo exported_repos/basic-fs-opus-4-6_true_test_0.jsonl \
+  --split cv --cv-folds 5 --random-state 42 \
+  --suggester autointent \
+  --emb-backend openai --emb-model text-embedding-3-small \
+  --formatter-max-len 4096 \
+  --selection-target-size 90 --min-samples-per-tool 4 --max-oos 0.2 \
+  --no-multilabel \
+  --experiment-name offline-fs-opus-autointent \
+  --topk-metric 5 --task-key case_name
+```
+
+## REDO
+
+### бейзлайны
+
+- opus-4.6: https://logfire-eu.pydantic.dev/public-trace/65b87987-89b6-451f-9195-a592854fbf2f?spanId=4ec2c13a9ad85099
+- haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/40ad8bf9-9319-4a77-9bcb-7ae671043991?spanId=b4a7f5e3d9b18fe9
+- qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/4b8f7d77-1ad2-4f4d-ba9c-ed78ec1590aa?spanId=6b987945dfb22a17
+- deepseek-v3.2: https://logfire-eu.pydantic.dev/public-trace/257a80b0-9656-446e-a5d3-26fbf668728d?spanId=19b82f7200458728
+- gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/07463937-1663-43d9-8124-615050dc08c7?spanId=3723e97f3824fb6c
+- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/6cfff4b7-a579-4730-8628-9ed080cddbbd?spanId=d579b60257c95154
+- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/4c4c5935-79fe-4d3d-a357-face0b523c8e?spanId=da9495595dcea3aa
+
+```bash
+uv run run_exp.py basic \
+  --domain fs \
+  --experiment-name basic-fs-redo-gpt54nano \
+  --model "openai:gpt-5.4-nano" \
+  --tool-retries 5 --max-concurrency 7 \
+  --request-limit 50
+```
+
+### offline metrics (REDO)
+
+Тот же стек, что в [offline metrics](#offline-metrics) выше, но репозиторий — `exported_repos/basic-fs-redo-opus46_test_0.jsonl` (экспорт Opus для REDO-бейзлайна).
+
+#### knn (for debug)
+
+
+|       | top1   | topk   | mrr    |
+| ----- | ------ | ------ | ------ |
+| micro | 0.5517 | 0.8336 | 0.6852 |
+| macro | 0.5128 | 0.8046 | 0.6500 |
+
+
+```bash
+uv run offline_eval.py --repo exported_repos/basic-fs-redo-opus46_test_0.jsonl \
+  --split cv \
+  --cv-folds 5 \
+  --suggester knn \
+  --emb-backend openai \
+  --emb-model text-embedding-3-small \
+  --formatter-max-len 4096 \
+  --knn-neighbors 5 \
+  --knn-aggregation weighted \
+  --topk-metric 5 \
+  --task-key case_name
+```
+
+#### autointent
+
+
+|       | top1   | topk   | mrr    |
+| ----- | ------ | ------ | ------ |
+| micro | 0.8090 | 0.9651 | 0.8795 |
+| macro | 0.7832 | 0.9697 | 0.8667 |
+
+
+```bash
+uv run offline_eval.py --repo exported_repos/basic-fs-redo-opus46_test_0.jsonl \
+  --split cv --cv-folds 5 --random-state 42 \
+  --suggester autointent \
+  --emb-backend openai --emb-model text-embedding-3-small \
+  --formatter-max-len 4096 \
+  --selection-target-size 90 --min-samples-per-tool 4 --max-oos 0.2 \
+  --no-multilabel \
+  --experiment-name offline-fs-redo-opus-autointent \
+  --topk-metric 5 --task-key case_name
+```
+
+## cv autointent oos
+
+### без аккумуляции
+
+- gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/750b65b7-62d8-4edc-9d52-a16313dcf723?spanId=578aba01ead3aa70
+- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/21f8b151-2c45-4e20-823a-6ef688a03b10?spanId=e6b055ffa95320e1
+- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/ee9722e6-7d95-41e6-b5cf-4bd5d2e9e6e5?spanId=79751e9da3fba556
+- qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/b7895224-63f9-4d5a-af37-ff53af2c9c0b?spanId=f3b0dbe311f691c8
+- deepseek-v3.2: https://logfire-eu.pydantic.dev/public-trace/efc48d5c-a2df-4465-ae34-7cba00989892?spanId=e8302299f914b300
+
+```bash
+uv run run_exp.py ts-repro \
+    --domain fs \
+    --experiment-name ts-fs-repro-redo-oos-cv-deepseekv32 \
+    --tool-retries 5 \
+    --model "openrouter:deepseek/deepseek-v3.2" \
+    --max-concurrency 7 \
+    --jsonl-repo exported_repos/basic-fs-redo-opus46_test_0.jsonl \
+    --grouper cv \
+    --top-k 5 \
+    --formatter-max-len 4096 \
+    --selection-target-size 150 \
+    --tool-samples 4
+```
+
+### с аккумуляцией
+
+- deepseek-v3.2:
+- qwen3-coder-plus: https://logfire-eu.pydantic.dev/public-trace/23cf61c4-db2c-4ca4-8122-b7d50ae0a0a7?spanId=9d059cc0eb9c725d
+- haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/0e283e08-84dc-4a4b-96a6-5957c8af5ce4?spanId=4d19b5ab51da5d12
+- gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/22b1ab9f-630f-47e3-b596-196d195f45e7?spanId=1cce67f66efc9f20
+- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/f6b1b02d-763d-450f-ac31-b6df9761f65c?spanId=216c4eef318a6e03
+- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/5c409fda-4228-4097-87d6-bc4214259d39?spanId=48b0bf4caddbc9b4
+
+```bash
+uv run run_exp.py ts-repro \
+    --domain fs \
+    --experiment-name ts-fs-repro-redo-oos-accum-cv-qwen3coderplus \
+    --tool-retries 5 \
+    --model "openrouter:qwen/qwen3-coder-plus" \
+    --max-concurrency 3 \
+    --jsonl-repo exported_repos/basic-fs-redo-opus46_test_0.jsonl \
+    --grouper cv \
+    --top-k 5 \
+    --formatter-max-len 4096 \
+    --selection-target-size 150 \
+    --tool-samples 4 --suggest-session-tracking
+```
+
+
+### Pass rates (REDO)
+
+
+| Model | Hard basic | Hard CV (OOS) | Hard CV+accum | Soft basic | Soft CV (OOS) | Soft CV+accum |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Opus 4.6 | 60.0% | — | — | 88.5% | — | — |
+| Haiku 4.5 | 32.0% | — | 28.0% | 88.3% | — | 74.6% |
+| GPT-5.4 | 40.0% | 24.0% | 36.0% | 77.5% | 34.8% | 68.8% |
+| GPT-5.4 mini | 12.0% | 4.0% | 8.0% | 54.3% | 32.0% | 50.7% |
+| GPT-5.4 nano | 4.0% | 8.0% | 8.0% | 51.4% | 35.5% | 51.4% |
+| Qwen3 Coder+ | 12.0% | 0.0% | 20.0% | 56.7% | 27.1% | 65.5% |
+| DeepSeek V3.2 | 8.0% | 0.0% | — | 33.3% | 17.4% | — |
+
+### Usage — per-case mean over case rows (REDO)
+
+Means are over **case lines** in each JSONL (fair vs merged CV headers), same spirit as the old “Usage” table. **N** = number of case rows in that file (25 where present).
+
+| Model | N_b | N_cv | N_acc | in tok B | in tok CV | in tok acc | out tok B | out tok CV | out tok acc | req B | req CV | req acc | cost B | cost CV | cost acc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Opus 4.6 | 25 | — | — | 480k | — | — | 5.5k | — | — | 12.80 | — | — | 0.0000 | — | — |
+| Haiku 4.5 | 25 | — | 25 | 519k | — | 677k | 4.9k | — | 6.9k | 11.92 | — | 14.64 | 0.0000 | — | 0.0000 |
+| GPT-5.4 | 25 | 25 | 25 | 145k | 175k | 222k | 1.5k | 1.1k | 1.5k | 8.44 | 7.60 | 7.08 | 0.1837 | 0.5029 | 0.5320 |
+| GPT-5.4 mini | 25 | 25 | 25 | 86k | 73k | 155k | 0.9k | 0.8k | 1.0k | 9.88 | 6.28 | 8.92 | 0.0346 | 0.0520 | 0.0813 |
+| GPT-5.4 nano | 25 | 25 | 25 | 62k | 75k | 110k | 0.7k | 0.7k | 0.7k | 8.52 | 8.96 | 8.72 | 0.0069 | 0.0135 | 0.0182 |
+| Qwen3 Coder+ | 25 | 25 | 25 | 429k | 659k | 763k | 1.9k | 2.5k | 1.9k | 16.72 | 13.84 | 14.32 | 0.0000 | 0.0000 | 0.0000 |
+| DeepSeek V3.2 | 25 | 25 | — | 281k | 405k | — | 2.3k | 1.1k | — | 13.16 | 12.80 | — | 0.0000 | 0.0000 | — |
