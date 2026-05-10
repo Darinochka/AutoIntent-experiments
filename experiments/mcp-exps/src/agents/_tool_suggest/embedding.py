@@ -89,7 +89,10 @@ def build_embedding_resources(
     if emb_backend == "openai":
         tool_suggest_embedder = OpenAIEmbedder(model=emb_model)
         token_counter = build_tiktoken_counter(model=emb_model)
-        ai_embedder_config = OpenaiEmbeddingConfig(model_name=emb_model)
+        ai_embedder_config = OpenaiEmbeddingConfig(
+            model_name=emb_model,
+            max_tokens_in_batch=200_000,
+        )
     elif emb_backend == "st":
         tool_suggest_embedder = SentenceTransformerEmbedder(model_name=emb_model)
         token_counter = None
