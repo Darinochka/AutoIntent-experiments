@@ -53,9 +53,10 @@ async def highlight_tool_suggestions(ctx: RunContext[TSAgentState], messages: li
     while parts and _is_highlight_part(parts[-1]):
         parts.pop()
 
-    body = _format_highlight_body(labels, suggest_result.detail)
-    parts.append(UserPromptPart(content=TOOL_SUGGEST_HIGHLIGHT_PREFIX + body))
-    last.parts = parts
+    body = _format_highlight_body(labels)
+    if body:
+        parts.append(UserPromptPart(content=TOOL_SUGGEST_HIGHLIGHT_PREFIX + body))
+        last.parts = parts
     return out
 
 
@@ -82,12 +83,12 @@ def strip_tool_suggest_highlights(messages: list[ModelMessage]) -> list[ModelMes
     return out
 
 
-def _format_highlight_body(tool_labels: list[str], detail: str | None) -> str:
-    intro = "Suggested tools for this step (recommended when they fit the task; not required — you may use any tool): "
+def _format_highlight_body(tool_labels: list[str], detail: str | None = None) -> str | None:
     if not tool_labels:
-        return intro + "(none ranked for this step)\n"
+        return None
+    intro = "Suggested tools for this step: "
     names = ", ".join(tool_labels)
-    body = intro + names + "\n"
+    body = intro + names
     if detail and detail.strip():
-        body += f"Detail: {detail.strip()}\n"
+        body += f"\nDetail: {detail.strip()}"
     return body
