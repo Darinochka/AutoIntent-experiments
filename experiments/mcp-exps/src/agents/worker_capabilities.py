@@ -47,7 +47,8 @@ class ToolSuggestHighlighterInstructions(AbstractCapability[Any]):
         return (
             "The conversation may include short appended notes listing suggested tools for the current step. "
             "Treat them as strong recommendations when they fit the task; they are not mandatory, and you "
-            "may use any available tool, including tools not listed there."
+            "may use any available tool, including tools not listed there. But those suggestions "
+            "are built based on the previous solved tasks so they may serve you well."
         )
 
 
