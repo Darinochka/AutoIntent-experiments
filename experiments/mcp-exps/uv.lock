@@ -1340,7 +1340,7 @@ requires-dist = [
     { name = "pydantic-ai-mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=aa56408" },
     { name = "rich", specifier = ">=14.3.2,<15.0.0" },
     { name = "scikit-learn", specifier = ">=1.5.0" },
-    { name = "tool-suggest", extras = ["autointent", "client"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=87f9137" },
+    { name = "tool-suggest", extras = ["autointent", "client"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=b2de087" },
 ]
 
 [package.metadata.requires-dev]
@@ -2830,7 +2830,7 @@ wheels = [
 [[package]]
 name = "tool-suggest"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=87f9137#87f9137477b30ad7c1f06962c2e0b3a798f6663a" }
+source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=b2de087#b2de087555879cdeba1316b18b5402812c55f932" }
 dependencies = [
     { name = "loguru" },
     { name = "numpy" },
