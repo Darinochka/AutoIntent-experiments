@@ -81,8 +81,7 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
             s.start_timestamp AS case_start_ts,
             s.end_timestamp,
             s.attributes->>'case_name' AS case_name,
-            s.attributes->>'task_name' AS task_name,
-            s.attributes AS case_attributes
+            s.attributes->>'task_name' AS task_name
         FROM records s
         INNER JOIN evaluate_roots r
           ON s.trace_id = r.trace_id AND s.parent_span_id = r.span_id
@@ -97,12 +96,7 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
             c.task_name,
             c.trace_id,
             c.span_id AS case_span_id,
-            c.case_attributes,
             s.span_id AS chat_span_id,
-            s.attributes->'gen_ai.input.messages' AS input_messages,
-            s.attributes->'gen_ai.output.messages' AS output_messages,
-            s.attributes->'gen_ai.request.model' AS request_model,
-            s.attributes->'gen_ai.response.model' AS response_model,
             ROW_NUMBER() OVER (
                 PARTITION BY c.span_id ORDER BY s.start_timestamp DESC
             ) AS rank
@@ -129,12 +123,7 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
                 bc.task_name,
                 bc.trace_id,
                 bc.case_span_id,
-                bc.case_attributes,
                 bc.chat_span_id,
-                bc.input_messages,
-                bc.output_messages,
-                bc.request_model,
-                bc.response_model,
                 ROW_NUMBER() OVER (
                     PARTITION BY bc.case_name
                     ORDER BY bc.root_start_ts DESC, bc.case_start_ts DESC
@@ -146,16 +135,17 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
     SELECT
         case_name,
         task_name,
-        trace_id,
+        w.trace_id,
         case_span_id,
-        case_attributes,
         chat_span_id,
-        input_messages,
-        output_messages,
-        request_model,
-        response_model
-    FROM winner_per_case_name
-    ORDER BY case_name
+        s.attributes->'gen_ai.input.messages' AS input_messages,
+        s.attributes->'gen_ai.output.messages' AS output_messages,
+        s.attributes->'gen_ai.request.model' AS request_model,
+        s.attributes->'gen_ai.response.model' AS response_model
+    FROM winner_per_case_name w
+    INNER JOIN records s
+      ON s.trace_id = w.trace_id
+      AND s.span_id = w.chat_span_id
     """  # noqa: S608
 
 
@@ -228,6 +218,7 @@ async def load(
     if not rows:
         logger.warning("Logfire query returned no rows")
         return
+    rows.sort(key=lambda row: str(row.get("case_name") or ""))
 
     logger.info(
         "After merging duplicate case_name across traces: {} case row(s)",
