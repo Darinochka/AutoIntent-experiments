@@ -42,17 +42,13 @@ class ToolReturnLimitInstructions(AbstractCapability[Any]):
 class ToolSuggestHighlighterInstructions(AbstractCapability[Any]):
     """Explains non-binding tool-suggestion notes for highlighter mode."""
 
-    def get_instructions(self) -> SystemPromptFunc[Any]:
+    def get_instructions(self) -> str:
         """Append guidance on how to interpret injected tool-suggestion notes."""
-
-        def highlighter_instructions(_ctx: RunContext[Any]) -> str:
-            return (
-                "The conversation may include short appended notes listing suggested tools for the current step. "
-                "Treat them as strong recommendations when they fit the task; they are not mandatory, and you "
-                "may use any available tool, including tools not listed there."
-            )
-
-        return highlighter_instructions
+        return (
+            "The conversation may include short appended notes listing suggested tools for the current step. "
+            "Treat them as strong recommendations when they fit the task; they are not mandatory, and you "
+            "may use any available tool, including tools not listed there."
+        )
 
 
 def shared_worker_capabilities() -> list[AbstractCapability[Any]]:
