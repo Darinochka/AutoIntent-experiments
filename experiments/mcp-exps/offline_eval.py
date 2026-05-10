@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -442,6 +443,136 @@ def batch_redo_repos(
 
     asyncio.run(_batch())
     logger.info("Appended batch results to {}", jsonl_out.resolve())
+
+
+def _redo_model_slug(repo: str) -> str:
+    """``basic-fs-redo-haiku45_test_0`` -> ``haiku45``; otherwise ``Path(repo).stem``."""
+    stem = Path(repo).stem
+    prefix = "basic-fs-redo-"
+    if stem.startswith(prefix) and "_test_" in stem:
+        return stem[len(prefix) :].split("_test_", maxsplit=1)[0]
+    return stem
+
+
+def _fmt_scalar(v: float, *, decimals: int) -> str:
+    return f"{v:.{decimals}f}"
+
+
+def _load_batch_pivot(
+    jsonl: Path,
+) -> tuple[int | None, list[str], dict[str, dict[str, dict[str, float]]]]:
+    """Return ``(topk_metric, preferred_row_order, model -> suggester -> mean_over_folds)``."""
+    topk: int | None = None
+    preferred_order: list[str] = []
+    pivot: dict[str, dict[str, dict[str, float]]] = {}
+
+    with jsonl.open(encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                continue
+            rec: dict[str, Any] = json.loads(line)
+            rt = rec.get("record_type")
+            if rt == "batch_start":
+                for rp in rec.get("repos", []):
+                    slug = _redo_model_slug(str(rp))
+                    if slug not in preferred_order:
+                        preferred_order.append(slug)
+                continue
+            if rt != "repo_suggester_summary":
+                continue
+            if topk is None and isinstance(rec.get("topk_metric"), int):
+                topk = rec["topk_metric"]
+            mof = rec.get("mean_over_folds")
+            if not isinstance(mof, dict):
+                continue
+            suggester = str(rec.get("suggester", ""))
+            if suggester not in ("knn", "autointent"):
+                continue
+            repo = str(rec.get("repo", ""))
+            slug = _redo_model_slug(repo)
+            cast_mof: dict[str, float] = {
+                str(k): float(v) for k, v in mof.items() if isinstance(v, (int, float)) and not isinstance(v, bool)
+            }
+            pivot.setdefault(slug, {})[suggester] = cast_mof
+
+    return topk, preferred_order, pivot
+
+
+def _pivot_row_order(preferred: list[str], pivot: dict[str, dict[str, dict[str, float]]]) -> list[str]:
+    seen = set()
+    out: list[str] = []
+    for s in preferred:
+        if s in pivot and s not in seen:
+            out.append(s)
+            seen.add(s)
+    out.extend(s for s in sorted(pivot.keys()) if s not in seen)
+    return out
+
+
+@app.command(
+    name="batch-jsonl-table",
+    help="Pivot ``repo_suggester_summary`` into a model x macro-metrics table (AI vs KNN columns).",
+)
+def batch_jsonl_table(
+    jsonl: Annotated[Path, Parameter(help="JSONL written by ``batch-redo-repos``.")],
+    fmt: Annotated[
+        Literal["markdown", "tsv"],
+        Parameter(name="--format", help="markdown: GitHub-style pipe table; tsv: tabs."),
+    ] = "markdown",
+    decimals: Annotated[int, Parameter(help="Decimal places per metric in each cell.")] = 3,
+    out: Annotated[Path | None, Parameter(help="Write table to this path instead of stdout.")] = None,
+) -> None:
+    """One column per macro metric; values are mean-over-folds from each suggester's summary."""
+    topk, preferred, pivot = _load_batch_pivot(jsonl)
+    if not pivot:
+        logger.error("No repo_suggester_summary rows with mean_over_folds in {}", jsonl)
+        return
+    rows = _pivot_row_order(preferred, pivot)
+    k = topk if topk is not None else "?"
+
+    col_specs: tuple[tuple[str, Literal["autointent", "knn"], str], ...] = (
+        ("AI top1", "autointent", "macro_top1"),
+        ("KNN top1", "knn", "macro_top1"),
+        ("AI topk", "autointent", "macro_topk"),
+        ("KNN topk", "knn", "macro_topk"),
+        ("AI MRR", "autointent", "macro_mrr"),
+        ("KNN MRR", "knn", "macro_mrr"),
+    )
+
+    def cell(slug: str, sug: Literal["autointent", "knn"], metric_key: str) -> str:
+        m = pivot.get(slug, {}).get(sug)
+        if m is None or metric_key not in m:
+            return "—"
+        return _fmt_scalar(m[metric_key], decimals=decimals)
+
+    lines: list[str] = []
+    if fmt == "markdown":
+        header = (
+            f"Offline batch pivot (macro mean-over-folds; topk matches eval k={k}). Source: `{jsonl.name}`.\n\n"
+            "| model | "
+            + " | ".join(h for h, _, _ in col_specs)
+            + " |\n| :--- | "
+            + " | ".join("---:" for _ in col_specs)
+            + " |"
+        )
+        lines.append(header)
+        for slug in rows:
+            cells = [cell(slug, sug, mk) for _, sug, mk in col_specs]
+            lines.append("| " + " | ".join([slug, *cells]) + " |")
+    else:
+        lines.append("\t".join(["model", *[h for h, _, _ in col_specs]]))
+        for slug in rows:
+            cells = [cell(slug, sug, mk) for _, sug, mk in col_specs]
+            lines.append("\t".join([slug, *cells]))
+
+    text = "\n".join(lines) + "\n"
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        logger.info("Wrote {}", out.resolve())
+    else:
+        sys.stdout.write(text)
 
 
 if __name__ == "__main__":
