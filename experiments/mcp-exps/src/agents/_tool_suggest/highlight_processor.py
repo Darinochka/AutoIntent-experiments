@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import TYPE_CHECKING
 
 import logfire
 from loguru import logger
+from pydantic_ai import RunContext  # noqa: TC002
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelRequestPart, UserPromptPart
 
-if TYPE_CHECKING:
-    from pydantic_ai import RunContext
-
-    from .types import TSAgentState
+from .types import TSAgentState  # noqa: TC001
 
 # Distinct sentinel so we can strip injected blocks from suggester input (avoids classifier bias).
 TOOL_SUGGEST_HIGHLIGHT_PREFIX = "[mcp-exps:tool-suggest-highlight]\n"
