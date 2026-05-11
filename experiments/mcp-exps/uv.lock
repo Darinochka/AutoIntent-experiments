@@ -212,7 +212,7 @@ wheels = [
 [[package]]
 name = "autointent"
 version = "0.3.0"
-source = { git = "https://github.com/DeepPavlov/AutoIntent?rev=46ff7e3#46ff7e3999e3c41cf98807d738a02c7c279c4a9d" }
+source = { git = "https://github.com/DeepPavlov/AutoIntent?rev=4f77f10#4f77f10ae9f3d6093d6af1466d8f6201da067ff2" }
 dependencies = [
     { name = "aiofiles" },
     { name = "aiometer" },
@@ -1340,7 +1340,7 @@ requires-dist = [
     { name = "pydantic-ai-mcp-evals", extras = ["domain-filesystem"], git = "ssh://git@github.com/DeepPavlov/mcp-evals.git?rev=aa56408" },
     { name = "rich", specifier = ">=14.3.2,<15.0.0" },
     { name = "scikit-learn", specifier = ">=1.5.0" },
-    { name = "tool-suggest", extras = ["autointent", "client"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=65e1799257e6a6fd8268dfa51eab37d64ea2230b" },
+    { name = "tool-suggest", extras = ["autointent", "client"], git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=6f51b85" },
 ]
 
 [package.metadata.requires-dev]
@@ -2830,7 +2830,7 @@ wheels = [
 [[package]]
 name = "tool-suggest"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=65e1799257e6a6fd8268dfa51eab37d64ea2230b#65e1799257e6a6fd8268dfa51eab37d64ea2230b" }
+source = { git = "ssh://git@github.com/DeepPavlov/tool-suggest.git?rev=6f51b85#6f51b85fc323b1c44c59c5a111c11a85e89d3452" }
 dependencies = [
     { name = "loguru" },
     { name = "numpy" },
