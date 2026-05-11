@@ -10,6 +10,8 @@ if TYPE_CHECKING:
 
 type EmbBackend = Literal["openai", "st"]
 
+type EmergencyToolset = Literal["full", "empty"]
+
 
 @dataclass
 class TSAgentState:

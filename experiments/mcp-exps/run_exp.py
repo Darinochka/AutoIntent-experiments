@@ -7,6 +7,7 @@ Subcommands:
 - `ts-remote`: tool-suggest against a running HTTP service (see tool-suggest README).
 - For `ts`, `ts-repro`, and `ts-remote`, pass ``--highlighter`` to keep all tools in the schema and inject
   ranked tools into message history instead of using ``PrepareTools`` filtering.
+- For `ts` and `ts-repro`, ``--emergency-toolset full|empty`` controls AutoIntent's fallback when ranking fails.
 
 Usage examples:
 ```bash
@@ -78,6 +79,7 @@ from pydantic_ai import UsageLimits
 
 from src.agents import (
     EmbBackend,
+    EmergencyToolset,
     create_basic_agent,
     create_basic_deps_maker,
     create_jsonl_repo_tool_suggest_deps,
@@ -228,6 +230,16 @@ class TSArgs(BasicArgs):
             negative_bool=(),
         ),
     ] = False
+    emergency_toolset: Annotated[
+        EmergencyToolset,
+        Parameter(
+            name="--emergency-toolset",
+            help=(
+                "AutoIntent fallback when suggestion is impossible: 'full' returns all tools, "
+                "'empty' returns none (matches tool-suggest library default)."
+            ),
+        ),
+    ] = "full"
     highlighter: Annotated[
         bool,
         Parameter(
@@ -433,6 +445,7 @@ def _build_deps(
             emb_st_query_prompt=cfg.emb_st_query_prompt,
             custom_qwen_prompt=cfg.custom_qwen_prompt,
             suggest_session_tracking=cfg.suggest_session_tracking,
+            emergency_toolset=cfg.emergency_toolset,
         )
     if mode == "ts-remote":
         if not isinstance(cfg, TSRemoteArgs):
@@ -461,6 +474,7 @@ def _build_deps(
         emb_st_query_prompt=cfg.emb_st_query_prompt,
         custom_qwen_prompt=cfg.custom_qwen_prompt,
         suggest_session_tracking=cfg.suggest_session_tracking,
+        emergency_toolset=cfg.emergency_toolset,
     )
 
 
