@@ -424,3 +424,4 @@ qwen4k
 - haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/5609c3d2-1624-47e2-8b86-dbbcaee86eea?spanId=8405bd8720a28a03
 - gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/537203b1-d40f-40f7-92ea-82bc5efe2115?spanId=e0bb3560b6726728
 - gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/8087f31f-1168-423d-a101-cca092465fb6?spanId=a03f7616eea32ad3
+- gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/6b1100b8-97d1-4004-bc7d-e50253400db4?spanId=d903f1668a6f06a6
