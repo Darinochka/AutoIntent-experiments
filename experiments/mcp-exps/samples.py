@@ -11,11 +11,14 @@ Usage example:
 ```bash
 export LOGFIRE_API_KEY="..."
 uv run samples.py --experiment basic-fs --output-dir ./tool_suggest_repos
+# Narrow the Logfire query window (ISO 8601; `Z` is accepted as UTC) when queries time out:
+uv run samples.py --experiment basic-fs --min-timestamp 2026-05-09T00:00:00Z --max-timestamp 2026-05-11T00:00:00Z
 ```
 """
 
 import os
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -51,6 +54,16 @@ def _evaluate_message_literal(experiment: str) -> str:
     return _sql_single_quoted_literal(f"evaluate {experiment}")
 
 
+def _parse_iso_datetime_for_logfire(value: str, *, flag: str) -> datetime:
+    """Parse a CLI timestamp into ``datetime`` for ``AsyncLogfireQueryClient`` query params."""
+    normalized = value.strip().replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError as e:
+        msg = f"{flag}: expected ISO 8601 datetime (e.g. 2026-05-10T12:00:00 or 2026-05-10T12:00:00Z), got {value!r}"
+        raise ValueError(msg) from e
+
+
 def _build_samples_query(*, evaluate_message_sql: str) -> str:
     """SQL: all evaluate roots for this experiment; dedupe ``case_name`` to latest root."""
     return f"""
@@ -68,8 +81,7 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
             s.start_timestamp AS case_start_ts,
             s.end_timestamp,
             s.attributes->>'case_name' AS case_name,
-            s.attributes->>'task_name' AS task_name,
-            s.attributes AS case_attributes
+            s.attributes->>'task_name' AS task_name
         FROM records s
         INNER JOIN evaluate_roots r
           ON s.trace_id = r.trace_id AND s.parent_span_id = r.span_id
@@ -84,12 +96,7 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
             c.task_name,
             c.trace_id,
             c.span_id AS case_span_id,
-            c.case_attributes,
             s.span_id AS chat_span_id,
-            s.attributes->'gen_ai.input.messages' AS input_messages,
-            s.attributes->'gen_ai.output.messages' AS output_messages,
-            s.attributes->'gen_ai.request.model' AS request_model,
-            s.attributes->'gen_ai.response.model' AS response_model,
             ROW_NUMBER() OVER (
                 PARTITION BY c.span_id ORDER BY s.start_timestamp DESC
             ) AS rank
@@ -116,12 +123,7 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
                 bc.task_name,
                 bc.trace_id,
                 bc.case_span_id,
-                bc.case_attributes,
                 bc.chat_span_id,
-                bc.input_messages,
-                bc.output_messages,
-                bc.request_model,
-                bc.response_model,
                 ROW_NUMBER() OVER (
                     PARTITION BY bc.case_name
                     ORDER BY bc.root_start_ts DESC, bc.case_start_ts DESC
@@ -133,16 +135,17 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
     SELECT
         case_name,
         task_name,
-        trace_id,
+        w.trace_id,
         case_span_id,
-        case_attributes,
         chat_span_id,
-        input_messages,
-        output_messages,
-        request_model,
-        response_model
-    FROM winner_per_case_name
-    ORDER BY case_name
+        s.attributes->'gen_ai.input.messages' AS input_messages,
+        s.attributes->'gen_ai.output.messages' AS output_messages,
+        s.attributes->'gen_ai.request.model' AS request_model,
+        s.attributes->'gen_ai.response.model' AS response_model
+    FROM winner_per_case_name w
+    INNER JOIN records s
+      ON s.trace_id = w.trace_id
+      AND s.span_id = w.chat_span_id
     """  # noqa: S608
 
 
@@ -157,10 +160,40 @@ async def load(
         int,
         cyclopts.Parameter(help="Query timeout in seconds"),
     ] = 10,
+    min_timestamp: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            help=(
+                "Inclusive lower bound for the Logfire query time window (ISO 8601). "
+                "Forwarded as min_timestamp to shrink scanned data and avoid query timeouts."
+            ),
+        ),
+    ] = None,
+    max_timestamp: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            help=(
+                "Upper bound for the Logfire query time window (ISO 8601). "
+                "Forwarded as max_timestamp to shrink scanned data and avoid query timeouts."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Load Logfire spans and save tool-suggest samples to JSONL."""
     output_path = ((output_dir or Path.cwd()).resolve() / experiment).with_suffix(".jsonl")
     logger.info(f"Samples will be saved to {output_path}")
+
+    min_ts: datetime | None = None
+    max_ts: datetime | None = None
+    if min_timestamp is not None:
+        min_ts = _parse_iso_datetime_for_logfire(min_timestamp, flag="--min-timestamp")
+    if max_timestamp is not None:
+        max_ts = _parse_iso_datetime_for_logfire(max_timestamp, flag="--max-timestamp")
+    if min_ts is not None and max_ts is not None and min_ts > max_ts:
+        msg = "--min-timestamp must be <= --max-timestamp"
+        raise ValueError(msg)
+    if min_ts is not None or max_ts is not None:
+        logger.info("Logfire query window: min_timestamp={!r}, max_timestamp={!r}", min_ts, max_ts)
 
     evaluate_msg = _evaluate_message_literal(experiment)
     query = _build_samples_query(evaluate_message_sql=evaluate_msg)
@@ -174,12 +207,18 @@ async def load(
         read_token=os.getenv("LOGFIRE_API_KEY") or "fake",
         timeout=timeout,  # type: ignore[arg-type]
     ) as client:
-        json_rows = await client.query_json_rows(sql=query, limit=10_000)
+        json_rows = await client.query_json_rows(
+            sql=query,
+            limit=10_000,
+            min_timestamp=min_ts,
+            max_timestamp=max_ts,
+        )
 
     rows: list[dict[str, Any]] = json_rows.get("rows", [])
     if not rows:
         logger.warning("Logfire query returned no rows")
         return
+    rows.sort(key=lambda row: str(row.get("case_name") or ""))
 
     logger.info(
         "After merging duplicate case_name across traces: {} case row(s)",
