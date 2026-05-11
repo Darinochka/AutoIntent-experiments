@@ -416,3 +416,11 @@ Means are over **case lines** in each JSONL (fair vs merged CV headers), same sp
 | haiku45 | 0.330 | 0.279 | 0.819 | 0.573 | 0.531 | 0.405 |
 | opus46 | 0.370 | 0.331 | 0.889 | 0.533 | 0.582 | 0.410 |
 | qwen3coder | 0.588 | 0.415 | 0.895 | 0.653 | 0.724 | 0.510 |
+
+## Highlighter
+
+qwen4k
+
+- haiku-4.5: https://logfire-eu.pydantic.dev/public-trace/5609c3d2-1624-47e2-8b86-dbbcaee86eea?spanId=8405bd8720a28a03
+- gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/537203b1-d40f-40f7-92ea-82bc5efe2115?spanId=e0bb3560b6726728
+- gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/8087f31f-1168-423d-a101-cca092465fb6?spanId=a03f7616eea32ad3
