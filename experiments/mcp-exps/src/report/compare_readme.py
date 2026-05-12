@@ -1,4 +1,8 @@
-"""Compare baseline `basic-fs-*` JSONL reports to CV-aggregated tool-suggest reports (README filenames)."""
+"""Compare baseline `basic-fs-*` JSONL reports to CV-aggregated tool-suggest reports (README filenames).
+
+Also supports REDO baseline ``basic-fs-redo-*`` vs OOS CV reports with the highlighter
+(``ts-fs-repro-redo-oos-cv-qwen4k-highlight-*``); see ``print_redo_basic_vs_highlight_table``.
+"""
 
 import sys
 from dataclasses import dataclass
@@ -192,6 +196,170 @@ def print_basic_vs_cv_table(reports_dir: Path) -> None:
         console.print("[yellow]Missing files (skipped rows):[/yellow]")
         for m in missing:
             console.print(f"  {m}")
+
+
+# (display label, basic-fs-redo stem prefix, highlight OOS CV stem prefix) — newest JSONL per prefix.
+README_REDO_BASIC_VS_HIGHLIGHT: list[tuple[str, str, str]] = [
+    (
+        "Haiku 4.5",
+        "basic-fs-redo-haiku45_test",
+        "ts-fs-repro-redo-oos-cv-qwen4k-highlight-haiku45-v7_test",
+    ),
+    ("GPT-5.4", "basic-fs-redo-gpt54_test", "ts-fs-repro-redo-oos-cv-qwen4k-highlight-gpt54_test"),
+    (
+        "GPT-5.4 mini",
+        "basic-fs-redo-gpt54mini_test",
+        "ts-fs-repro-redo-oos-cv-qwen4k-highlight-gpt54mini_test",
+    ),
+    (
+        "GPT-5.4 nano",
+        "basic-fs-redo-gpt54nano_test",
+        "ts-fs-repro-redo-oos-cv-qwen4k-highlight-gpt54nano_test",
+    ),
+]
+
+
+@dataclass(frozen=True, slots=True)
+class _RedoHighlightBundle:
+    pass_rows: list[list[str]]
+    use_rows: list[list[str]]
+    missing: list[str]
+
+
+def _collect_redo_highlight_rows(reports_dir: Path) -> _RedoHighlightBundle:
+    missing: list[str] = []
+    pass_rows: list[list[str]] = []
+    use_rows: list[list[str]] = []
+
+    for label, basic_pre, hi_pre in README_REDO_BASIC_VS_HIGHLIGHT:
+        b_path = _redo_jsonl(reports_dir, basic_pre)
+        h_path = _redo_jsonl(reports_dir, hi_pre)
+        if b_path is None:
+            missing.append(f"{label} / basic: {reports_dir}/{basic_pre}*.jsonl")
+        if h_path is None:
+            missing.append(f"{label} / highlight: {reports_dir}/{hi_pre}*.jsonl")
+
+        hb, hh, sb, sh = "—", "—", "—", "—"
+        ub: _CaseUsageAgg | None = None
+        uh: _CaseUsageAgg | None = None
+        if b_path is not None:
+            bh, bc = load_report_jsonl(b_path)
+            hb = f"{hard_pass_rate(bh):.1%}"
+            sb = f"{soft_pass_rate(bc):.1%}"
+            ub = _aggregate_case_usage(bc)
+        if h_path is not None:
+            hh_h, hc = load_report_jsonl(h_path)
+            hh = f"{hard_pass_rate(hh_h):.1%}"
+            sh = f"{soft_pass_rate(hc):.1%}"
+            uh = _aggregate_case_usage(hc)
+
+        pass_rows.append([label, hb, hh, sb, sh])
+
+        b_u = _fmt_redo_usage_cells(ub)
+        h_u = _fmt_redo_usage_cells(uh)
+        use_rows.append(
+            [
+                label,
+                b_u[0],
+                h_u[0],
+                b_u[1],
+                h_u[1],
+                b_u[2],
+                h_u[2],
+                b_u[3],
+                h_u[3],
+                b_u[4],
+                h_u[4],
+            ]
+        )
+
+    return _RedoHighlightBundle(pass_rows=pass_rows, use_rows=use_rows, missing=missing)
+
+
+def _write_redo_highlight_markdown(bundle: _RedoHighlightBundle) -> None:
+    out = sys.stdout
+    lines = [
+        "### Pass rates: REDO basic-fs vs OOS CV (qwen4k + highlighter)\n",
+        "| Model | Hard basic | Hard highlight | Soft basic | Soft highlight |",
+        "| --- | ---: | ---: | ---: | ---: |",
+        *[f"| {' | '.join(row)} |" for row in bundle.pass_rows],
+        "",
+        (
+            "- **Hard** = `passed_tasks / total_tasks` from each JSONL header. "
+            "**Soft** = fraction of evaluator scores equal to 1.0 across all case rows."
+        ),
+        "",
+        "### Usage — per-case mean over case rows\n",
+        ("| Model | N_b | N_h | in tok B | in tok H | out tok B | out tok H | req B | req H | cost B | cost H |"),
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        *[f"| {' | '.join(row)} |" for row in bundle.use_rows],
+        "",
+        "Per-case means (not merged CV header totals).",
+    ]
+    out.write("\n".join(lines))
+    if bundle.missing:
+        out.write("\n\nMissing:\n\n")
+        out.write("\n".join(f"- {m}" for m in bundle.missing))
+    out.write("\n")
+
+
+def _print_redo_highlight_rich(bundle: _RedoHighlightBundle) -> None:
+    console = Console(width=120, soft_wrap=True)
+    pass_tbl = Table(
+        title="Pass rates: REDO basic-fs vs OOS CV (qwen4k + highlighter)",
+        box=box.SIMPLE,
+        width=120,
+    )
+    pass_tbl.add_column("Model", max_width=16)
+    for col in ("hard_B", "hard_H", "soft_B", "soft_H"):
+        pass_tbl.add_column(col, justify="right", no_wrap=True)
+
+    use_mean_tbl = Table(
+        title="Usage per case (mean over case rows) — basic vs highlight; N = row count",
+        box=box.SIMPLE,
+        width=120,
+    )
+    use_mean_tbl.add_column("Model", overflow="fold", max_width=12)
+    for col in (
+        "N_b",
+        "N_h",
+        "in_mB",
+        "in_mH",
+        "out_mB",
+        "out_mH",
+        "req_mB",
+        "req_mH",
+        "cst_mB",
+        "cst_mH",
+    ):
+        use_mean_tbl.add_column(col, justify="right", no_wrap=True)
+
+    for row in bundle.pass_rows:
+        pass_tbl.add_row(*row)
+    for row in bundle.use_rows:
+        use_mean_tbl.add_row(*row)
+
+    console.print(pass_tbl)
+    console.print()
+    console.print(use_mean_tbl)
+    console.print(
+        "\n[dim]Same methodology as ``compare-readme``: compare per-case means, not merged CV header totals. "
+        "Newest JSONL per stem prefix is chosen (trace suffix ignored).[/dim]"
+    )
+    if bundle.missing:
+        console.print()
+        console.print("[yellow]Missing files (some cells may be —):[/yellow]")
+        for m in bundle.missing:
+            console.print(f"  {m}")
+
+
+def print_redo_basic_vs_highlight_table(reports_dir: Path, *, markdown: bool = False) -> None:
+    """REDO ``basic-fs-redo-*`` vs OOS CV tool-suggest with qwen4k + highlighter (fair per-case means)."""
+    bundle = _collect_redo_highlight_rows(reports_dir)
+    if markdown:
+        _write_redo_highlight_markdown(bundle)
+    else:
+        _print_redo_highlight_rich(bundle)
 
 
 def _redo_jsonl(reports_dir: Path, stem_prefix: str | None) -> Path | None:

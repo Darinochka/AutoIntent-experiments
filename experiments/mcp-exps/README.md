@@ -425,3 +425,21 @@ qwen4k
 - gpt-5.4: https://logfire-eu.pydantic.dev/public-trace/537203b1-d40f-40f7-92ea-82bc5efe2115?spanId=e0bb3560b6726728
 - gpt-5.4-mini: https://logfire-eu.pydantic.dev/public-trace/8087f31f-1168-423d-a101-cca092465fb6?spanId=a03f7616eea32ad3
 - gpt-5.4-nano: https://logfire-eu.pydantic.dev/public-trace/6b1100b8-97d1-4004-bc7d-e50253400db4?spanId=d903f1668a6f06a6
+
+**Pass rates (hard = header task pass rate; soft = share of evaluator scores at 1.0)**
+
+| Model | Hard basic | Hard highlight | Soft basic | Soft highlight |
+| --- | ---: | ---: | ---: | ---: |
+| Haiku 4.5 | 32.0% | 36.0% | 88.3% | 75.4% |
+| GPT-5.4 | 40.0% | 40.0% | 77.5% | 78.3% |
+| GPT-5.4 mini | 12.0% | 12.0% | 54.3% | 59.4% |
+| GPT-5.4 nano | 4.0% | 4.0% | 51.4% | 46.4% |
+
+**Usage — per-case means (same fairness story as the original `compare-readme` note: compare row means, not merged CV header totals)**
+
+| Model | N_b | N_h | in tok B | in tok H | out tok B | out tok H | req B | req H | cost B | cost H |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Haiku 4.5 | 25 | 25 | 519k | 376k | 4.9k | 5.7k | 11.92 | 17.08 | 0.0000 | 0.0000 |
+| GPT-5.4 | 25 | 25 | 145k | 192k | 1.5k | 1.6k | 8.44 | 9.88 | 0.1837 | 0.0000 |
+| GPT-5.4 mini | 25 | 25 | 86k | 139k | 0.9k | 1.1k | 9.88 | 11.40 | 0.0346 | 0.0000 |
+| GPT-5.4 nano | 25 | 25 | 62k | 118k | 0.7k | 0.8k | 8.52 | 13.56 | 0.0069 | 0.0000 |
