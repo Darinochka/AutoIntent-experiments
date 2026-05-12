@@ -18,7 +18,7 @@ from .constants import IGNORED_TOOL_LABELS
 from .embedding import build_embedding_resources, get_ai_config
 from .phase_deps import make_phase_deps_maker
 from .phase_names import sanitize_phase_name
-from .types import EmbBackend, TSAgentState
+from .types import EmbBackend, EmergencyToolset, TSAgentState
 
 if TYPE_CHECKING:
     from mcp_evals.types import DepsMaker, TrainingTestingCallback
@@ -42,6 +42,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: PLR0913
     top_k: int | None = None,
     *,
     suggest_session_tracking: bool = False,
+    emergency_toolset: EmergencyToolset = "full",
 ) -> tuple[DepsMaker, TrainingTestingCallback, TrainingTestingCallback]:
     """Build tool-suggest deps from an existing JSONL repository.
 
@@ -124,7 +125,7 @@ def create_jsonl_repo_tool_suggest_deps(  # noqa: PLR0913
                 formatter=formatter,
                 multilabel=multilabel,
                 config=ai_config,
-                emergency_toolset="full",
+                emergency_toolset=emergency_toolset,
                 under_represented_behavior="always_include",
                 max_oos_fraction=max_oos_fraction,
             ),

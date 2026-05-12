@@ -5,6 +5,9 @@ Subcommands:
 - `ts`: tool-suggest mode with hold-out / cross-validation grouping.
 - `ts-repro`: tool-suggest reproduction mode backed by an existing JSONL repo.
 - `ts-remote`: tool-suggest against a running HTTP service (see tool-suggest README).
+- For `ts`, `ts-repro`, and `ts-remote`, pass ``--highlighter`` to keep all tools in the schema and inject
+  ranked tools into message history instead of using ``PrepareTools`` filtering.
+- For `ts` and `ts-repro`, ``--emergency-toolset full|empty`` controls AutoIntent's fallback when ranking fails.
 
 Usage examples:
 ```bash
@@ -38,6 +41,14 @@ uv run run_exp.py ts-repro \
     --experiment-name repro-fs \
     --jsonl-repo path/to/repo.jsonl
 
+# Tool-suggest with highlighter (full tool list + in-history suggestions)
+uv run run_exp.py ts \
+    --domain fs \
+    --experiment-name ts-fs-hl \
+    --grouper ho \
+    --top-k 8 \
+    --highlighter
+
 # Tool-suggest with a remote server (suggester/repo configured on the server)
 uv run run_exp.py ts-remote \
     --domain fs \
@@ -68,12 +79,14 @@ from pydantic_ai import UsageLimits
 
 from src.agents import (
     EmbBackend,
+    EmergencyToolset,
     create_basic_agent,
     create_basic_deps_maker,
     create_jsonl_repo_tool_suggest_deps,
     create_phase_scoped_tool_suggest_deps,
     create_remote_phase_scoped_tool_suggest_deps,
     create_tool_suggest_agent,
+    create_tool_suggest_highlighter_agent,
     tool_suggest_run_result_processor,
 )
 
@@ -217,6 +230,28 @@ class TSArgs(BasicArgs):
             negative_bool=(),
         ),
     ] = False
+    emergency_toolset: Annotated[
+        EmergencyToolset,
+        Parameter(
+            name="--emergency-toolset",
+            help=(
+                "AutoIntent fallback when suggestion is impossible: 'full' returns all tools, "
+                "'empty' returns none (matches tool-suggest library default)."
+            ),
+        ),
+    ] = "full"
+    highlighter: Annotated[
+        bool,
+        Parameter(
+            name="--highlighter",
+            help=(
+                "Use highlighter mode: all tools stay in the model schema; ranked tools are "
+                "appended as a synthetic user note each turn (after truncation). "
+                "Default is prepare_tools filtering."
+            ),
+            negative_bool=(),
+        ),
+    ] = False
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -242,6 +277,14 @@ class TSRemoteArgs(BasicArgs):
         bool,
         Parameter(
             help=("Use suggest session tracking (remote server merges prior-step tools when session_id is sent)."),
+            negative_bool=(),
+        ),
+    ] = False
+    highlighter: Annotated[
+        bool,
+        Parameter(
+            name="--highlighter",
+            help=("Use highlighter mode: full tool schema plus per-step suggestion notes in message history."),
             negative_bool=(),
         ),
     ] = False
@@ -280,7 +323,7 @@ def ts_remote(args: Annotated[TSRemoteArgs, Parameter(name="*")]) -> None:
 
 def _run(cfg: BasicArgs, *, mode: Literal["basic", "ts", "ts-repro", "ts-remote"]) -> None:
     _init_logfire()
-    agent_obj = _build_agent(mode, cfg.model)
+    agent_obj = _build_agent(mode, cfg.model, highlighter=_tool_suggest_highlighter_enabled(cfg))
     domain_obj = _build_domain(cfg.domain_key, cfg.tool_retries)
     grouper_obj = _build_grouper(mode, cfg)
     deps_maker, start_training_cb, start_testing_cb = _build_deps(mode, cfg)
@@ -336,10 +379,26 @@ def _build_domain(domain_key: Literal["pg", "fs"], tool_retries: int) -> Domain[
     return FilesystemDomain(tool_retries=tool_retries)
 
 
-def _build_agent(mode: Literal["basic", "ts", "ts-repro", "ts-remote"], model: str) -> "Agent[Any, Any]":
+def _tool_suggest_highlighter_enabled(cfg: BasicArgs) -> bool:
+    if isinstance(cfg, TSArgs):
+        return cfg.highlighter
+    if isinstance(cfg, TSRemoteArgs):
+        return cfg.highlighter
+    return False
+
+
+def _build_agent(
+    mode: Literal["basic", "ts", "ts-repro", "ts-remote"],
+    model: str,
+    *,
+    highlighter: bool = False,
+) -> "Agent[Any, Any]":
     if mode == "basic":
         return create_basic_agent(model=model)
-    logger.debug("Creating ts agent")
+    if highlighter:
+        logger.debug("Creating tool-suggest agent (highlighter mode)")
+        return create_tool_suggest_highlighter_agent(model=model)
+    logger.debug("Creating tool-suggest agent (prepare_tools mode)")
     return create_tool_suggest_agent(model=model)
 
 
@@ -386,6 +445,7 @@ def _build_deps(
             emb_st_query_prompt=cfg.emb_st_query_prompt,
             custom_qwen_prompt=cfg.custom_qwen_prompt,
             suggest_session_tracking=cfg.suggest_session_tracking,
+            emergency_toolset=cfg.emergency_toolset,
         )
     if mode == "ts-remote":
         if not isinstance(cfg, TSRemoteArgs):
@@ -414,6 +474,7 @@ def _build_deps(
         emb_st_query_prompt=cfg.emb_st_query_prompt,
         custom_qwen_prompt=cfg.custom_qwen_prompt,
         suggest_session_tracking=cfg.suggest_session_tracking,
+        emergency_toolset=cfg.emergency_toolset,
     )
 
 

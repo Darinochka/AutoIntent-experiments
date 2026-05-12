@@ -8,6 +8,7 @@ This module contains CLI commands:
 4. `aggregate-links` command: merge several public trace URLs into one JSONL (e.g. CV folds).
 5. `compare-readme` command: print basic-fs vs CV-aggregated pass rates and **per-case mean** token/cost
    usage (fair: uses case-row rollups, not raw headers — CV merged headers sum all traces).
+   With ``--redo-highlight``, compare ``basic-fs-redo-*`` to ``ts-fs-repro-redo-oos-cv-qwen4k-highlight-*``.
 6. `compare-readme-redo` command: same style for **REDO** reports (`basic-fs-redo-*`, `ts-fs-repro-redo-oos-cv-*`,
    `ts-fs-repro-redo-oos-accum-cv-*` under ``reports/``).
 
@@ -78,6 +79,7 @@ from src.report import (
     narrow_eval_fetch_to_trace,
     parse_span_id_from_public_trace_url,
     print_basic_vs_cv_table,
+    print_redo_basic_vs_highlight_table,
     print_redo_readme_table,
     query,
     resolve_experiment_for_span,
@@ -342,8 +344,27 @@ def print_table(
 def compare_readme(
     reports_dir: Annotated[
         Path,
-        cyclopts.Parameter(help="Directory containing basic-fs-* and cv-readme-* JSONL files"),
+        cyclopts.Parameter(
+            help=(
+                "Directory of JSONL reports: basic-fs-* + cv-readme-* (default), or with "
+                "--redo-highlight: basic-fs-redo-* + ts-fs-repro-redo-oos-cv-qwen4k-highlight-*"
+            ),
+        ),
     ] = Path("reports"),
+    redo_highlight: Annotated[
+        bool,
+        cyclopts.Parameter(
+            "--redo-highlight",
+            help=(
+                "Compare REDO baseline (basic-fs-redo-*) to OOS CV highlighter runs "
+                "(ts-fs-repro-redo-oos-cv-qwen4k-highlight-*) instead of README basic vs cv-readme"
+            ),
+        ),
+    ] = False,
+    markdown: Annotated[
+        bool,
+        cyclopts.Parameter(help="With --redo-highlight: print GitHub-flavored markdown tables"),
+    ] = False,
 ) -> None:
     """Compare README-aligned baseline reports to CV-aggregated tool-suggest reports.
 
@@ -352,7 +373,11 @@ def compare_readme(
     **Usage:** means of per-case ``input_tokens`` / ``output_tokens`` / ``requests`` / ``cost`` (not raw
     headers: merged CV headers sum every trace, which is unfair vs a single-trace baseline).
     """
-    print_basic_vs_cv_table(reports_dir.resolve())
+    resolved = reports_dir.resolve()
+    if redo_highlight:
+        print_redo_basic_vs_highlight_table(resolved, markdown=markdown)
+    else:
+        print_basic_vs_cv_table(resolved)
 
 
 @app.command(name="compare-readme-redo")

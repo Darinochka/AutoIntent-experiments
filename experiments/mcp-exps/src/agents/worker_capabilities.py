@@ -38,6 +38,20 @@ class ToolReturnLimitInstructions(AbstractCapability[Any]):
         return current_tool_return_limit
 
 
+@dataclass
+class ToolSuggestHighlighterInstructions(AbstractCapability[Any]):
+    """Explains non-binding tool-suggestion notes for highlighter mode."""
+
+    def get_instructions(self) -> str:
+        """Append guidance on how to interpret injected tool-suggestion notes."""
+        return (
+            "The conversation may include short appended notes listing suggested tools for the current step. "
+            "Treat them as strong recommendations when they fit the task; they are not mandatory, and you "
+            "may use any available tool, including tools not listed there. But those suggestions "
+            "are built based on the previous solved tasks so they may serve you well."
+        )
+
+
 def shared_worker_capabilities() -> list[AbstractCapability[Any]]:
     """Capabilities shared by baseline and tool-suggest agents."""
     return [
@@ -54,3 +68,16 @@ def tool_suggest_capabilities() -> list[AbstractCapability[Any]]:
     from ._tool_suggest.suggest_filter import suggest_tools  # noqa: PLC0415
 
     return [*shared_worker_capabilities(), PrepareTools(suggest_tools)]
+
+
+def tool_suggest_highlighter_capabilities() -> list[AbstractCapability[Any]]:
+    """Worker stack with truncation then highlight injection; full tool list (no ``PrepareTools``)."""
+    from ._tool_suggest.highlight_processor import highlight_tool_suggestions  # noqa: PLC0415
+
+    return [
+        Toolset(_worker_toolset),
+        HistoryProcessor(truncate_tool_returns),
+        HistoryProcessor(highlight_tool_suggestions),
+        ToolReturnLimitInstructions(),
+        ToolSuggestHighlighterInstructions(),
+    ]

@@ -3,17 +3,20 @@
 from ._basic import BasicAgentState, create_basic_agent, create_basic_deps_maker
 from ._tool_suggest import (
     EmbBackend,
+    EmergencyToolset,
     TSAgentState,
     create_jsonl_repo_tool_suggest_deps,
     create_phase_scoped_tool_suggest_deps,
     create_remote_phase_scoped_tool_suggest_deps,
     create_tool_suggest_agent,
+    create_tool_suggest_highlighter_agent,
     tool_suggest_run_result_processor,
 )
 
 __all__ = [
     "BasicAgentState",
     "EmbBackend",
+    "EmergencyToolset",
     "TSAgentState",
     "create_basic_agent",
     "create_basic_deps_maker",
@@ -21,5 +24,6 @@ __all__ = [
     "create_phase_scoped_tool_suggest_deps",
     "create_remote_phase_scoped_tool_suggest_deps",
     "create_tool_suggest_agent",
+    "create_tool_suggest_highlighter_agent",
     "tool_suggest_run_result_processor",
 ]

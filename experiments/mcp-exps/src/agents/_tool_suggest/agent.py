@@ -5,7 +5,11 @@ from __future__ import annotations
 from dotenv import load_dotenv
 from pydantic_ai import Agent
 
-from src.agents.worker_capabilities import WORKER_SYSTEM_PROMPT, tool_suggest_capabilities
+from src.agents.worker_capabilities import (
+    WORKER_SYSTEM_PROMPT,
+    tool_suggest_capabilities,
+    tool_suggest_highlighter_capabilities,
+)
 
 from .types import TSAgentState
 
@@ -29,6 +33,18 @@ def create_tool_suggest_agent(model: str) -> Agent[TSAgentState, str]:
         model,
         system_prompt=WORKER_SYSTEM_PROMPT,
         capabilities=tool_suggest_capabilities(),
+        deps_type=TSAgentState,
+        retries=5,
+    )
+
+
+def create_tool_suggest_highlighter_agent(model: str) -> Agent[TSAgentState, str]:
+    """Like :func:`create_tool_suggest_agent` but keeps all tools in schema and injects suggestions in history."""
+    load_dotenv()
+    return Agent(
+        model,
+        system_prompt=WORKER_SYSTEM_PROMPT,
+        capabilities=tool_suggest_highlighter_capabilities(),
         deps_type=TSAgentState,
         retries=5,
     )
