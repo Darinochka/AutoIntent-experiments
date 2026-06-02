@@ -19,6 +19,7 @@ from src.offline_eval.metrics import (
     SampleRetrievalMetrics,
     aggregate_task_and_global,
     compute_sample_metrics,
+    mean_average_precision_from_ranks,
     normalized_shannon_entropy,
 )
 from src.offline_eval.ranking import assert_suggester_supported, full_ranked_tool_ids
@@ -166,6 +167,7 @@ async def evaluate_fold(
     per_task: dict[str, list[SampleRetrievalMetrics]] = {}
     y_true: list[str] = []
     y_pred: list[str] = []
+    rankings: list[list[str]] = []
     n_oos = 0
     n_scored = 0
 
@@ -187,19 +189,23 @@ async def evaluate_fold(
         if not cfg.multilabel:
             y_true.append(next(iter(truth)))
             y_pred.append(ranked[0] if ranked else _EMPTY_PRED_LABEL)
+            rankings.append(list(ranked))
         n_scored += 1
 
     if cfg.multilabel:
         balanced_acc = 0.0
         entropy = 0.0
+        mean_ap = 0.0
     else:
         balanced_acc = float(balanced_accuracy_score(y_true, y_pred)) if y_true else 0.0
         entropy = normalized_shannon_entropy(y_true)
+        mean_ap = mean_average_precision_from_ranks(y_true, rankings)
 
     metrics = aggregate_task_and_global(
         per_task,
         balanced_accuracy=balanced_acc,
         class_entropy_normalized=entropy,
+        mean_average_precision=mean_ap,
     )
     return FoldResult(
         fold_index=fold_index,

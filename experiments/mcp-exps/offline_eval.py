@@ -38,6 +38,7 @@ _EMPTY_AGG_METRICS = AggregatedRetrievalMetrics(
     macro_mrr_std=0.0,
     balanced_accuracy=0.0,
     class_entropy_normalized=0.0,
+    mean_average_precision=0.0,
 )
 
 
@@ -164,6 +165,7 @@ def _fold_to_jsonable(fr: FoldResult, *, topk: int) -> dict[str, Any]:
         },
         "balanced_accuracy": m.balanced_accuracy,
         "class_entropy_normalized": m.class_entropy_normalized,
+        "mean_average_precision": m.mean_average_precision,
         "n_samples": m.n_samples,
         "n_tasks": m.n_tasks,
     }
@@ -290,6 +292,7 @@ _FOLD_MEAN_FIELDS: tuple[tuple[str, str], ...] = (
     ("macro_mrr", "macro_mrr"),
     ("balanced_accuracy", "balanced_accuracy"),
     ("class_entropy_normalized", "class_entropy_normalized"),
+    ("mean_average_precision", "mean_average_precision"),
 )
 
 
