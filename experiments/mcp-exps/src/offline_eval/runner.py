@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from loguru import logger
+from sklearn.metrics import balanced_accuracy_score
 from tool_suggest.orchestration import train_suggester
 from tool_suggest.services.formatter import SampleFormatter
 from tool_suggest.services.repository.inmemory import InMemoryRepository
@@ -18,8 +19,11 @@ from src.offline_eval.metrics import (
     SampleRetrievalMetrics,
     aggregate_task_and_global,
     compute_sample_metrics,
+    normalized_shannon_entropy,
 )
 from src.offline_eval.ranking import assert_suggester_supported, full_ranked_tool_ids
+
+_EMPTY_PRED_LABEL = "__no_prediction__"
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -160,6 +164,8 @@ async def evaluate_fold(
     assert_suggester_supported(suggester)
 
     per_task: dict[str, list[SampleRetrievalMetrics]] = {}
+    y_true: list[str] = []
+    y_pred: list[str] = []
     n_oos = 0
     n_scored = 0
 
@@ -178,9 +184,23 @@ async def evaluate_fold(
             ranked = []
         m = compute_sample_metrics(ranked, truth, topk_value=topk_value)
         per_task.setdefault(tkey, []).append(m)
+        if not cfg.multilabel:
+            y_true.append(next(iter(truth)))
+            y_pred.append(ranked[0] if ranked else _EMPTY_PRED_LABEL)
         n_scored += 1
 
-    metrics = aggregate_task_and_global(per_task)
+    if cfg.multilabel:
+        balanced_acc = 0.0
+        entropy = 0.0
+    else:
+        balanced_acc = float(balanced_accuracy_score(y_true, y_pred)) if y_true else 0.0
+        entropy = normalized_shannon_entropy(y_true)
+
+    metrics = aggregate_task_and_global(
+        per_task,
+        balanced_accuracy=balanced_acc,
+        class_entropy_normalized=entropy,
+    )
     return FoldResult(
         fold_index=fold_index,
         n_train_samples=len(train_samples),

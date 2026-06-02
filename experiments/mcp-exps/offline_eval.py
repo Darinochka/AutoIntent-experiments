@@ -36,6 +36,8 @@ _EMPTY_AGG_METRICS = AggregatedRetrievalMetrics(
     macro_top1_std=0.0,
     macro_topk_std=0.0,
     macro_mrr_std=0.0,
+    balanced_accuracy=0.0,
+    class_entropy_normalized=0.0,
 )
 
 
@@ -160,6 +162,8 @@ def _fold_to_jsonable(fr: FoldResult, *, topk: int) -> dict[str, Any]:
             f"std_topk@{topk}": m.macro_topk_std,
             "std_mrr": m.macro_mrr_std,
         },
+        "balanced_accuracy": m.balanced_accuracy,
+        "class_entropy_normalized": m.class_entropy_normalized,
         "n_samples": m.n_samples,
         "n_tasks": m.n_tasks,
     }
@@ -277,30 +281,28 @@ async def _run_folds_async(
     return results
 
 
+_FOLD_MEAN_FIELDS: tuple[tuple[str, str], ...] = (
+    ("micro_top1", "micro_top1"),
+    ("micro_topk", "micro_topk"),
+    ("micro_mrr", "micro_mrr"),
+    ("macro_top1", "macro_top1"),
+    ("macro_topk", "macro_topk"),
+    ("macro_mrr", "macro_mrr"),
+    ("balanced_accuracy", "balanced_accuracy"),
+    ("class_entropy_normalized", "class_entropy_normalized"),
+)
+
+
 def _mean_over_folds(valid: list[FoldResult]) -> dict[str, float]:
     out: dict[str, float] = {}
-    for mname, field in [
-        ("micro_top1", "micro_top1"),
-        ("micro_topk", "micro_topk"),
-        ("micro_mrr", "micro_mrr"),
-        ("macro_top1", "macro_top1"),
-        ("macro_topk", "macro_topk"),
-        ("macro_mrr", "macro_mrr"),
-    ]:
+    for mname, field in _FOLD_MEAN_FIELDS:
         vals = [getattr(r.metrics, field) for r in valid]
         out[mname] = float(mean(vals))
     return out
 
 
 def _log_mean_over_folds(valid: list[FoldResult], *, topk: int, split: str) -> None:
-    for mname, field in [
-        ("micro_top1", "micro_top1"),
-        ("micro_topk", "micro_topk"),
-        ("micro_mrr", "micro_mrr"),
-        ("macro_top1", "macro_top1"),
-        ("macro_topk", "macro_topk"),
-        ("macro_mrr", "macro_mrr"),
-    ]:
+    for mname, field in _FOLD_MEAN_FIELDS:
         vals = [getattr(r.metrics, field) for r in valid]
         v: float = mean(vals)
         logger.info(
