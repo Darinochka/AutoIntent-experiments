@@ -20,8 +20,23 @@ from loguru import logger
 
 from src.agents import EmbBackend  # noqa: TC001
 from src.offline_eval.loading import group_samples_by_task, load_and_normalize
+from src.offline_eval.metrics import AggregatedRetrievalMetrics
 from src.offline_eval.runner import FoldResult, OfflineEvalConfig, evaluate_fold
 from src.offline_eval.splits import TaskSplit, build_cv_splits, build_holdout_split, samples_for_tasks
+
+_EMPTY_AGG_METRICS = AggregatedRetrievalMetrics(
+    n_samples=0,
+    n_tasks=0,
+    micro_top1=0.0,
+    micro_topk=0.0,
+    micro_mrr=0.0,
+    macro_top1=0.0,
+    macro_topk=0.0,
+    macro_mrr=0.0,
+    macro_top1_std=0.0,
+    macro_topk_std=0.0,
+    macro_mrr_std=0.0,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -67,6 +82,16 @@ class OfflineEvalCommonArgs:
         str,
         Parameter(help="``sample.data`` key for task / case id (e.g. case_name)."),
     ] = "case_name"
+    train_on_passed_only: Annotated[
+        bool,
+        Parameter(
+            help=(
+                "Train only on samples whose case passed (``data['passed']`` is True). Test set is unfiltered. "
+                "Folds whose train split has no passing samples are skipped (recorded with an error). "
+                "Requires every loaded sample to have ``data['passed']`` — raises otherwise."
+            ),
+        ),
+    ] = False
 
 
 _OFFLINE_COMMON_STAR_DEFAULT = OfflineEvalCommonArgs()
@@ -186,6 +211,14 @@ def _prepare_folds(a: OfflineEvalCliArgs) -> tuple[dict[str, list[Any]], list[Ta
     samples = load_and_normalize(a.repo)
     if not samples:
         return None
+    if a.train_on_passed_only:
+        missing = sum(1 for s in samples if not (isinstance(s.data, dict) and "passed" in s.data))
+        if missing:
+            msg = (
+                f"--train-on-passed-only requires every sample to carry data['passed']; "
+                f"{missing}/{len(samples)} are missing it in {a.repo}. Re-export the repo with the updated samples.py."
+            )
+            raise ValueError(msg)
     task_to_samples = group_samples_by_task(samples, task_key=a.task_key)
     if a.split == "ho":
         fold_list = [build_holdout_split(task_to_samples, test_size=a.test_size, random_state=a.random_state)]
@@ -209,6 +242,26 @@ async def _run_folds_async(
     for i, fsp in enumerate(fold_list):
         train_s = samples_for_tasks(task_to_samples, fsp.train_task_ids)
         test_s = samples_for_tasks(task_to_samples, fsp.test_task_ids)
+        if a.train_on_passed_only:
+            train_s = [s for s in train_s if isinstance(s.data, dict) and s.data.get("passed") is True]
+            if not train_s:
+                logger.warning(
+                    "Fold {}: no passing samples in train split ({} tasks); skipping fold.",
+                    i,
+                    len(fsp.train_task_ids),
+                )
+                r = FoldResult(
+                    fold_index=i,
+                    n_train_samples=0,
+                    n_test_samples_scored=0,
+                    n_test_oos_skipped=0,
+                    metrics=_EMPTY_AGG_METRICS,
+                    error="skipped: no passing train samples (train_on_passed_only)",
+                )
+                results.append(r)
+                if on_fold is not None:
+                    on_fold(r)
+                continue
         name = f"{a.experiment_name}-fold{i}" if len(fold_list) > 1 else a.experiment_name
         cfg = a.to_offline_eval_config(experiment_name=name)
         r = await evaluate_fold(
