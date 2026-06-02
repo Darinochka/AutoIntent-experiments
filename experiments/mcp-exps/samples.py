@@ -16,6 +16,7 @@ uv run samples.py --experiment basic-fs --min-timestamp 2026-05-09T00:00:00Z --m
 ```
 """
 
+import json
 import os
 from collections import Counter
 from datetime import datetime
@@ -31,6 +32,7 @@ from tool_suggest.models import Sample
 from tool_suggest.services.repository import JSONFileRepository
 
 from src.logfire_genai import transcript_from_chat_span
+from src.report.constants import PASSED_EPS
 
 load_dotenv()
 
@@ -81,7 +83,8 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
             s.start_timestamp AS case_start_ts,
             s.end_timestamp,
             s.attributes->>'case_name' AS case_name,
-            s.attributes->>'task_name' AS task_name
+            s.attributes->>'task_name' AS task_name,
+            s.attributes->'scores' AS scores
         FROM records s
         INNER JOIN evaluate_roots r
           ON s.trace_id = r.trace_id AND s.parent_span_id = r.span_id
@@ -94,6 +97,7 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
             c.case_start_ts,
             c.case_name,
             c.task_name,
+            c.scores,
             c.trace_id,
             c.span_id AS case_span_id,
             s.span_id AS chat_span_id,
@@ -121,6 +125,7 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
                 bc.case_start_ts,
                 bc.case_name,
                 bc.task_name,
+                bc.scores,
                 bc.trace_id,
                 bc.case_span_id,
                 bc.chat_span_id,
@@ -135,6 +140,7 @@ def _build_samples_query(*, evaluate_message_sql: str) -> str:
     SELECT
         case_name,
         task_name,
+        scores,
         w.trace_id,
         case_span_id,
         chat_span_id,
@@ -275,6 +281,7 @@ def _extract_samples_from_rows(rows: list[dict[str, Any]], experiment_name: str)
 
         transcript = transcript_from_chat_span(input_messages_raw, output_messages_raw)
 
+        scores = _coerce_scores(row.get("scores"))
         case_samples = _samples_from_messages(
             messages=transcript,
             base_data={
@@ -286,11 +293,43 @@ def _extract_samples_from_rows(rows: list[dict[str, Any]], experiment_name: str)
                 "source_chat_span_id": row.get("chat_span_id"),
                 "request_model": row.get("request_model"),
                 "response_model": row.get("response_model"),
+                "passed": _passed_from_scores(scores),
+                "scores": scores,
             },
         )
         all_samples.extend(case_samples)
 
     return all_samples
+
+
+def _coerce_scores(raw: object) -> dict[str, Any]:
+    """Logfire may return JSON columns as dict or JSON string."""
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return dict(parsed) if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _passed_from_scores(scores: dict[str, Any]) -> bool:
+    """Mirror report._parse_case_row: pass iff every evaluator value is ~1.0."""
+    if not scores:
+        return False
+    for entry in scores.values():
+        value = entry.get("value") if isinstance(entry, dict) else entry
+        if value is None:
+            return False
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return False
+        if abs(v - 1.0) >= PASSED_EPS:
+            return False
+    return True
 
 
 def _samples_from_messages(messages: list[ModelMessage], base_data: dict[str, Any]) -> list[Sample]:
