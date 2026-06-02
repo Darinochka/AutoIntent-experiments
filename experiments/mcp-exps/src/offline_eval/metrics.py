@@ -9,10 +9,12 @@ from statistics import mean, pstdev
 from typing import TYPE_CHECKING
 
 import numpy as np
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+_MIN_CLASSES_FOR_CLASS_METRIC = 2
 
 
 def mean_average_precision_from_ranks(
@@ -32,7 +34,7 @@ def mean_average_precision_from_ranks(
     if not y_true:
         return 0.0
     labels = sorted(set(y_true))
-    if len(labels) < 2:
+    if len(labels) < _MIN_CLASSES_FOR_CLASS_METRIC:
         return 0.0
     label_to_idx = {lab: i for i, lab in enumerate(labels)}
     n_samples = len(y_true)
@@ -60,7 +62,7 @@ def normalized_shannon_entropy(labels: Sequence[str]) -> float:
         return 0.0
     counts = Counter(labels)
     k = len(counts)
-    if k < 2:
+    if k < _MIN_CLASSES_FOR_CLASS_METRIC:
         return 0.0
     n = len(labels)
     h = -sum((c / n) * math.log2(c / n) for c in counts.values())

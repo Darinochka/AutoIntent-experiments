@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from loguru import logger
-from sklearn.metrics import balanced_accuracy_score
+from sklearn.metrics import balanced_accuracy_score  # type: ignore[import-untyped]
 from tool_suggest.orchestration import train_suggester
 from tool_suggest.services.formatter import SampleFormatter
 from tool_suggest.services.repository.inmemory import InMemoryRepository
