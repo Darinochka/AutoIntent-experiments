@@ -142,14 +142,8 @@ class OfflineEvalCliArgs(OfflineEvalCommonArgs):
         )
 
 
-def _fold_to_jsonable(fr: FoldResult, *, topk: int) -> dict[str, Any]:
-    m = fr.metrics
+def _metrics_payload(m: AggregatedRetrievalMetrics, *, topk: int) -> dict[str, Any]:
     return {
-        "fold_index": fr.fold_index,
-        "n_train_samples": fr.n_train_samples,
-        "n_test_samples_scored": fr.n_test_samples_scored,
-        "n_test_skipped_no_eval": fr.n_test_oos_skipped,
-        "error": fr.error,
         "micro": {
             "top1": m.micro_top1,
             f"topk@{topk}": m.micro_topk,
@@ -168,6 +162,21 @@ def _fold_to_jsonable(fr: FoldResult, *, topk: int) -> dict[str, Any]:
         "mean_average_precision": m.mean_average_precision,
         "n_samples": m.n_samples,
         "n_tasks": m.n_tasks,
+    }
+
+
+def _fold_to_jsonable(fr: FoldResult, *, topk: int) -> dict[str, Any]:
+    return {
+        "fold_index": fr.fold_index,
+        "n_train_samples": fr.n_train_samples,
+        "n_test_samples_scored": fr.n_test_samples_scored,
+        "n_test_skipped_no_eval": fr.n_test_oos_skipped,
+        "n_test_passed": fr.n_test_passed,
+        "n_test_failed": fr.n_test_failed,
+        "error": fr.error,
+        **_metrics_payload(fr.metrics, topk=topk),
+        "passed_segment": _metrics_payload(fr.metrics_passed, topk=topk) if fr.metrics_passed else None,
+        "failed_segment": _metrics_payload(fr.metrics_failed, topk=topk) if fr.metrics_failed else None,
     }
 
 
@@ -296,25 +305,57 @@ _FOLD_MEAN_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _mean_over_folds(valid: list[FoldResult]) -> dict[str, float]:
+def _mean_over_folds(valid: list[FoldResult], *, attr: str = "metrics") -> dict[str, float]:
+    metrics_list = [getattr(r, attr) for r in valid]
+    metrics_list = [m for m in metrics_list if m is not None]
+    if not metrics_list:
+        return {}
     out: dict[str, float] = {}
     for mname, field in _FOLD_MEAN_FIELDS:
-        vals = [getattr(r.metrics, field) for r in valid]
+        vals = [getattr(m, field) for m in metrics_list]
         out[mname] = float(mean(vals))
     return out
 
 
-def _log_mean_over_folds(valid: list[FoldResult], *, topk: int, split: str) -> None:
+def _log_mean_over_folds(
+    valid: list[FoldResult],
+    *,
+    topk: int,
+    split: str,
+    attr: str = "metrics",
+    segment_label: str = "all",
+) -> None:
+    metrics_list = [getattr(r, attr) for r in valid]
+    metrics_list = [m for m in metrics_list if m is not None]
+    if not metrics_list:
+        logger.info("mean over folds [{}]: empty bucket", segment_label)
+        return
     for mname, field in _FOLD_MEAN_FIELDS:
-        vals = [getattr(r.metrics, field) for r in valid]
+        vals = [getattr(m, field) for m in metrics_list]
         v: float = mean(vals)
         logger.info(
-            "mean over folds: {} = {:.4f} (topk_metric k={}, split={})",
+            "mean over folds [{}]: {} = {:.4f} (topk_metric k={}, split={})",
+            segment_label,
             mname,
             v,
             topk,
             split,
         )
+
+
+def _log_all_segments(valid: list[FoldResult], *, topk: int, split: str) -> None:
+    _log_mean_over_folds(valid, topk=topk, split=split, attr="metrics", segment_label="all")
+    _log_mean_over_folds(valid, topk=topk, split=split, attr="metrics_passed", segment_label="passed")
+    _log_mean_over_folds(valid, topk=topk, split=split, attr="metrics_failed", segment_label="failed")
+
+
+def _segmented_means(valid: list[FoldResult]) -> dict[str, dict[str, float]]:
+    """All three mean-over-folds dicts keyed by ``mean_over_folds`` / ``..._passed`` / ``..._failed``."""
+    return {
+        "mean_over_folds": _mean_over_folds(valid, attr="metrics"),
+        "mean_over_folds_passed": _mean_over_folds(valid, attr="metrics_passed"),
+        "mean_over_folds_failed": _mean_over_folds(valid, attr="metrics_failed"),
+    }
 
 
 def run_offline_eval(a: OfflineEvalCliArgs) -> None:
@@ -340,7 +381,7 @@ def run_offline_eval(a: OfflineEvalCliArgs) -> None:
     if not valid:
         logger.error("No successful folds; fold errors: {}", [r.error for r in results])
     else:
-        _log_mean_over_folds(valid, topk=a.topk_metric, split=a.split)
+        _log_all_segments(valid, topk=a.topk_metric, split=a.split)
 
     out_obj: dict[str, Any] = {
         "repo": str(a.repo.resolve()),
@@ -351,6 +392,7 @@ def run_offline_eval(a: OfflineEvalCliArgs) -> None:
         "topk_metric": a.topk_metric,
         "config": asdict(base_cfg),
         "folds": [_fold_to_jsonable(fr, topk=a.topk_metric) for fr in results],
+        **(_segmented_means(valid) if valid else {}),
     }
     if a.json_out is not None:
         a.json_out.parent.mkdir(parents=True, exist_ok=True)
@@ -461,7 +503,7 @@ def batch_redo_repos(
                     results = await _run_folds_async(a, task_to_samples, fold_list, on_fold=on_fold)
                     valid = [r for r in results if r.error is None and r.n_test_samples_scored > 0]
                     if valid:
-                        _log_mean_over_folds(valid, topk=a.topk_metric, split=a.split)
+                        _log_all_segments(valid, topk=a.topk_metric, split=a.split)
                     else:
                         logger.error(
                             "No successful folds for {} {}; errors={}",
@@ -469,6 +511,15 @@ def batch_redo_repos(
                             suggester,
                             [r.error for r in results],
                         )
+                    segmented: dict[str, dict[str, float] | None]
+                    if valid:
+                        segmented = dict(_segmented_means(valid))
+                    else:
+                        segmented = {
+                            "mean_over_folds": None,
+                            "mean_over_folds_passed": None,
+                            "mean_over_folds_failed": None,
+                        }
                     _append_jsonl(
                         out_f,
                         {
@@ -487,7 +538,7 @@ def batch_redo_repos(
                             "n_folds": len(results),
                             "n_successful_folds": len(valid),
                             "fold_errors": [r.error for r in results],
-                            "mean_over_folds": _mean_over_folds(valid) if valid else None,
+                            **segmented,
                         },
                     )
 
@@ -516,10 +567,19 @@ def _fmt_scalar(v: float, *, decimals: int) -> str:
     return f"{v:.{decimals}f}"
 
 
+_SEGMENT_TO_MEAN_KEY: dict[str, str] = {
+    "all": "mean_over_folds",
+    "passed": "mean_over_folds_passed",
+    "failed": "mean_over_folds_failed",
+}
+
+
 def _load_batch_pivot(
     jsonl: Path,
+    *,
+    mean_key: str = "mean_over_folds",
 ) -> tuple[int | None, list[str], dict[str, dict[str, dict[str, float]]]]:
-    """Return ``(topk_metric, preferred_row_order, model -> suggester -> mean_over_folds)``."""
+    """Return ``(topk_metric, preferred_row_order, model -> suggester -> mean_over_folds[mean_key])``."""
     topk: int | None = None
     preferred_order: list[str] = []
     pivot: dict[str, dict[str, dict[str, float]]] = {}
@@ -541,7 +601,7 @@ def _load_batch_pivot(
                 continue
             if topk is None and isinstance(rec.get("topk_metric"), int):
                 topk = rec["topk_metric"]
-            mof = rec.get("mean_over_folds")
+            mof = rec.get(mean_key)
             if not isinstance(mof, dict):
                 continue
             suggester = str(rec.get("suggester", ""))
@@ -568,6 +628,61 @@ def _pivot_row_order(preferred: list[str], pivot: dict[str, dict[str, dict[str, 
     return out
 
 
+_BATCH_TABLE_COL_SPECS: tuple[tuple[str, Literal["autointent", "knn"], str], ...] = (
+    ("AI top1", "autointent", "macro_top1"),
+    ("KNN top1", "knn", "macro_top1"),
+    ("AI topk", "autointent", "macro_topk"),
+    ("KNN topk", "knn", "macro_topk"),
+    ("AI MRR", "autointent", "macro_mrr"),
+    ("KNN MRR", "knn", "macro_mrr"),
+    ("AI bal_acc", "autointent", "balanced_accuracy"),
+    ("KNN bal_acc", "knn", "balanced_accuracy"),
+    ("AI mAP", "autointent", "mean_average_precision"),
+    ("KNN mAP", "knn", "mean_average_precision"),
+)
+
+
+def _render_pivot_section(
+    *,
+    pivot: dict[str, dict[str, dict[str, float]]],
+    rows: list[str],
+    topk: int | None,
+    decimals: int,
+    fmt: Literal["markdown", "tsv"],
+    jsonl_name: str,
+    segment_label: str,
+) -> str:
+    """Render one segment's pivot as a markdown or TSV section (with its own heading)."""
+    k = topk if topk is not None else "?"
+
+    def cell(slug: str, sug: Literal["autointent", "knn"], metric_key: str) -> str:
+        m = pivot.get(slug, {}).get(sug)
+        if m is None or metric_key not in m:
+            return "—"
+        return _fmt_scalar(m[metric_key], decimals=decimals)
+
+    lines: list[str] = []
+    if fmt == "markdown":
+        heading = (
+            f"### Segment: {segment_label} "
+            f"(macro mean-over-folds; topk matches eval k={k}; source: `{jsonl_name}`)"
+        )
+        lines.append(heading)
+        lines.append("")
+        lines.append("| model | " + " | ".join(h for h, _, _ in _BATCH_TABLE_COL_SPECS) + " |")
+        lines.append("| :--- | " + " | ".join("---:" for _ in _BATCH_TABLE_COL_SPECS) + " |")
+        for slug in rows:
+            cells = [cell(slug, sug, mk) for _, sug, mk in _BATCH_TABLE_COL_SPECS]
+            lines.append("| " + " | ".join([slug, *cells]) + " |")
+    else:
+        lines.append(f"# segment={segment_label}")
+        lines.append("\t".join(["model", *[h for h, _, _ in _BATCH_TABLE_COL_SPECS]]))
+        for slug in rows:
+            cells = [cell(slug, sug, mk) for _, sug, mk in _BATCH_TABLE_COL_SPECS]
+            lines.append("\t".join([slug, *cells]))
+    return "\n".join(lines)
+
+
 @app.command(
     name="batch-jsonl-table",
     help="Pivot ``repo_suggester_summary`` into a model x macro-metrics table (AI vs KNN columns).",
@@ -580,51 +695,55 @@ def batch_jsonl_table(
     ] = "markdown",
     decimals: Annotated[int, Parameter(help="Decimal places per metric in each cell.")] = 3,
     out: Annotated[Path | None, Parameter(help="Write table to this path instead of stdout.")] = None,
+    segment: Annotated[
+        Literal["all", "passed", "failed", "compare"],
+        Parameter(
+            name="--segment",
+            help=(
+                "Which subset of test samples to render. "
+                "``all`` (default): every scored sample. "
+                "``passed`` / ``failed``: only samples whose case carries ``data['passed']=True/False``. "
+                "``compare``: stack all three sections so successful vs unsuccessful predictability is side-by-side."
+            ),
+        ),
+    ] = "all",
 ) -> None:
-    """One column per macro metric; values are mean-over-folds from each suggester's summary."""
-    topk, preferred, pivot = _load_batch_pivot(jsonl)
-    if not pivot:
-        logger.error("No repo_suggester_summary rows with mean_over_folds in {}", jsonl)
-        return
-    rows = _pivot_row_order(preferred, pivot)
-    k = topk if topk is not None else "?"
+    """One column per macro metric; values are mean-over-folds from each suggester's summary.
 
-    col_specs: tuple[tuple[str, Literal["autointent", "knn"], str], ...] = (
-        ("AI top1", "autointent", "macro_top1"),
-        ("KNN top1", "knn", "macro_top1"),
-        ("AI topk", "autointent", "macro_topk"),
-        ("KNN topk", "knn", "macro_topk"),
-        ("AI MRR", "autointent", "macro_mrr"),
-        ("KNN MRR", "knn", "macro_mrr"),
-    )
+    ``--segment`` switches which ``mean_over_folds`` key is read from each ``repo_suggester_summary`` row
+    (written by ``batch-redo-repos``: ``mean_over_folds`` / ``mean_over_folds_passed`` / ``mean_over_folds_failed``).
+    Repos that predate per-sample ``passed`` flags will have empty pass/fail sections (em-dash cells).
+    """
+    segments_to_render: tuple[str, ...]
+    segments_to_render = ("all", "passed", "failed") if segment == "compare" else (segment,)
 
-    def cell(slug: str, sug: Literal["autointent", "knn"], metric_key: str) -> str:
-        m = pivot.get(slug, {}).get(sug)
-        if m is None or metric_key not in m:
-            return "—"
-        return _fmt_scalar(m[metric_key], decimals=decimals)
-
-    lines: list[str] = []
-    if fmt == "markdown":
-        header = (
-            f"Offline batch pivot (macro mean-over-folds; topk matches eval k={k}). Source: `{jsonl.name}`.\n\n"
-            "| model | "
-            + " | ".join(h for h, _, _ in col_specs)
-            + " |\n| :--- | "
-            + " | ".join("---:" for _ in col_specs)
-            + " |"
+    sections: list[str] = []
+    any_data = False
+    for seg in segments_to_render:
+        mean_key = _SEGMENT_TO_MEAN_KEY[seg]
+        topk, preferred, pivot = _load_batch_pivot(jsonl, mean_key=mean_key)
+        if not pivot:
+            logger.warning("No repo_suggester_summary rows with {} in {}", mean_key, jsonl)
+            continue
+        any_data = True
+        rows = _pivot_row_order(preferred, pivot)
+        sections.append(
+            _render_pivot_section(
+                pivot=pivot,
+                rows=rows,
+                topk=topk,
+                decimals=decimals,
+                fmt=fmt,
+                jsonl_name=jsonl.name,
+                segment_label=seg,
+            ),
         )
-        lines.append(header)
-        for slug in rows:
-            cells = [cell(slug, sug, mk) for _, sug, mk in col_specs]
-            lines.append("| " + " | ".join([slug, *cells]) + " |")
-    else:
-        lines.append("\t".join(["model", *[h for h, _, _ in col_specs]]))
-        for slug in rows:
-            cells = [cell(slug, sug, mk) for _, sug, mk in col_specs]
-            lines.append("\t".join([slug, *cells]))
 
-    text = "\n".join(lines) + "\n"
+    if not any_data:
+        logger.error("No pivot data for segment={!r} in {}", segment, jsonl)
+        return
+
+    text = "\n\n".join(sections) + "\n"
     if out is not None:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text, encoding="utf-8")
