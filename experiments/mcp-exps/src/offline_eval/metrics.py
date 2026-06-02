@@ -2,12 +2,71 @@
 
 from __future__ import annotations
 
+import math
+from collections import Counter
 from dataclasses import dataclass
 from statistics import mean, pstdev
 from typing import TYPE_CHECKING
 
+import numpy as np
+from sklearn.metrics import average_precision_score  # type: ignore[import-untyped]
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+_MIN_CLASSES_FOR_CLASS_METRIC = 2
+
+
+def mean_average_precision_from_ranks(
+    y_true: Sequence[str],
+    rankings: Sequence[Sequence[str]],
+) -> float:
+    """Macro mAP across classes from per-sample ranked id lists.
+
+    Score derivation (the suggester only exposes a ranked id list, no scores):
+    ``score(c) = 1 / (1 + position)`` if ``c`` appears in the ranking, else ``0``. The score
+    function is monotone-decreasing in rank, so it preserves the suggester's ordering for the
+    precision-recall curve.
+
+    Labels are restricted to those that appear in ``y_true`` so every per-class AP is well-defined.
+    Returns ``0.0`` when ``y_true`` has fewer than 2 distinct classes (mAP not meaningful).
+    """
+    if not y_true:
+        return 0.0
+    labels = sorted(set(y_true))
+    if len(labels) < _MIN_CLASSES_FOR_CLASS_METRIC:
+        return 0.0
+    label_to_idx = {lab: i for i, lab in enumerate(labels)}
+    n_samples = len(y_true)
+    n_classes = len(labels)
+    y_true_mat = np.zeros((n_samples, n_classes), dtype=np.int64)
+    y_score_mat = np.zeros((n_samples, n_classes), dtype=np.float64)
+    for i, (true_label, ranking) in enumerate(zip(y_true, rankings, strict=False)):
+        idx = label_to_idx.get(true_label)
+        if idx is not None:
+            y_true_mat[i, idx] = 1
+        for position, tool_id in enumerate(ranking):
+            idx = label_to_idx.get(tool_id)
+            if idx is not None and y_score_mat[i, idx] == 0.0:
+                y_score_mat[i, idx] = 1.0 / (1 + position)
+    return float(average_precision_score(y_true_mat, y_score_mat, average="macro"))
+
+
+def normalized_shannon_entropy(labels: Sequence[str]) -> float:
+    """Normalized Shannon entropy of a label sequence; ``0`` (one class) → ``1`` (uniform).
+
+    ``H(p) / log(K)`` where ``K`` is the number of distinct labels seen. Returns ``0.0`` when
+    fewer than two distinct labels are present (degenerate case).
+    """
+    if not labels:
+        return 0.0
+    counts = Counter(labels)
+    k = len(counts)
+    if k < _MIN_CLASSES_FOR_CLASS_METRIC:
+        return 0.0
+    n = len(labels)
+    h = -sum((c / n) * math.log2(c / n) for c in counts.values())
+    return h / math.log2(k)
 
 
 @dataclass(frozen=True)
@@ -55,7 +114,12 @@ def compute_sample_metrics(
 
 @dataclass(frozen=True)
 class AggregatedRetrievalMetrics:
-    """Micro (all samples) and macro (mean over tasks) aggregates."""
+    """Micro (all samples) and macro (mean over tasks) aggregates.
+
+    ``balanced_accuracy`` is sklearn's macro-recall-over-classes on top-1 predictions (multiclass only;
+    ``0.0`` in multilabel mode). ``class_entropy_normalized`` is Shannon entropy of the y_true label
+    distribution divided by ``log(K)``, so 1.0 means perfectly balanced and 0.0 means a single class.
+    """
 
     n_samples: int
     n_tasks: int
@@ -68,10 +132,17 @@ class AggregatedRetrievalMetrics:
     macro_top1_std: float
     macro_topk_std: float
     macro_mrr_std: float
+    balanced_accuracy: float = 0.0
+    class_entropy_normalized: float = 0.0
+    mean_average_precision: float = 0.0
 
 
 def aggregate_task_and_global(
     per_task: dict[str, list[SampleRetrievalMetrics]],
+    *,
+    balanced_accuracy: float = 0.0,
+    class_entropy_normalized: float = 0.0,
+    mean_average_precision: float = 0.0,
 ) -> AggregatedRetrievalMetrics:
     """Micro averages over all samples; macro = mean of per-task means."""
     all_m: list[SampleRetrievalMetrics] = [m for rows in per_task.values() for m in rows]
@@ -89,6 +160,9 @@ def aggregate_task_and_global(
             macro_top1_std=0.0,
             macro_topk_std=0.0,
             macro_mrr_std=0.0,
+            balanced_accuracy=balanced_accuracy,
+            class_entropy_normalized=class_entropy_normalized,
+            mean_average_precision=mean_average_precision,
         )
 
     micro_top1 = mean(m.top1 for m in all_m)
@@ -125,4 +199,7 @@ def aggregate_task_and_global(
         macro_top1_std=macro_top1_std,
         macro_topk_std=macro_topk_std,
         macro_mrr_std=macro_mrr_std,
+        balanced_accuracy=balanced_accuracy,
+        class_entropy_normalized=class_entropy_normalized,
+        mean_average_precision=mean_average_precision,
     )
