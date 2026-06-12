@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 
 from autointent import Dataset, Pipeline
-from autointent.configs import LoggingConfig, get_default_embedder_config
+from autointent.configs import LoggingConfig
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override the preset's embedder (e.g. sentence-transformers/all-MiniLM-L6-v2 for a fast CPU run).",
     )
+    parser.add_argument("--device", choices=["cpu", "cuda", "mps"], default=None, help="Torch device for the embedder.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     return parser.parse_args()
 
@@ -61,9 +62,14 @@ def main() -> None:
     pipeline = Pipeline.from_preset(args.preset, seed=args.seed)
     # dump_modules=True keeps fitted modules so final test metrics are computed and saved.
     pipeline.set_config(LoggingConfig(project_dir=args.logs_dir, run_name=run_name, dump_modules=True))
+    emb_updates: dict[str, str] = {}
     if args.embedder_model:
-        pipeline.set_config(get_default_embedder_config(model_name=args.embedder_model))
-        print(f"Overriding embedder with '{args.embedder_model}'")
+        emb_updates["model_name"] = args.embedder_model
+    if args.device:
+        emb_updates["device"] = args.device
+    if emb_updates:
+        pipeline.set_config(pipeline.embedder_config.model_copy(update=emb_updates))
+        print(f"Embedder overrides: {emb_updates}")
 
     print(f"Optimizing preset '{args.preset}' (run '{run_name}') ...")
     context = pipeline.fit(dataset)

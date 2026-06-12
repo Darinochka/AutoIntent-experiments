@@ -5,4 +5,5 @@ requires-python = ">=3.13"
 dependencies = [
     "autointent[sentence-transformers]==0.3.0",
     "datasets>=4.8.5",
+    "iterative-stratification>=0.1.9",
 ]

@@ -6,18 +6,20 @@ multilabel samples as one-hot vectors: ``{"utterance": ..., "label": [0, 1, 0, .
 explicit ``intents`` list so the label space is sized correctly.
 
 Usage:
-    uv run prepare_data.py                 # full dataset -> data/go_emotions.json
-    uv run prepare_data.py --max-train 2000  # subsample train for a fast pass
+    uv run prepare_data.py                          # full dataset -> data/go_emotions.json
+    uv run prepare_data.py --min-samples-per-class 50  # balanced stratified train subsample
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import random
+import math
 from pathlib import Path
 
+import numpy as np
 from datasets import load_dataset
+from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -30,9 +32,54 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo", default="google-research-datasets/go_emotions", help="HuggingFace dataset repo.")
     parser.add_argument("--config", default="simplified", help="Dataset config name.")
     parser.add_argument("--out", type=Path, default=SCRIPT_DIR / "data" / "go_emotions.json", help="Output JSON path.")
-    parser.add_argument("--max-train", type=int, default=None, help="Subsample the train split to this many samples.")
+    parser.add_argument(
+        "--min-samples-per-class",
+        type=int,
+        default=None,
+        help="Label-stratified subsample of train sized so each class clears this floor (default: full train).",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed for subsampling.")
     return parser.parse_args()
+
+
+def label_matrix(rows: list[dict], n_classes: int) -> np.ndarray:
+    """Build a (n_samples, n_classes) one-hot matrix from GoEmotions label-index lists."""
+    y = np.zeros((len(rows), n_classes), dtype=int)
+    for i, ex in enumerate(rows):
+        for idx in ex["labels"]:
+            y[i, idx] = 1
+    return y
+
+
+def balanced_subsample(rows: list[dict], n_classes: int, min_per_class: int, seed: int) -> list[dict]:
+    """Smallest label-stratified subsample (iterative-stratification) where each class clears a floor.
+
+    The subset size is chosen so the rarest present class reaches ~min_per_class samples while the
+    overall label distribution is preserved. If the floor cannot be met (a class has too few total
+    examples), all rows are kept.
+    """
+    y = label_matrix(rows, n_classes)
+    class_counts = y.sum(axis=0)
+    present = class_counts > 0
+    # Proportion-preserving sampling keeps each class at count * (target / n); invert for the rarest.
+    needed = (min_per_class * len(rows) / class_counts[present]).max()
+    target = math.ceil(needed)
+    if target >= len(rows):
+        print(f"Cannot reduce train below {len(rows)} rows for min-samples-per-class={min_per_class}; keeping all.")
+        return rows
+
+    # test_size is passed explicitly: iterstrat 0.1.9's "default" sentinel is rejected by modern sklearn.
+    splitter = MultilabelStratifiedShuffleSplit(
+        n_splits=1, train_size=target, test_size=len(rows) - target, random_state=seed
+    )
+    train_idx, _ = next(splitter.split(np.zeros((len(rows), 1)), y))
+    subset = [rows[i] for i in train_idx]
+
+    rarest = int(label_matrix(subset, n_classes).sum(axis=0)[present].min())
+    print(f"Balanced-subsampled train to {len(subset)} rows (rarest class has {rarest}, floor {min_per_class}).")
+    if rarest < min_per_class:
+        print(f"  Warning: rarest class below floor ({rarest} < {min_per_class}); data too imbalanced to guarantee it.")
+    return subset
 
 
 def to_autointent_split(examples: list[dict], n_classes: int) -> list[dict]:
@@ -65,9 +112,8 @@ def main() -> None:
         if hf_split not in ds:
             continue
         rows = list(ds[hf_split])
-        if ai_split == "train" and args.max_train is not None and args.max_train < len(rows):
-            rows = random.Random(args.seed).sample(rows, args.max_train)
-            print(f"Subsampled train to {args.max_train} rows.")
+        if ai_split == "train" and args.min_samples_per_class is not None:
+            rows = balanced_subsample(rows, n_classes, args.min_samples_per_class, args.seed)
         samples = to_autointent_split(rows, n_classes)
         mapping[ai_split] = samples
         print(f"  {ai_split}: {len(samples)} samples (dropped {len(rows) - len(samples)} label-less)")
