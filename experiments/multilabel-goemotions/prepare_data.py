@@ -6,8 +6,9 @@ multilabel samples as one-hot vectors: ``{"utterance": ..., "label": [0, 1, 0, .
 explicit ``intents`` list so the label space is sized correctly.
 
 Usage:
-    uv run prepare_data.py                          # full dataset -> data/go_emotions.json
-    uv run prepare_data.py --min-samples-per-class 50  # balanced stratified train subsample
+    uv run prepare_data.py                                       # full dataset -> data/go_emotions.json
+    uv run prepare_data.py --min-samples-per-class 50            # stratified subsample (floor 50/class)
+    uv run prepare_data.py --min-samples-per-class 50 --balance classwise  # flattened (cap ~50/class)
 """
 
 from __future__ import annotations
@@ -36,7 +37,19 @@ def parse_args() -> argparse.Namespace:
         "--min-samples-per-class",
         type=int,
         default=None,
-        help="Label-stratified subsample of train sized so each class clears this floor (default: full train).",
+        help=(
+            "Train subsample size control (default: full train). With --balance stratified it is a floor; "
+            "with --balance classwise it is the per-class target/cap."
+        ),
+    )
+    parser.add_argument(
+        "--balance",
+        choices=["stratified", "classwise"],
+        default="stratified",
+        help=(
+            "stratified: proportion-preserving subsample (iterative-stratification). "
+            "classwise: flatten the distribution by capping each class near the target (multilabel undersampling)."
+        ),
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed for subsampling.")
     return parser.parse_args()
@@ -82,6 +95,34 @@ def balanced_subsample(rows: list[dict], n_classes: int, min_per_class: int, see
     return subset
 
 
+def classwise_subsample(rows: list[dict], n_classes: int, target_per_class: int, seed: int) -> list[dict]:
+    """Flatten the label distribution by capping each class near target_per_class (multilabel undersampling).
+
+    Shuffles, then keeps a row only while at least one of its labels is still below the target. Majority
+    classes settle near the target; rarer classes keep all available samples. Exact equality is impossible
+    in multilabel data since each row carries several labels, so capped classes may slightly overshoot.
+    """
+    order = np.random.default_rng(seed).permutation(len(rows))
+    counts = np.zeros(n_classes, dtype=int)
+    keep = []
+    for i in order:
+        labels = rows[i]["labels"]
+        if labels and any(counts[label] < target_per_class for label in labels):
+            keep.append(int(i))
+            for label in labels:
+                counts[label] += 1
+    subset = [rows[i] for i in keep]
+
+    present = label_matrix(rows, n_classes).sum(axis=0) > 0
+    sub_counts = label_matrix(subset, n_classes).sum(axis=0)[present]
+    print(
+        f"Classwise-subsampled train to {len(subset)} rows "
+        f"(per-class min/median/max = {int(sub_counts.min())}/{int(np.median(sub_counts))}/{int(sub_counts.max())}, "
+        f"target {target_per_class})."
+    )
+    return subset
+
+
 def to_autointent_split(examples: list[dict], n_classes: int) -> list[dict]:
     """Map GoEmotions rows to AutoIntent one-hot multilabel samples (dropping label-less rows)."""
     samples = []
@@ -113,7 +154,10 @@ def main() -> None:
             continue
         rows = list(ds[hf_split])
         if ai_split == "train" and args.min_samples_per_class is not None:
-            rows = balanced_subsample(rows, n_classes, args.min_samples_per_class, args.seed)
+            if args.balance == "classwise":
+                rows = classwise_subsample(rows, n_classes, args.min_samples_per_class, args.seed)
+            else:
+                rows = balanced_subsample(rows, n_classes, args.min_samples_per_class, args.seed)
         samples = to_autointent_split(rows, n_classes)
         mapping[ai_split] = samples
         print(f"  {ai_split}: {len(samples)} samples (dropped {len(rows) - len(samples)} label-less)")

@@ -7,6 +7,7 @@ metrics plus the selected module configs to ``<logs-dir>/<run-name>_metrics.json
 Usage:
     uv run run.py                                   # classic-light on data/go_emotions.json
     uv run run.py --preset classic-medium --run-name gm-medium
+    uv run run.py --scoring-metric scoring_map --decision-metric decision_f1  # override target metrics
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ from pathlib import Path
 
 from autointent import Dataset, Pipeline
 from autointent.configs import LoggingConfig
+from autointent.metrics import DICISION_METRICS_MULTILABEL, SCORING_METRICS_MULTILABEL
+from autointent.utils import load_preset
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -33,8 +36,36 @@ def parse_args() -> argparse.Namespace:
         help="Override the preset's embedder (e.g. sentence-transformers/all-MiniLM-L6-v2 for a fast CPU run).",
     )
     parser.add_argument("--device", choices=["cpu", "cuda", "mps"], default=None, help="Torch device for the embedder.")
+    parser.add_argument(
+        "--scoring-metric",
+        default=None,
+        help="Override the scoring node's target_metric (selects the best scorer). E.g. scoring_map.",
+    )
+    parser.add_argument(
+        "--decision-metric",
+        default=None,
+        help="Override the decision node's target_metric (selects the best decisioner). E.g. decision_f1.",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     return parser.parse_args()
+
+
+def build_pipeline(preset: str, seed: int, scoring_metric: str | None, decision_metric: str | None) -> Pipeline:
+    """Load a preset and optionally override the scoring/decision target metrics before building."""
+    if scoring_metric and scoring_metric not in SCORING_METRICS_MULTILABEL:
+        raise SystemExit(f"Invalid --scoring-metric '{scoring_metric}'. Choose from: {sorted(SCORING_METRICS_MULTILABEL)}")
+    if decision_metric and decision_metric not in DICISION_METRICS_MULTILABEL:
+        raise SystemExit(
+            f"Invalid --decision-metric '{decision_metric}'. Choose from: {sorted(DICISION_METRICS_MULTILABEL)}"
+        )
+
+    cfg = load_preset(preset)
+    for node in cfg["search_space"]:
+        if node["node_type"] == "scoring" and scoring_metric:
+            node["target_metric"] = scoring_metric
+        elif node["node_type"] == "decision" and decision_metric:
+            node["target_metric"] = decision_metric
+    return Pipeline.from_optimization_config({**cfg, "seed": seed})
 
 
 def selected_modules(context) -> list[dict]:  # noqa: ANN001
@@ -59,7 +90,7 @@ def main() -> None:
     for split in dataset:
         print(f"  {split}: {len(dataset[split])} samples")
 
-    pipeline = Pipeline.from_preset(args.preset, seed=args.seed)
+    pipeline = build_pipeline(args.preset, args.seed, args.scoring_metric, args.decision_metric)
     # dump_modules=True keeps fitted modules so final test metrics are computed and saved.
     pipeline.set_config(LoggingConfig(project_dir=args.logs_dir, run_name=run_name, dump_modules=True))
     emb_updates: dict[str, str] = {}
@@ -80,6 +111,10 @@ def main() -> None:
         "run_name": run_name,
         "n_classes": dataset.n_classes,
         "split_sizes": {split: len(dataset[split]) for split in dataset},
+        "target_metrics": {
+            "scoring": args.scoring_metric or "preset-default",
+            "decision": args.decision_metric or "preset-default",
+        },
         "test_metrics": metrics,
         "selected_modules": selected_modules(context),
     }
