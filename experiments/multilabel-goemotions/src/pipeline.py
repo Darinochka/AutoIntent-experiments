@@ -82,6 +82,9 @@ def run_experiment(
         pipeline.set_config(pipeline.embedder_config.model_copy(update=emb_updates))
         print(f"Embedder overrides: {emb_updates}")
 
+    # Snapshot the splits we feed before fit() (AutoIntent carves an HPO-validation out of train in place).
+    fed_split_sizes = {split: len(dataset[split]) for split in dataset}
+
     print(f"Optimizing preset '{preset}' (experiment '{exp_name}') ...")
     context = pipeline.fit(dataset)
 
@@ -90,7 +93,8 @@ def run_experiment(
         "preset": preset,
         "exp_name": exp_name,
         "n_classes": dataset.n_classes,
-        "split_sizes": {split: len(dataset[split]) for split in dataset},
+        "fed_split_sizes": fed_split_sizes,
+        "eval_on": "ai-test (= GoEmotions validation); HPO-validation carved from train by AutoIntent",
         "target_metrics": {
             "scoring": scoring_metric or "preset-default",
             "decision": decision_metric or "preset-default",

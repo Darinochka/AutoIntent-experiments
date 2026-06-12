@@ -18,8 +18,13 @@ from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 DEFAULT_REPO = "google-research-datasets/go_emotions"
 DEFAULT_CONFIG = "simplified"
 
+# Feeding scheme: we give AutoIntent only train + test (no validation split), so AutoIntent carves its
+# own HPO-validation out of the (subsampled) train via DataConfig.validation_size. This makes the train
+# balance treatment shape the validation set too -- an imbalanced train yields an imbalanced HPO val, so
+# model selection is affected by balance, not just model fitting. GoEmotions' validation becomes the held-out
+# eval set (AutoIntent's test); GoEmotions' own test split is intentionally unused.
 # GoEmotions split name -> AutoIntent split name.
-SPLIT_MAP = {"train": "train", "validation": "validation", "test": "test"}
+SPLIT_MAP = {"train": "train", "validation": "test"}
 
 
 def load_goemotions(repo: str = DEFAULT_REPO, config: str = DEFAULT_CONFIG) -> tuple[dict, list[str]]:
@@ -130,15 +135,15 @@ def prepare_mapping(
     print(f"{n_classes} emotion classes: {', '.join(names)}")
 
     mapping: dict[str, list[dict]] = {"intents": [{"id": i, "name": name} for i, name in enumerate(names)]}
-    for hf_split, ai_split in SPLIT_MAP.items():
-        if hf_split not in ds:
+    for src_split, ai_split in SPLIT_MAP.items():
+        if src_split not in ds:
             continue
-        rows = list(ds[hf_split])
+        rows = list(ds[src_split])
         if ai_split == "train":
             rows = subsample_train(rows, n_classes, min_per_class, balance, seed)
         samples = to_onehot_samples(rows, n_classes)
         mapping[ai_split] = samples
-        print(f"  {ai_split}: {len(samples)} samples (dropped {len(rows) - len(samples)} label-less)")
+        print(f"  ai-{ai_split} (from source {src_split}): {len(samples)} samples (dropped {len(rows) - len(samples)} label-less)")
     return mapping
 
 
