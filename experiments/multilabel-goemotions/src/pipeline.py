@@ -62,16 +62,20 @@ def run_experiment(
     scoring_metric: str | None,
     decision_metric: str | None,
     seed: int,
+    dump_modules: bool = True,
 ) -> dict:
-    """Optimize the pipeline, evaluate on test, write the report, and return it."""
+    """Optimize the pipeline, evaluate on test, write the report, and return it.
+
+    dump_modules persists fitted modules to disk for reuse; final test metrics are computed regardless
+    (clear_ram is left False). Sweeps pass dump_modules=False to avoid writing a module dump per run.
+    """
     dataset = load_multilabel_dataset(data_path)
     print(f"Loaded {Path(data_path).name}: {dataset.n_classes} classes, multilabel={dataset.multilabel}")
     for split in dataset:
         print(f"  {split}: {len(dataset[split])} samples")
 
     pipeline = build_pipeline(preset, seed, scoring_metric, decision_metric)
-    # dump_modules=True keeps fitted modules so final test metrics are computed and saved.
-    pipeline.set_config(LoggingConfig(project_dir=Path(logs_dir), run_name=exp_name, dump_modules=True))
+    pipeline.set_config(LoggingConfig(project_dir=Path(logs_dir), run_name=exp_name, dump_modules=dump_modules))
 
     emb_updates: dict[str, str] = {}
     if embedder_model:

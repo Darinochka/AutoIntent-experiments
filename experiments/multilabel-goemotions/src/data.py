@@ -102,6 +102,30 @@ def classwise_subsample(rows: list[dict], n_classes: int, target_per_class: int,
     return subset
 
 
+def natural_subsample(rows: list[dict], n_classes: int, total_size: int, seed: int) -> list[dict]:
+    """Proportion-preserving sample of ``total_size`` rows (keeps the natural, imbalanced distribution).
+
+    Used to build a size-matched imbalanced counterpart to a balanced N-shot set: same total size, but
+    drawn at natural label proportions instead of capped per class.
+    """
+    if total_size >= len(rows):
+        return rows
+    y = label_matrix(rows, n_classes)
+    splitter = MultilabelStratifiedShuffleSplit(
+        n_splits=1, train_size=total_size, test_size=len(rows) - total_size, random_state=seed
+    )
+    idx, _ = next(splitter.split(np.zeros((len(rows), 1)), y))
+    subset = [rows[i] for i in idx]
+
+    present = y.sum(axis=0) > 0
+    sub = label_matrix(subset, n_classes).sum(axis=0)[present]
+    print(
+        f"Natural-subsampled train to {len(subset)} rows "
+        f"(per-class min/median/max = {int(sub.min())}/{int(np.median(sub))}/{int(sub.max())})."
+    )
+    return subset
+
+
 def subsample_train(rows: list[dict], n_classes: int, min_per_class: int | None, balance: str, seed: int) -> list[dict]:
     """Dispatch to the requested subsampler, or keep all rows when min_per_class is None."""
     if min_per_class is None:
@@ -145,6 +169,21 @@ def prepare_mapping(
         mapping[ai_split] = samples
         print(f"  ai-{ai_split} (from source {src_split}): {len(samples)} samples (dropped {len(rows) - len(samples)} label-less)")
     return mapping
+
+
+def assemble_mapping(names: list[str], train_rows: list[dict], eval_rows: list[dict]) -> dict[str, list[dict]]:
+    """Build an AutoIntent mapping from explicit train/eval rows.
+
+    Mirrors the prepare_mapping feeding scheme: eval_rows become AutoIntent's ``test`` split, and
+    AutoIntent carves its HPO-validation out of ``train``. Used by the sweep to vary the train subsample
+    while keeping the held-out eval set fixed.
+    """
+    n_classes = len(names)
+    return {
+        "intents": [{"id": i, "name": name} for i, name in enumerate(names)],
+        "train": to_onehot_samples(train_rows, n_classes),
+        "test": to_onehot_samples(eval_rows, n_classes),
+    }
 
 
 def save_mapping(mapping: dict, out_path: str | Path) -> None:
