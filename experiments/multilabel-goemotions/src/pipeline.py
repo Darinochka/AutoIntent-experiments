@@ -22,10 +22,10 @@ def validate_metrics(scoring_metric: str | None, decision_metric: str | None) ->
     """Reject unknown target-metric names with the valid multilabel options."""
     if scoring_metric and scoring_metric not in SCORING_METRICS_MULTILABEL:
         msg = f"Invalid --scoring-metric '{scoring_metric}'. Choose from: {sorted(SCORING_METRICS_MULTILABEL)}"
-        raise SystemExit(msg)
+        raise ValueError(msg)
     if decision_metric and decision_metric not in DICISION_METRICS_MULTILABEL:
         msg = f"Invalid --decision-metric '{decision_metric}'. Choose from: {sorted(DICISION_METRICS_MULTILABEL)}"
-        raise SystemExit(msg)
+        raise ValueError(msg)
 
 
 def build_pipeline(preset: str, seed: int, scoring_metric: str | None, decision_metric: str | None) -> Pipeline:
@@ -44,7 +44,7 @@ def load_multilabel_dataset(data_path: str | Path) -> Dataset:
     """Load the dataset JSON and assert it is multilabel."""
     dataset = Dataset.from_json(data_path)
     if not dataset.multilabel:
-        raise SystemExit("Loaded dataset is not multilabel; check prepare_data.py output.")
+        raise ValueError("Loaded dataset is not multilabel; check prepare_data.py output.")
     return dataset
 
 

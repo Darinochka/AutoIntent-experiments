@@ -187,7 +187,7 @@ def _aggregate(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "n_seeds": len(rs),
             "train_size": rs[0]["train_size"],
             "f1_mean": round(statistics.mean(f1), 4),
-            "f1_std": round(statistics.pstdev(f1), 4) if len(f1) > 1 else 0.0,
+            "f1_std": round(statistics.stdev(f1), 4) if len(f1) > 1 else 0.0,
             "precision_mean": mean("eval_precision"),
             "recall_mean": mean("eval_recall"),
             "accuracy_mean": mean("eval_accuracy"),

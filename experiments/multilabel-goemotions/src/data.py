@@ -212,8 +212,13 @@ def assemble_mapping(
 
 
 def save_mapping(mapping: dict[str, Any], out_path: str | Path) -> None:
-    """Write the dataset mapping to JSON."""
+    """Write the dataset mapping to JSON atomically (temp file + rename).
+
+    A crash mid-write must not leave a truncated JSON that later passes an existence check.
+    """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8") as f:
+    tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as f:
         json.dump(mapping, f, ensure_ascii=False, indent=2)
+    tmp_path.replace(out_path)

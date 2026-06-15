@@ -13,7 +13,7 @@ from typing import Annotated, Literal
 from cyclopts import App, Parameter
 
 from src.naming import ensure_absent, metrics_path
-from src.pipeline import run_experiment
+from src.pipeline import run_experiment, validate_metrics
 
 EXP_DIR = Path(__file__).resolve().parent
 app = App(help="Optimize an AutoIntent pipeline on GoEmotions multilabel.")
@@ -42,6 +42,11 @@ _DEFAULTS = RunConfig()
 def main(cfg: Annotated[RunConfig, Parameter(name="*")] = _DEFAULTS) -> None:
     """Run one optimization described by the flattened RunConfig options."""
     exp_name = cfg.exp_name or f"goemotions-{cfg.preset}"
+
+    try:
+        validate_metrics(cfg.scoring_metric, cfg.decision_metric)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
     ensure_absent(metrics_path(cfg.logs_dir, exp_name), cfg.overwrite, label="Metrics file")
     ensure_absent(Path(cfg.logs_dir) / exp_name, cfg.overwrite, label="Run directory")
