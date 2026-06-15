@@ -6,52 +6,46 @@ Usage:
     uv run prepare_data.py --min-samples-per-class 50 --balance classwise  # flattened (cap ~50/class)
 """
 
-from __future__ import annotations
-
-import argparse
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated, Literal
+
+from cyclopts import App, Parameter
 
 from src.data import DEFAULT_CONFIG, DEFAULT_REPO, prepare_mapping, save_mapping
 from src.naming import ensure_absent
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+EXP_DIR = Path(__file__).resolve().parent
+app = App(help="Build the GoEmotions multilabel dataset JSON for AutoIntent.")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--repo", default=DEFAULT_REPO, help="HuggingFace dataset repo.")
-    parser.add_argument("--config", default=DEFAULT_CONFIG, help="Dataset config name.")
-    parser.add_argument("--out", type=Path, default=SCRIPT_DIR / "data" / "go_emotions.json", help="Output JSON path.")
-    parser.add_argument(
-        "--min-samples-per-class",
-        type=int,
-        default=None,
-        help=(
-            "Train subsample size control (default: full train). With --balance stratified it is a floor; "
-            "with --balance classwise it is the per-class target/cap."
-        ),
-    )
-    parser.add_argument(
-        "--balance",
-        choices=["stratified", "classwise"],
-        default="stratified",
-        help=(
-            "stratified: proportion-preserving subsample (iterative-stratification). "
-            "classwise: flatten the distribution by capping each class near the target (multilabel undersampling)."
-        ),
-    )
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for subsampling.")
-    parser.add_argument("--overwrite", action="store_true", help="Replace the output file if it already exists.")
-    return parser.parse_args()
+@dataclass(frozen=True)
+class PrepareConfig:
+    """Configuration for building the dataset JSON."""
+
+    repo: Annotated[str, Parameter(help="HuggingFace dataset repo.")] = DEFAULT_REPO
+    config: Annotated[str, Parameter(help="Dataset config name.")] = DEFAULT_CONFIG
+    out: Annotated[Path, Parameter(help="Output JSON path.")] = EXP_DIR / "data" / "go_emotions.json"
+    min_samples_per_class: Annotated[
+        int | None,
+        Parameter(help="Train subsample control (floor for stratified, per-class cap for classwise)."),
+    ] = None
+    balance: Annotated[
+        Literal["stratified", "classwise"],
+        Parameter(help="stratified=proportion-preserving; classwise=flatten the distribution."),
+    ] = "stratified"
+    seed: Annotated[int, Parameter(help="Random seed for subsampling.")] = 42
+    overwrite: Annotated[bool, Parameter(help="Replace the output file if it already exists.")] = False
 
 
-def main() -> None:
-    args = parse_args()
-    out = ensure_absent(args.out, args.overwrite, label="Dataset file")
-    mapping = prepare_mapping(args.repo, args.config, args.min_samples_per_class, args.balance, args.seed)
+@app.default
+def main(cfg: Annotated[PrepareConfig, Parameter(name="*")] = PrepareConfig()) -> None:
+    """Build and save the dataset described by the flattened PrepareConfig options."""
+    out = ensure_absent(cfg.out, cfg.overwrite, label="Dataset file")
+    mapping = prepare_mapping(cfg.repo, cfg.config, cfg.min_samples_per_class, cfg.balance, cfg.seed)
     save_mapping(mapping, out)
     print(f"Wrote {out}")
 
 
 if __name__ == "__main__":
-    main()
+    app()
