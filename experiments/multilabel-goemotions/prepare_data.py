@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from cyclopts import App, Parameter
+from loguru import logger
 
 from src.data import DEFAULT_CONFIG, DEFAULT_REPO, prepare_mapping, save_mapping
 from src.naming import ensure_absent
@@ -47,7 +48,7 @@ def main(cfg: Annotated[PrepareConfig, Parameter(name="*")] = _DEFAULTS) -> None
     out = ensure_absent(cfg.out, cfg.overwrite, label="Dataset file")
     mapping = prepare_mapping(cfg.repo, cfg.config, cfg.min_samples_per_class, cfg.balance, cfg.seed)
     save_mapping(mapping, out)
-    print(f"Wrote {out}")
+    logger.info("Wrote {}", out)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ dependencies = [
     "cyclopts>=4.18.0",
     "datasets>=4.8.5",
     "iterative-stratification>=0.1.9",
+    "loguru>=0.7.3",
 ]
 
 [dependency-groups]
@@ -29,7 +30,6 @@ ignore = [
     "D105",       # docstring in magic methods
     "EM101",      # string literal in exception
     "TRY003",     # strings in exceptions
-    "T201",       # print (intentional: CLI/progress output)
     "FIX", "TD"   # todos
 ]
 

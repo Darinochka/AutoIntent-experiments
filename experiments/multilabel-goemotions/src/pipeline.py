@@ -10,6 +10,7 @@ from autointent import Context, Dataset, Pipeline
 from autointent.configs import LoggingConfig
 from autointent.metrics import DICISION_METRICS_MULTILABEL, SCORING_METRICS_MULTILABEL
 from autointent.utils import load_preset
+from loguru import logger
 
 from src.naming import metrics_path
 
@@ -74,9 +75,9 @@ def run_experiment(
     (clear_ram is left False). Sweeps pass dump_modules=False to avoid writing a module dump per run.
     """
     dataset = load_multilabel_dataset(data_path)
-    print(f"Loaded {Path(data_path).name}: {dataset.n_classes} classes, multilabel={dataset.multilabel}")
+    logger.info("Loaded {}: {} classes, multilabel={}", Path(data_path).name, dataset.n_classes, dataset.multilabel)
     for split in dataset:
-        print(f"  {split}: {len(dataset[split])} samples")
+        logger.info("split {}: {} samples", split, len(dataset[split]))
 
     pipeline = build_pipeline(preset, seed, scoring_metric, decision_metric)
     pipeline.set_config(LoggingConfig(project_dir=Path(logs_dir), run_name=exp_name, dump_modules=dump_modules))
@@ -88,12 +89,12 @@ def run_experiment(
         emb_updates["device"] = device
     if emb_updates:
         pipeline.set_config(pipeline.embedder_config.model_copy(update=emb_updates))
-        print(f"Embedder overrides: {emb_updates}")
+        logger.info("Embedder overrides: {}", emb_updates)
 
     # Snapshot the splits we feed before fit() (AutoIntent carves an HPO-validation out of train in place).
     fed_split_sizes = {split: len(dataset[split]) for split in dataset}
 
-    print(f"Optimizing preset '{preset}' (experiment '{exp_name}') ...")
+    logger.info("Optimizing preset '{}' (experiment '{}') ...", preset, exp_name)
     context = pipeline.fit(dataset)
 
     metrics = dict(context.optimization_info.pipeline_metrics)
@@ -116,8 +117,8 @@ def run_experiment(
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
 
-    print("\n=== Test metrics (multilabel) ===")
+    logger.info("Test metrics (multilabel):")
     for name, value in metrics.items():
-        print(f"  {name}: {value}")
-    print(f"\nWrote {out_path}")
+        logger.info("  {}: {}", name, value)
+    logger.info("Wrote {}", out_path)
     return report

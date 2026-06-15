@@ -30,6 +30,7 @@ from typing import Annotated, Any, Literal
 
 from autointent.metrics import DICISION_METRICS_MULTILABEL, SCORING_METRICS_MULTILABEL
 from cyclopts import Parameter
+from loguru import logger
 
 from src.data import (
     DEFAULT_CONFIG,
@@ -124,11 +125,11 @@ def build_datasets(
         if path.exists():
             paths[cell] = path
             continue
-        print(f"Building dataset {path.name} ({balance}, {n}-shot, seed {seed}) ...")
+        logger.info("Building dataset {} ({}, {}-shot, seed {}) ...", path.name, balance, n, seed)
         train_rows = subsample_for(balance, train_full, n_classes, n, seed)
         present = int((label_matrix(train_rows, n_classes).sum(axis=0) > 0).sum())
         if present < n_classes:
-            print(f"  SKIP: only {present}/{n_classes} classes present; AutoIntent needs every class.")
+            logger.warning("SKIP: only {}/{} classes present; AutoIntent needs every class.", present, n_classes)
             continue
         save_mapping(assemble_mapping(names, train_rows, eval_rows), path)
         paths[cell] = path
@@ -209,11 +210,17 @@ def _print_best(summary: list[dict[str, Any]]) -> None:
         key = (r["size"], r["balance"])
         if key not in best or r["f1_mean"] > best[key]["f1_mean"]:
             best[key] = r
-    print("\n=== best (scoring, decision) per cell, by mean eval_f1 over seeds ===")
+    logger.info("Best (scoring, decision) per cell, by mean eval_f1 over seeds:")
     for (size, balance), r in sorted(best.items()):
-        print(
-            f"  size={size:<4} {balance:<10} scoring={r['scoring_metric']:<24} "
-            f"decision={r['decision_metric']:<20} -> f1={r['f1_mean']:.4f} ± {r['f1_std']:.4f} (n={r['n_seeds']})"
+        logger.info(
+            "size={:<4} {:<10} scoring={:<24} decision={:<20} -> f1={:.4f} ± {:.4f} (n={})",
+            size,
+            balance,
+            r["scoring_metric"],
+            r["decision_metric"],
+            r["f1_mean"],
+            r["f1_std"],
+            r["n_seeds"],
         )
 
 
@@ -231,10 +238,10 @@ def _run_cell(
     logs_dir = Path(cfg.logs_dir)
     out_path = metrics_path(logs_dir, exp_name)
     if out_path.exists() and not cfg.overwrite:
-        print("  exists -> skip (resume)")
+        logger.info("exists -> skip (resume)")
         return json.loads(out_path.read_text(encoding="utf-8")), "ok"
     if dedup_key in seen:
-        print(f"  identical (dataset, seed) to {seen[dedup_key]} -> reuse result")
+        logger.info("identical (dataset, seed) to {} -> reuse result", seen[dedup_key])
         report = json.loads(metrics_path(logs_dir, seen[dedup_key]).read_text(encoding="utf-8"))
         out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         return report, "ok"
@@ -257,7 +264,7 @@ def _run_cell(
             dump_modules=False,
         )
     except Exception as exc:  # noqa: BLE001 - one bad cell must not kill the sweep
-        print(f"  FAILED: {exc}")
+        logger.exception("cell failed")
         return None, f"failed: {exc}"
     seen[dedup_key] = exp_name
     return report, "ok"
@@ -269,7 +276,7 @@ def _print_plan(cfg: SweepConfig) -> None:
             for seed in cfg.seeds:
                 for scoring in cfg.scoring_metrics:
                     for decision in cfg.decision_metrics:
-                        print(f"  gm-{balance}-{n}-s_{scoring}-d_{decision}-seed{seed}")
+                        logger.info("gm-{}-{}-s_{}-d_{}-seed{}", balance, n, scoring, decision, seed)
 
 
 def run_sweep(cfg: SweepConfig) -> list[dict[str, Any]]:
@@ -282,14 +289,19 @@ def run_sweep(cfg: SweepConfig) -> list[dict[str, Any]]:
     total = (
         len(cfg.sizes) * len(cfg.balances) * len(cfg.scoring_metrics) * len(cfg.decision_metrics) * len(cfg.seeds)
     )
-    print(
-        f"Sweep plan: {len(cfg.sizes)} sizes x {len(cfg.balances)} balances x {len(cfg.scoring_metrics)} scoring "
-        f"x {len(cfg.decision_metrics)} decision x {len(cfg.seeds)} seeds = {total} runs"
+    logger.info(
+        "Sweep plan: {} sizes x {} balances x {} scoring x {} decision x {} seeds = {} runs",
+        len(cfg.sizes),
+        len(cfg.balances),
+        len(cfg.scoring_metrics),
+        len(cfg.decision_metrics),
+        len(cfg.seeds),
+        total,
     )
 
     if cfg.dry_run:
         _print_plan(cfg)
-        print("dry-run: no datasets built, no fits executed.")
+        logger.info("dry-run: no datasets built, no fits executed.")
         return []
 
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -307,13 +319,13 @@ def run_sweep(cfg: SweepConfig) -> list[dict[str, Any]]:
                 done += 1
                 exp_name = f"gm-{balance}-{n}-s_{scoring}-d_{decision}-seed{seed}"
                 dedup_key = (train_hash, scoring, decision, seed)
-                print(f"\n[{done}/{total}] {exp_name}")
+                logger.info("[{}/{}] {}", done, total, exp_name)
                 report, status = _run_cell(cfg, exp_name, data_path, scoring, decision, seed, dedup_key, seen)
                 runs.append(_summarize(report or {}, balance, n, scoring, decision, seed, status))
                 _write_csv(runs_csv, runs, RUN_FIELDS)
 
     summary = _aggregate(runs)
     _write_csv(summary_csv, summary, SUMMARY_FIELDS)
-    print(f"\nWrote {runs_csv} and {summary_csv}")
+    logger.info("Wrote {} and {}", runs_csv, summary_csv)
     _print_best(summary)
     return runs

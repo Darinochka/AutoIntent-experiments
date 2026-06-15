@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 from datasets import load_dataset
 from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
+from loguru import logger
 
 DEFAULT_REPO = "google-research-datasets/go_emotions"
 DEFAULT_CONFIG = "simplified"
@@ -60,7 +61,9 @@ def stratified_subsample(
     needed = (min_per_class * len(rows) / class_counts[present]).max()
     target = math.ceil(needed)
     if target >= len(rows):
-        print(f"Cannot reduce train below {len(rows)} rows for min-samples-per-class={min_per_class}; keeping all.")
+        logger.warning(
+            "Cannot reduce train below {} rows for min-samples-per-class={}; keeping all.", len(rows), min_per_class
+        )
         return rows
 
     # test_size is passed explicitly: iterstrat 0.1.9's "default" sentinel is rejected by modern sklearn.
@@ -71,9 +74,13 @@ def stratified_subsample(
     subset = [rows[i] for i in train_idx]
 
     rarest = int(label_matrix(subset, n_classes).sum(axis=0)[present].min())
-    print(f"Stratified-subsampled train to {len(subset)} rows (rarest class has {rarest}, floor {min_per_class}).")
+    logger.info(
+        "Stratified-subsampled train to {} rows (rarest class has {}, floor {}).", len(subset), rarest, min_per_class
+    )
     if rarest < min_per_class:
-        print(f"  Warning: rarest class below floor ({rarest} < {min_per_class}); data too imbalanced to guarantee it.")
+        logger.warning(
+            "Rarest class below floor ({} < {}); data too imbalanced to guarantee it.", rarest, min_per_class
+        )
     return subset
 
 
@@ -99,10 +106,13 @@ def classwise_subsample(
 
     present = label_matrix(rows, n_classes).sum(axis=0) > 0
     sub_counts = label_matrix(subset, n_classes).sum(axis=0)[present]
-    print(
-        f"Classwise-subsampled train to {len(subset)} rows "
-        f"(per-class min/median/max = {int(sub_counts.min())}/{int(np.median(sub_counts))}/{int(sub_counts.max())}, "
-        f"target {target_per_class})."
+    logger.info(
+        "Classwise-subsampled train to {} rows (per-class min/median/max = {}/{}/{}, target {}).",
+        len(subset),
+        int(sub_counts.min()),
+        int(np.median(sub_counts)),
+        int(sub_counts.max()),
+        target_per_class,
     )
     return subset
 
@@ -124,9 +134,12 @@ def natural_subsample(rows: list[dict[str, Any]], n_classes: int, total_size: in
 
     present = y.sum(axis=0) > 0
     sub = label_matrix(subset, n_classes).sum(axis=0)[present]
-    print(
-        f"Natural-subsampled train to {len(subset)} rows "
-        f"(per-class min/median/max = {int(sub.min())}/{int(np.median(sub))}/{int(sub.max())})."
+    logger.info(
+        "Natural-subsampled train to {} rows (per-class min/median/max = {}/{}/{}).",
+        len(subset),
+        int(sub.min()),
+        int(np.median(sub)),
+        int(sub.max()),
     )
     return subset
 
@@ -160,10 +173,10 @@ def prepare_mapping(
     repo: str, config: str, min_per_class: int | None, balance: str, seed: int
 ) -> dict[str, list[dict[str, Any]]]:
     """Build the full AutoIntent dataset mapping (intents + splits) from GoEmotions."""
-    print(f"Loading {repo} ({config}) ...")
+    logger.info("Loading {} ({}) ...", repo, config)
     ds, names = load_goemotions(repo, config)
     n_classes = len(names)
-    print(f"{n_classes} emotion classes: {', '.join(names)}")
+    logger.info("{} emotion classes: {}", n_classes, ", ".join(names))
 
     mapping: dict[str, list[dict[str, Any]]] = {"intents": [{"id": i, "name": name} for i, name in enumerate(names)]}
     for src_split, ai_split in SPLIT_MAP.items():
@@ -175,7 +188,9 @@ def prepare_mapping(
         samples = to_onehot_samples(rows, n_classes)
         mapping[ai_split] = samples
         dropped = len(rows) - len(samples)
-        print(f"  ai-{ai_split} (from source {src_split}): {len(samples)} samples (dropped {dropped} label-less)")
+        logger.info(
+            "ai-{} (from source {}): {} samples (dropped {} label-less)", ai_split, src_split, len(samples), dropped
+        )
     return mapping
 
 
