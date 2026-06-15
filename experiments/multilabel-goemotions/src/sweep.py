@@ -28,7 +28,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-import numpy as np
 from autointent.metrics import DICISION_METRICS_MULTILABEL, SCORING_METRICS_MULTILABEL
 from cyclopts import Parameter
 
@@ -90,7 +89,9 @@ class SweepConfig:
     dry_run: Annotated[bool, Parameter(help="Print the run plan and exit (no datasets, no fits).")] = False
 
 
-def subsample_for(balance: str, train_full: list[dict], n_classes: int, n: int, seed: int) -> list[dict]:
+def subsample_for(
+    balance: str, train_full: list[dict[str, Any]], n_classes: int, n: int, seed: int
+) -> list[dict[str, Any]]:
     """Return the train subsample for a (balance, size) cell."""
     if balance == "classwise":
         return classwise_subsample(train_full, n_classes, n, seed)
@@ -99,44 +100,49 @@ def subsample_for(balance: str, train_full: list[dict], n_classes: int, n: int, 
     if balance == "natural":
         total = len(classwise_subsample(train_full, n_classes, n, seed))
         return natural_subsample(train_full, n_classes, total, seed)
-    raise ValueError(f"unknown balance '{balance}'")
+    msg = f"unknown balance '{balance}'"
+    raise ValueError(msg)
 
 
 def build_datasets(
     sizes: list[int], balances: list[str], seeds: list[int], repo: str, config: str, data_dir: Path
-) -> dict[tuple, Path]:
+) -> dict[tuple[str, int, int], Path]:
     """Prepare one dataset JSON per (balance, size, seed). Skips cells missing a class."""
-    ds = names = train_full = eval_rows = None
-    n_classes = 0
-    paths: dict[tuple, Path] = {}
-    for n in sizes:
-        for balance in balances:
-            for seed in seeds:
-                path = data_dir / f"ge_{balance}_{n}_s{seed}.json"
-                if path.exists():
-                    paths[(balance, n, seed)] = path
-                    continue
-                if ds is None:
-                    ds, names = load_goemotions(repo, config)
-                    n_classes = len(names)
-                    train_full, eval_rows = list(ds["train"]), list(ds["validation"])
-                print(f"Building dataset {path.name} ({balance}, {n}-shot, seed {seed}) ...")
-                train_rows = subsample_for(balance, train_full, n_classes, n, seed)
-                present = int((label_matrix(train_rows, n_classes).sum(axis=0) > 0).sum())
-                if present < n_classes:
-                    print(f"  SKIP: only {present}/{n_classes} classes present; AutoIntent needs every class.")
-                    continue
-                save_mapping(assemble_mapping(names, train_rows, eval_rows), path)
-                paths[(balance, n, seed)] = path
+    cells = [(balance, n, seed) for n in sizes for balance in balances for seed in seeds]
+    candidate = {cell: data_dir / f"ge_{cell[0]}_{cell[1]}_s{cell[2]}.json" for cell in cells}
+    if all(path.exists() for path in candidate.values()):
+        return candidate
+
+    ds, names = load_goemotions(repo, config)
+    n_classes = len(names)
+    train_full, eval_rows = list(ds["train"]), list(ds["validation"])
+
+    paths: dict[tuple[str, int, int], Path] = {}
+    for cell in cells:
+        balance, n, seed = cell
+        path = candidate[cell]
+        if path.exists():
+            paths[cell] = path
+            continue
+        print(f"Building dataset {path.name} ({balance}, {n}-shot, seed {seed}) ...")
+        train_rows = subsample_for(balance, train_full, n_classes, n, seed)
+        present = int((label_matrix(train_rows, n_classes).sum(axis=0) > 0).sum())
+        if present < n_classes:
+            print(f"  SKIP: only {present}/{n_classes} classes present; AutoIntent needs every class.")
+            continue
+        save_mapping(assemble_mapping(names, train_rows, eval_rows), path)
+        paths[cell] = path
     return paths
 
 
 def _train_hash(path: Path) -> str:
     train = json.loads(path.read_text(encoding="utf-8"))["train"]
-    return hashlib.md5(json.dumps(train, sort_keys=True).encode()).hexdigest()
+    return hashlib.md5(json.dumps(train, sort_keys=True).encode(), usedforsecurity=False).hexdigest()
 
 
-def _summarize(report: dict, balance: str, n: int, scoring: str, decision: str, seed: int, status: str) -> dict[str, Any]:
+def _summarize(
+    report: dict[str, Any], balance: str, n: int, scoring: str, decision: str, seed: int, status: str
+) -> dict[str, Any]:
     tm = report.get("test_metrics", {}) if report else {}
     modules = report.get("selected_modules", []) if report else []
     chosen = {m["node_type"]: m.get("module_name") for m in modules if "module_name" in m}
@@ -157,21 +163,21 @@ def _summarize(report: dict, balance: str, n: int, scoring: str, decision: str, 
     }
 
 
-def _aggregate(runs: list[dict]) -> list[dict]:
+def _aggregate(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Average eval metrics across seeds per (size, balance, scoring, decision) cell."""
-    groups: dict[tuple, list[dict]] = defaultdict(list)
+    groups: dict[tuple[int, str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in runs:
         if r["status"] != "ok" or r["eval_f1"] is None:
             continue
         groups[(r["size"], r["balance"], r["scoring_metric"], r["decision_metric"])].append(r)
 
-    rows = []
+    rows: list[dict[str, Any]] = []
     for (size, balance, sm, dm), rs in groups.items():
 
-        def mean(name: str, rs: list[dict] = rs) -> float:
-            return round(statistics.mean([r[name] for r in rs]), 4)
+        def mean(name: str, rs: list[dict[str, Any]] = rs) -> float:
+            return round(statistics.mean([float(r[name]) for r in rs]), 4)
 
-        f1 = [r["eval_f1"] for r in rs]
+        f1 = [float(r["eval_f1"]) for r in rs]
         rows.append({
             "size": size,
             "balance": balance,
@@ -190,15 +196,15 @@ def _aggregate(runs: list[dict]) -> list[dict]:
     return sorted(rows, key=lambda r: (r["size"], r["balance"], r["scoring_metric"], r["decision_metric"]))
 
 
-def _write_csv(path: Path, rows: list[dict], fields: list[str]) -> None:
+def _write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
 
 
-def _print_best(summary: list[dict]) -> None:
-    best: dict[tuple, dict] = {}
+def _print_best(summary: list[dict[str, Any]]) -> None:
+    best: dict[tuple[int, str], dict[str, Any]] = {}
     for r in summary:
         key = (r["size"], r["balance"])
         if key not in best or r["f1_mean"] > best[key]["f1_mean"]:
@@ -211,11 +217,67 @@ def _print_best(summary: list[dict]) -> None:
         )
 
 
-def run_sweep(cfg: SweepConfig) -> list[dict]:
+def _run_cell(
+    cfg: SweepConfig,
+    exp_name: str,
+    data_path: Path,
+    scoring: str,
+    decision: str,
+    seed: int,
+    dedup_key: tuple[str, str, str, int],
+    seen: dict[tuple[str, str, str, int], str],
+) -> tuple[dict[str, Any] | None, str]:
+    """Run, resume, or reuse one sweep cell. Returns (report or None, status); updates ``seen``."""
+    logs_dir = Path(cfg.logs_dir)
+    out_path = metrics_path(logs_dir, exp_name)
+    if out_path.exists() and not cfg.overwrite:
+        print("  exists -> skip (resume)")
+        return json.loads(out_path.read_text(encoding="utf-8")), "ok"
+    if dedup_key in seen:
+        print(f"  identical (dataset, seed) to {seen[dedup_key]} -> reuse result")
+        report = json.loads(metrics_path(logs_dir, seen[dedup_key]).read_text(encoding="utf-8"))
+        out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        return report, "ok"
+    if cfg.overwrite:
+        out_path.unlink(missing_ok=True)
+        run_dir = logs_dir / exp_name
+        if run_dir.exists():
+            shutil.rmtree(run_dir)
+    try:
+        report = run_experiment(
+            data_path=data_path,
+            preset=cfg.preset,
+            exp_name=exp_name,
+            logs_dir=logs_dir,
+            embedder_model=cfg.embedder_model,
+            device=cfg.device,
+            scoring_metric=scoring,
+            decision_metric=decision,
+            seed=seed,
+            dump_modules=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - one bad cell must not kill the sweep
+        print(f"  FAILED: {exc}")
+        return None, f"failed: {exc}"
+    seen[dedup_key] = exp_name
+    return report, "ok"
+
+
+def _print_plan(cfg: SweepConfig) -> None:
+    for n in cfg.sizes:
+        for balance in cfg.balances:
+            for seed in cfg.seeds:
+                for scoring in cfg.scoring_metrics:
+                    for decision in cfg.decision_metrics:
+                        print(f"  gm-{balance}-{n}-s_{scoring}-d_{decision}-seed{seed}")
+
+
+def run_sweep(cfg: SweepConfig) -> list[dict[str, Any]]:
     """Run the full grid and return the collected per-run summary rows."""
     bad = [b for b in cfg.balances if b not in BALANCES]
     if bad:
-        raise SystemExit(f"unknown balance(s) {bad}; choose from {list(BALANCES)}")
+        msg = f"unknown balance(s) {bad}; choose from {list(BALANCES)}"
+        raise SystemExit(msg)
     logs_dir, data_dir = Path(cfg.logs_dir), Path(cfg.data_dir)
     total = (
         len(cfg.sizes) * len(cfg.balances) * len(cfg.scoring_metrics) * len(cfg.decision_metrics) * len(cfg.seeds)
@@ -226,12 +288,7 @@ def run_sweep(cfg: SweepConfig) -> list[dict]:
     )
 
     if cfg.dry_run:
-        for n in cfg.sizes:
-            for balance in cfg.balances:
-                for seed in cfg.seeds:
-                    for scoring in cfg.scoring_metrics:
-                        for decision in cfg.decision_metrics:
-                            print(f"  gm-{balance}-{n}-s_{scoring}-d_{decision}-seed{seed}")
+        _print_plan(cfg)
         print("dry-run: no datasets built, no fits executed.")
         return []
 
@@ -240,8 +297,8 @@ def run_sweep(cfg: SweepConfig) -> list[dict]:
     paths = build_datasets(cfg.sizes, cfg.balances, cfg.seeds, DEFAULT_REPO, DEFAULT_CONFIG, data_dir)
     runs_csv, summary_csv = logs_dir / "sweep_runs.csv", logs_dir / "sweep_summary.csv"
 
-    runs: list[dict] = []
-    seen: dict[tuple, str] = {}  # (train_hash, scoring, decision, seed) -> exp_name already computed
+    runs: list[dict[str, Any]] = []
+    seen: dict[tuple[str, str, str, int], str] = {}  # (train_hash, scoring, decision, seed) -> exp_name
     done = 0
     for (balance, n, seed), data_path in paths.items():
         train_hash = _train_hash(data_path)
@@ -249,43 +306,9 @@ def run_sweep(cfg: SweepConfig) -> list[dict]:
             for decision in cfg.decision_metrics:
                 done += 1
                 exp_name = f"gm-{balance}-{n}-s_{scoring}-d_{decision}-seed{seed}"
-                out_path = metrics_path(logs_dir, exp_name)
                 dedup_key = (train_hash, scoring, decision, seed)
                 print(f"\n[{done}/{total}] {exp_name}")
-
-                status, report = "ok", None
-                if out_path.exists() and not cfg.overwrite:
-                    print("  exists -> skip (resume)")
-                    report = json.loads(out_path.read_text(encoding="utf-8"))
-                elif dedup_key in seen:
-                    print(f"  identical (dataset, seed) to {seen[dedup_key]} -> reuse result")
-                    report = json.loads(metrics_path(logs_dir, seen[dedup_key]).read_text(encoding="utf-8"))
-                    out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-                else:
-                    if cfg.overwrite:
-                        out_path.unlink(missing_ok=True)
-                        run_dir = logs_dir / exp_name
-                        if run_dir.exists():
-                            shutil.rmtree(run_dir)
-                    try:
-                        report = run_experiment(
-                            data_path=data_path,
-                            preset=cfg.preset,
-                            exp_name=exp_name,
-                            logs_dir=logs_dir,
-                            out_path=out_path,
-                            embedder_model=cfg.embedder_model,
-                            device=cfg.device,
-                            scoring_metric=scoring,
-                            decision_metric=decision,
-                            seed=seed,
-                            dump_modules=False,
-                        )
-                        seen[dedup_key] = exp_name
-                    except Exception as exc:  # noqa: BLE001 - one bad cell must not kill the sweep
-                        status = f"failed: {exc}"
-                        print(f"  FAILED: {exc}")
-
+                report, status = _run_cell(cfg, exp_name, data_path, scoring, decision, seed, dedup_key, seen)
                 runs.append(_summarize(report or {}, balance, n, scoring, decision, seed, status))
                 _write_csv(runs_csv, runs, RUN_FIELDS)
 

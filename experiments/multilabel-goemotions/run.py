@@ -35,23 +35,26 @@ class RunConfig:
     overwrite: Annotated[bool, Parameter(help="Replace existing metrics/run outputs.")] = False
 
 
+_DEFAULTS = RunConfig()
+
+
 @app.default
-def main(cfg: Annotated[RunConfig, Parameter(name="*")] = RunConfig()) -> None:
+def main(cfg: Annotated[RunConfig, Parameter(name="*")] = _DEFAULTS) -> None:
     """Run one optimization described by the flattened RunConfig options."""
     exp_name = cfg.exp_name or f"goemotions-{cfg.preset}"
 
-    out_path = ensure_absent(metrics_path(cfg.logs_dir, exp_name), cfg.overwrite, label="Metrics file")
+    ensure_absent(metrics_path(cfg.logs_dir, exp_name), cfg.overwrite, label="Metrics file")
     ensure_absent(Path(cfg.logs_dir) / exp_name, cfg.overwrite, label="Run directory")
 
     if not cfg.data.exists():
-        raise SystemExit(f"Dataset not found at {cfg.data}. Run prepare_data.py first.")
+        msg = f"Dataset not found at {cfg.data}. Run prepare_data.py first."
+        raise SystemExit(msg)
 
     run_experiment(
         data_path=cfg.data,
         preset=cfg.preset,
         exp_name=exp_name,
         logs_dir=cfg.logs_dir,
-        out_path=out_path,
         embedder_model=cfg.embedder_model,
         device=cfg.device,
         scoring_metric=cfg.scoring_metric,

@@ -4,28 +4,33 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
-from autointent import Dataset, Pipeline
+from autointent import Context, Dataset, Pipeline
 from autointent.configs import LoggingConfig
 from autointent.metrics import DICISION_METRICS_MULTILABEL, SCORING_METRICS_MULTILABEL
 from autointent.utils import load_preset
+
+from src.naming import metrics_path
+
+if TYPE_CHECKING:
+    from autointent.custom_types import SearchSpacePreset
 
 
 def validate_metrics(scoring_metric: str | None, decision_metric: str | None) -> None:
     """Reject unknown target-metric names with the valid multilabel options."""
     if scoring_metric and scoring_metric not in SCORING_METRICS_MULTILABEL:
-        raise SystemExit(f"Invalid --scoring-metric '{scoring_metric}'. Choose from: {sorted(SCORING_METRICS_MULTILABEL)}")
+        msg = f"Invalid --scoring-metric '{scoring_metric}'. Choose from: {sorted(SCORING_METRICS_MULTILABEL)}"
+        raise SystemExit(msg)
     if decision_metric and decision_metric not in DICISION_METRICS_MULTILABEL:
-        raise SystemExit(
-            f"Invalid --decision-metric '{decision_metric}'. Choose from: {sorted(DICISION_METRICS_MULTILABEL)}"
-        )
+        msg = f"Invalid --decision-metric '{decision_metric}'. Choose from: {sorted(DICISION_METRICS_MULTILABEL)}"
+        raise SystemExit(msg)
 
 
 def build_pipeline(preset: str, seed: int, scoring_metric: str | None, decision_metric: str | None) -> Pipeline:
     """Load a preset and optionally override the scoring/decision target metrics before building."""
     validate_metrics(scoring_metric, decision_metric)
-    cfg = load_preset(preset)
+    cfg = load_preset(cast("SearchSpacePreset", preset))
     for node in cfg["search_space"]:
         if node["node_type"] == "scoring" and scoring_metric:
             node["target_metric"] = scoring_metric
@@ -42,7 +47,7 @@ def load_multilabel_dataset(data_path: str | Path) -> Dataset:
     return dataset
 
 
-def selected_modules(context: Any) -> list[dict]:
+def selected_modules(context: Context) -> list[dict[str, Any]]:
     """Best-effort extraction of the chosen module configs (never fatal)."""
     try:
         return [cfg.asdict() for cfg in context.optimization_info.get_inference_nodes_config()]
@@ -56,14 +61,13 @@ def run_experiment(
     preset: str,
     exp_name: str,
     logs_dir: str | Path,
-    out_path: str | Path,
     embedder_model: str | None,
     device: str | None,
     scoring_metric: str | None,
     decision_metric: str | None,
     seed: int,
     dump_modules: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Optimize the pipeline, evaluate on test, write the report, and return it.
 
     dump_modules persists fitted modules to disk for reuse; final test metrics are computed regardless
@@ -93,7 +97,7 @@ def run_experiment(
     context = pipeline.fit(dataset)
 
     metrics = dict(context.optimization_info.pipeline_metrics)
-    report = {
+    report: dict[str, Any] = {
         "preset": preset,
         "exp_name": exp_name,
         "n_classes": dataset.n_classes,
@@ -107,7 +111,7 @@ def run_experiment(
         "selected_modules": selected_modules(context),
     }
 
-    out_path = Path(out_path)
+    out_path = metrics_path(logs_dir, exp_name)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)

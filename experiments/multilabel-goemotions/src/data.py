@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from datasets import load_dataset
@@ -27,14 +28,14 @@ DEFAULT_CONFIG = "simplified"
 SPLIT_MAP = {"train": "train", "validation": "test"}
 
 
-def load_goemotions(repo: str = DEFAULT_REPO, config: str = DEFAULT_CONFIG) -> tuple[dict, list[str]]:
+def load_goemotions(repo: str = DEFAULT_REPO, config: str = DEFAULT_CONFIG) -> tuple[Any, list[str]]:
     """Load the dataset and return it alongside the ordered emotion class names."""
     ds = load_dataset(repo, config)
     names = ds["train"].features["labels"].feature.names
     return ds, names
 
 
-def label_matrix(rows: list[dict], n_classes: int) -> np.ndarray:
+def label_matrix(rows: list[dict[str, Any]], n_classes: int) -> np.ndarray:
     """Build a (n_samples, n_classes) one-hot matrix from GoEmotions label-index lists."""
     y = np.zeros((len(rows), n_classes), dtype=int)
     for i, ex in enumerate(rows):
@@ -43,7 +44,9 @@ def label_matrix(rows: list[dict], n_classes: int) -> np.ndarray:
     return y
 
 
-def stratified_subsample(rows: list[dict], n_classes: int, min_per_class: int, seed: int) -> list[dict]:
+def stratified_subsample(
+    rows: list[dict[str, Any]], n_classes: int, min_per_class: int, seed: int
+) -> list[dict[str, Any]]:
     """Smallest label-stratified subsample (iterative-stratification) where each class clears a floor.
 
     The subset size is chosen so the rarest present class reaches ~min_per_class samples while the
@@ -74,7 +77,9 @@ def stratified_subsample(rows: list[dict], n_classes: int, min_per_class: int, s
     return subset
 
 
-def classwise_subsample(rows: list[dict], n_classes: int, target_per_class: int, seed: int) -> list[dict]:
+def classwise_subsample(
+    rows: list[dict[str, Any]], n_classes: int, target_per_class: int, seed: int
+) -> list[dict[str, Any]]:
     """Flatten the label distribution by capping each class near target_per_class (multilabel undersampling).
 
     Shuffles, then keeps a row only while at least one of its labels is still below the target. Majority
@@ -102,7 +107,7 @@ def classwise_subsample(rows: list[dict], n_classes: int, target_per_class: int,
     return subset
 
 
-def natural_subsample(rows: list[dict], n_classes: int, total_size: int, seed: int) -> list[dict]:
+def natural_subsample(rows: list[dict[str, Any]], n_classes: int, total_size: int, seed: int) -> list[dict[str, Any]]:
     """Proportion-preserving sample of ``total_size`` rows (keeps the natural, imbalanced distribution).
 
     Used to build a size-matched imbalanced counterpart to a balanced N-shot set: same total size, but
@@ -126,7 +131,9 @@ def natural_subsample(rows: list[dict], n_classes: int, total_size: int, seed: i
     return subset
 
 
-def subsample_train(rows: list[dict], n_classes: int, min_per_class: int | None, balance: str, seed: int) -> list[dict]:
+def subsample_train(
+    rows: list[dict[str, Any]], n_classes: int, min_per_class: int | None, balance: str, seed: int
+) -> list[dict[str, Any]]:
     """Dispatch to the requested subsampler, or keep all rows when min_per_class is None."""
     if min_per_class is None:
         return rows
@@ -135,7 +142,7 @@ def subsample_train(rows: list[dict], n_classes: int, min_per_class: int | None,
     return stratified_subsample(rows, n_classes, min_per_class, seed)
 
 
-def to_onehot_samples(rows: list[dict], n_classes: int) -> list[dict]:
+def to_onehot_samples(rows: list[dict[str, Any]], n_classes: int) -> list[dict[str, Any]]:
     """Map GoEmotions rows to AutoIntent one-hot multilabel samples (dropping label-less rows)."""
     samples = []
     for ex in rows:
@@ -151,14 +158,14 @@ def to_onehot_samples(rows: list[dict], n_classes: int) -> list[dict]:
 
 def prepare_mapping(
     repo: str, config: str, min_per_class: int | None, balance: str, seed: int
-) -> dict[str, list[dict]]:
+) -> dict[str, list[dict[str, Any]]]:
     """Build the full AutoIntent dataset mapping (intents + splits) from GoEmotions."""
     print(f"Loading {repo} ({config}) ...")
     ds, names = load_goemotions(repo, config)
     n_classes = len(names)
     print(f"{n_classes} emotion classes: {', '.join(names)}")
 
-    mapping: dict[str, list[dict]] = {"intents": [{"id": i, "name": name} for i, name in enumerate(names)]}
+    mapping: dict[str, list[dict[str, Any]]] = {"intents": [{"id": i, "name": name} for i, name in enumerate(names)]}
     for src_split, ai_split in SPLIT_MAP.items():
         if src_split not in ds:
             continue
@@ -167,11 +174,14 @@ def prepare_mapping(
             rows = subsample_train(rows, n_classes, min_per_class, balance, seed)
         samples = to_onehot_samples(rows, n_classes)
         mapping[ai_split] = samples
-        print(f"  ai-{ai_split} (from source {src_split}): {len(samples)} samples (dropped {len(rows) - len(samples)} label-less)")
+        dropped = len(rows) - len(samples)
+        print(f"  ai-{ai_split} (from source {src_split}): {len(samples)} samples (dropped {dropped} label-less)")
     return mapping
 
 
-def assemble_mapping(names: list[str], train_rows: list[dict], eval_rows: list[dict]) -> dict[str, list[dict]]:
+def assemble_mapping(
+    names: list[str], train_rows: list[dict[str, Any]], eval_rows: list[dict[str, Any]]
+) -> dict[str, list[dict[str, Any]]]:
     """Build an AutoIntent mapping from explicit train/eval rows.
 
     Mirrors the prepare_mapping feeding scheme: eval_rows become AutoIntent's ``test`` split, and
@@ -186,7 +196,7 @@ def assemble_mapping(names: list[str], train_rows: list[dict], eval_rows: list[d
     }
 
 
-def save_mapping(mapping: dict, out_path: str | Path) -> None:
+def save_mapping(mapping: dict[str, Any], out_path: str | Path) -> None:
     """Write the dataset mapping to JSON."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

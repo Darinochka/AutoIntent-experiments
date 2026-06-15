@@ -9,10 +9,11 @@ def ensure_absent(path: str | Path, overwrite: bool, label: str = "Output") -> P
     """Fail before doing any work if path already exists (unless overwrite is set)."""
     path = Path(path)
     if path.exists() and not overwrite:
-        raise SystemExit(
+        msg = (
             f"{label} already exists: {path}\n"
-            f"Choose a different name (--exp-name / --out) or pass --overwrite to replace it."
+            "Choose a different name (--exp-name / --out) or pass --overwrite to replace it."
         )
+        raise SystemExit(msg)
     return path
 
 

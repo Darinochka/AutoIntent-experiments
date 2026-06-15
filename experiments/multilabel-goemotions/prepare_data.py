@@ -38,8 +38,11 @@ class PrepareConfig:
     overwrite: Annotated[bool, Parameter(help="Replace the output file if it already exists.")] = False
 
 
+_DEFAULTS = PrepareConfig()
+
+
 @app.default
-def main(cfg: Annotated[PrepareConfig, Parameter(name="*")] = PrepareConfig()) -> None:
+def main(cfg: Annotated[PrepareConfig, Parameter(name="*")] = _DEFAULTS) -> None:
     """Build and save the dataset described by the flattened PrepareConfig options."""
     out = ensure_absent(cfg.out, cfg.overwrite, label="Dataset file")
     mapping = prepare_mapping(cfg.repo, cfg.config, cfg.min_samples_per_class, cfg.balance, cfg.seed)

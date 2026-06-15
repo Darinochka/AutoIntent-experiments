@@ -29,6 +29,7 @@ ignore = [
     "D105",       # docstring in magic methods
     "EM101",      # string literal in exception
     "TRY003",     # strings in exceptions
+    "T201",       # print (intentional: CLI/progress output)
     "FIX", "TD"   # todos
 ]
 
@@ -50,3 +51,7 @@ plugins = [
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true
+
+[[tool.mypy.overrides]]
+module = ["datasets.*", "iterstrat.*"]
+ignore_missing_imports = true
