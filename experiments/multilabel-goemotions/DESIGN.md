@@ -69,7 +69,11 @@ Because the metric is macro, **per-class data availability is the binding constr
 
 - **`classwise` — primary capability probe.** Cap *N* samples/class → balanced *N*-shot. The standard,
   fair way to measure per-class learning ability: equal budget per class, so the score reflects the model,
-  not the dataset's skew. (Rare classes saturate at availability — `grief` maxes at ~77.)
+  not the dataset's skew. (Rare classes saturate at availability — `grief` maxes at ~77.) **Not guaranteed
+  feasible at `N=5`:** classwise puts ≥5/class in *train*, but AutoIntent carves ~20% of train as
+  HPO-validation, which at 5-shot averages ~1 sample/class — a rare class can land 0 times in the carved
+  val and the fit raises (same root cause as `natural`, milder). Such a cell is caught and recorded as
+  `failed`, not crashed; treat classwise-5 as best-effort, with classwise-10 the first fully reliable rung.
 - **`stratified` — realism anchor.** Floor of *N*/class, natural proportions above the floor → imbalanced,
   like real deployment data. Collapses to the **full** train once *N* > the rarest class total (~77), so
   `100`- and `500`-shot are identical (the sweep deduplicates identical (dataset, seed) cells).
@@ -88,9 +92,17 @@ A shared shot ladder for both modes: **`5 10 25 50 100`**.
 
 ### 5.3 Seeds
 
-Run **3 seeds** per cell (`--seeds 1 2 3`). Each seed redraws the subsample **and** reseeds AutoIntent's
-HPO/val-carve. At 5–10 shots the variance is large; a single seed is not a fair measurement. The summary
-reports `f1_mean ± f1_std` per cell.
+Each seed redraws the subsample **and** reseeds AutoIntent's HPO/val-carve (the same integer drives both —
+verified: pipeline `seed` → `Context` → `DataHandler.random_seed` → the validation carve). At 5–10 shots the
+variance is large; a single seed is not a fair measurement. The summary reports `f1_mean ± f1_std` per cell.
+
+**Seed budget scales with expected variance.** Run **≥5 seeds at the two smallest sizes (5, 10)** and **3
+seeds from 25 up**. Two reasons the bottom of the ladder needs more: (a) the design's own §8 says small-N
+variance is largest there, and 3 samples give a near-useless std estimate; (b) because one integer seeds
+*both* the subsample and the HPO/val-carve, those two noise sources are **correlated**, not independent — so
+each seed explores less of the noise space than two independent draws would, and more seeds are needed to
+average it out. (Decoupling them — separate subsample and pipeline seeds — would be cleaner but is left out
+to keep cells reproducible from a single integer.)
 
 ### 5.4 Held fixed (do not vary in the capability study)
 
@@ -122,7 +134,10 @@ uv run sweep.py --device mps --balances stratified --sizes 25 50 --seeds 1 2 3
 Inspect `logs/sweep_summary_val.csv` / the "best per cell" log line. Freeze the winning `(scoring,
 decision)` per balance (it should agree across the two sizes; if not, prefer the larger size and note the
 instability). A sensible default if you skip Phase 1: `scoring_f1` + `decision_f1` (decision target aligned
-with the headline eval metric).
+with the headline eval metric) — this is now the built-in default of `run.py`, because the `classic-light`
+preset's raw decision default is `decision_accuracy`, which on sparse multilabel just learns the
+all-negative baseline (§4). The sweep still explores the full grid; only the single-run `run.py` default
+changed.
 
 ### Phase 2 — capability & scaling study (on `test`)
 
@@ -130,14 +145,19 @@ Fix the per-balance target metrics from Phase 1; vary size × seed; report on `t
 test`. Run each balance with its own frozen pair:
 
 ```bash
+# small sizes get 5 seeds (highest variance, §5.3); larger sizes get 3
 uv run sweep.py --device mps --eval-split test \
-  --balances classwise --sizes 5 10 25 50 100 \
+  --balances classwise --sizes 5 10 \
+  --scoring-metrics scoring_f1 --decision-metrics decision_f1 --seeds 1 2 3 4 5
+uv run sweep.py --device mps --eval-split test \
+  --balances classwise --sizes 25 50 100 \
   --scoring-metrics scoring_f1 --decision-metrics decision_f1 --seeds 1 2 3
-# repeat for --balances stratified with its own Phase-1 winner
+# repeat both for --balances stratified with its own Phase-1 winner
 ```
 
-= 5 sizes × 1 balance × 1 × 1 × 3 seeds = **15 runs per balance**. Read `f1_mean ± f1_std` vs size from
-`logs/sweep_summary_test.csv`, per balance.
+= (2 sizes × 5 seeds) + (3 sizes × 3 seeds) = **19 runs per balance**. The per-tag CSVs accumulate across
+invocations (§9): the second call reloads the first call's rows, so `logs/sweep_summary_test.csv` ends up
+covering both size groups (and both balances). Read `f1_mean ± f1_std` vs size from it, per balance.
 
 ## 7. Reading the results
 
@@ -158,6 +178,13 @@ uv run sweep.py --device mps --eval-split test \
 - **Per-balance metric freeze is verified, not assumed.** We freeze the target metric across sizes *within*
   a balance only after checking it's stable across two Phase-1 sizes (§6); across balances we don't freeze
   at all (each gets its own pair). Residual assumption: stability is checked at two sizes, not all five.
+- **Phase-1 selection is a multiple-comparison.** Phase 1 picks the best of the full scoring × decision
+  grid (~9 × 4 = 36 pairs) by mean validation macro-F1 over a few seeds. With 36 noisy candidates, the
+  *winning pair's* validation score is optimistically biased (max-of-many), and the "agrees across two
+  sizes" check (§6) is only a weak guard against that. This does **not** contaminate the headline numbers —
+  Phase 2 reports the frozen pair on the disjoint `test` split — but it does mean the Phase-1 validation
+  F1 itself should not be read as an unbiased performance estimate, only as a *ranking* signal for which
+  pair to freeze.
 - **`test`'s long tail is thin.** `test`'s rarest class has only **6** examples (`validation`'s has 13), so
   macro-F1 — which weights the rarest classes most — has high-variance per-class estimates there. Seeds
   average *model* noise but cannot add eval examples; treat the very-rarest-class contribution as noisy.
@@ -181,9 +208,12 @@ uv run sweep.py --device mps --eval-split test \
 Per sweep (written to `logs/`, git-ignored). Output names carry the eval-split tag (`val` for Phase 1,
 `test` for Phase 2) so the two phases never clobber each other:
 
-- `sweep_runs_<tag>.csv` — one row per (size, balance, scoring, decision, **seed**) run.
-- `sweep_summary_<tag>.csv` — seed-aggregated: `f1_mean`, `f1_std` (sample std), mean
-  precision/recall/accuracy, modal scorer/decisioner.
+- `sweep_runs_<tag>.csv` — one row per (size, balance, scoring, decision, **seed**) run. **Accumulates
+  across invocations of the same tag**: each call reloads the existing rows and merges its own on top (a
+  re-run cell overwrites its old row; cells from other invocations — e.g. the other balance, or a different
+  size group — are preserved), so running classwise then stratified does not clobber the classwise rows.
+- `sweep_summary_<tag>.csv` — seed-aggregated over the accumulated runs: `f1_mean`, `f1_std` (sample std),
+  mean precision/recall/accuracy, modal scorer/decisioner.
 - `<exp>_metrics.json` (exp name ends in `-<tag>`) — full per-run report (fed split sizes, target metrics,
   eval metrics, selected modules). Enables resume.
 

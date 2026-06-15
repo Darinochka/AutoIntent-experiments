@@ -34,7 +34,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.pylint]
-max-args = 10
+max-args = 11
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

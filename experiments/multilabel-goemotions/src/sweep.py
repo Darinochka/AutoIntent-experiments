@@ -6,7 +6,10 @@ seed); per-run results go to sweep_runs.csv and a seed-aggregated view (mean/std
 so a long sweep can be interrupted and resumed.
 
 Balance modes:
-- classwise:  cap N samples/class -> balanced N-shot. Always feasible.
+- classwise:  cap N samples/class -> balanced N-shot. Robust at moderate N, but not guaranteed at the
+              very bottom: at N=5 the ~20% HPO-validation AutoIntent carves from train averages ~1
+              sample/class, so a rare class can be absent from the carved val and the fit raises (caught
+              by the per-cell try/except, recorded as failed).
 - stratified: floor of N samples/class -> imbalanced, but collapses to the full train once N exceeds the
               rarest class's total (~77 for GoEmotions' "grief"), so 100- and 500-shot become identical
               (identical (dataset, seed) cells are deduped and not re-fit).
@@ -214,6 +217,54 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> Non
         writer.writerows(rows)
 
 
+def _opt_int(value: str | None) -> int | None:
+    return int(value) if value else None
+
+
+def _opt_float(value: str | None) -> float | None:
+    return float(value) if value else None
+
+
+def _coerce_run_row(row: dict[str, str]) -> dict[str, Any]:
+    """Parse a CSV-loaded run row back into the native types _aggregate / _merge_runs expect."""
+    return {
+        "seed": _opt_int(row.get("seed")),
+        "size": _opt_int(row.get("size")),
+        "balance": row.get("balance"),
+        "train_size": _opt_int(row.get("train_size")),
+        "scoring_metric": row.get("scoring_metric"),
+        "decision_metric": row.get("decision_metric"),
+        "eval_f1": _opt_float(row.get("eval_f1")),
+        "eval_precision": _opt_float(row.get("eval_precision")),
+        "eval_recall": _opt_float(row.get("eval_recall")),
+        "eval_accuracy": _opt_float(row.get("eval_accuracy")),
+        "scorer": row.get("scorer") or None,
+        "decisioner": row.get("decisioner") or None,
+        "status": row.get("status"),
+    }
+
+
+def _load_runs(path: Path) -> list[dict[str, Any]]:
+    """Load previously-written run rows for this tag so summaries accumulate across invocations."""
+    if not path.exists():
+        return []
+    with path.open(newline="", encoding="utf-8") as f:
+        return [_coerce_run_row(row) for row in csv.DictReader(f)]
+
+
+def _run_key(row: dict[str, Any]) -> tuple[Any, ...]:
+    """Identity of a single run cell (one fitted pipeline)."""
+    return (row["seed"], row["size"], row["balance"], row["scoring_metric"], row["decision_metric"])
+
+
+def _merge_runs(prior: list[dict[str, Any]], current: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Union on-disk and freshly-produced run rows; the current invocation wins on identical cells."""
+    merged = {_run_key(r): r for r in prior}
+    for r in current:
+        merged[_run_key(r)] = r
+    return list(merged.values())
+
+
 def _print_best(summary: list[dict[str, Any]]) -> None:
     best: dict[tuple[int, str], dict[str, Any]] = {}
     for r in summary:
@@ -234,6 +285,31 @@ def _print_best(summary: list[dict[str, Any]]) -> None:
         )
 
 
+def _verify_resume(report: dict[str, Any], cfg: SweepConfig, exp_name: str) -> None:
+    """Refuse to resume a cached cell that was produced under a different result-affecting config.
+
+    The exp_name only encodes balance/size/metrics/seed/eval-split, so a cached metrics JSON could have
+    been fitted with a different preset or embedder. Reusing it would silently mix configs; halt instead.
+    """
+    checks = {
+        "preset": (report.get("preset"), cfg.preset),
+        "embedder_model": (report.get("embedder_model_override"), cfg.embedder_model),
+        "eval_split": (report.get("eval_split"), cfg.eval_split),
+    }
+    mismatches = [
+        f"{key}: cached={cached!r} != requested={requested!r}"
+        for key, (cached, requested) in checks.items()
+        if cached != requested
+    ]
+    if mismatches:
+        joined = "; ".join(mismatches)
+        msg = (
+            f"Refusing to resume {exp_name}: cached result was built with a different config ({joined}). "
+            "Pass --overwrite to replace it or point --logs-dir at a fresh directory."
+        )
+        raise SystemExit(msg)
+
+
 def _run_cell(
     cfg: SweepConfig,
     exp_name: str,
@@ -248,8 +324,10 @@ def _run_cell(
     logs_dir = Path(cfg.logs_dir)
     out_path = metrics_path(logs_dir, exp_name)
     if out_path.exists() and not cfg.overwrite:
+        report = json.loads(out_path.read_text(encoding="utf-8"))
+        _verify_resume(report, cfg, exp_name)
         logger.info("exists -> skip (resume)")
-        return json.loads(out_path.read_text(encoding="utf-8")), "ok"
+        return report, "ok"
     if dedup_key in seen:
         logger.info("identical (dataset, seed) to {} -> reuse result", seen[dedup_key])
         report = json.loads(metrics_path(logs_dir, seen[dedup_key]).read_text(encoding="utf-8"))
@@ -271,6 +349,7 @@ def _run_cell(
             scoring_metric=scoring,
             decision_metric=decision,
             seed=seed,
+            eval_split=cfg.eval_split,
             dump_modules=False,
         )
     except Exception as exc:  # noqa: BLE001 - one bad cell must not kill the sweep
@@ -322,6 +401,7 @@ def run_sweep(cfg: SweepConfig) -> list[dict[str, Any]]:
     paths = build_datasets(cfg.sizes, cfg.balances, cfg.seeds, DEFAULT_REPO, DEFAULT_CONFIG, data_dir, cfg.eval_split)
     runs_csv, summary_csv = logs_dir / f"sweep_runs_{tag}.csv", logs_dir / f"sweep_summary_{tag}.csv"
 
+    prior_runs = _load_runs(runs_csv)  # cells from earlier invocations of this tag; preserved in the outputs
     runs: list[dict[str, Any]] = []
     seen: dict[tuple[str, str, str, int], str] = {}  # (train_hash, scoring, decision, seed) -> exp_name
     done = 0
@@ -335,9 +415,10 @@ def run_sweep(cfg: SweepConfig) -> list[dict[str, Any]]:
                 logger.info("[{}/{}] {}", done, total, exp_name)
                 report, status = _run_cell(cfg, exp_name, data_path, scoring, decision, seed, dedup_key, seen)
                 runs.append(_summarize(report or {}, balance, n, scoring, decision, seed, status))
-                _write_csv(runs_csv, runs, RUN_FIELDS)
+                _write_csv(runs_csv, _merge_runs(prior_runs, runs), RUN_FIELDS)
 
-    summary = _aggregate(runs)
+    merged = _merge_runs(prior_runs, runs)
+    summary = _aggregate(merged)
     _write_csv(summary_csv, summary, SUMMARY_FIELDS)
     logger.info("Wrote {} and {}", runs_csv, summary_csv)
     _print_best(summary)

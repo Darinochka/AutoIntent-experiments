@@ -29,8 +29,15 @@ class RunConfig:
     exp_name: Annotated[str | None, Parameter(help="Experiment name (default: goemotions-<preset>).")] = None
     embedder_model: Annotated[str | None, Parameter(help="Override the preset's embedder.")] = None
     device: Annotated[Literal["cpu", "cuda", "mps"] | None, Parameter(help="Torch device for the embedder.")] = None
-    scoring_metric: Annotated[str | None, Parameter(help="Override the scoring node's target_metric.")] = None
-    decision_metric: Annotated[str | None, Parameter(help="Override the decision node's target_metric.")] = None
+    scoring_metric: Annotated[str | None, Parameter(help="Override the scoring node's target_metric.")] = "scoring_f1"
+    decision_metric: Annotated[
+        str | None,
+        Parameter(help="Override the decision target_metric (preset default decision_accuracy is degenerate here)."),
+    ] = "decision_f1"
+    eval_split: Annotated[
+        Literal["validation", "test"],
+        Parameter(help="GoEmotions split the data JSON's test was built from (recorded for provenance)."),
+    ] = "validation"
     seed: Annotated[int, Parameter(help="Random seed.")] = 42
     overwrite: Annotated[bool, Parameter(help="Replace existing metrics/run outputs.")] = False
 
@@ -65,6 +72,7 @@ def main(cfg: Annotated[RunConfig, Parameter(name="*")] = _DEFAULTS) -> None:
         scoring_metric=cfg.scoring_metric,
         decision_metric=cfg.decision_metric,
         seed=cfg.seed,
+        eval_split=cfg.eval_split,
     )
 
 

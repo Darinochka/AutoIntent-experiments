@@ -67,10 +67,13 @@ def run_experiment(
     scoring_metric: str | None,
     decision_metric: str | None,
     seed: int,
+    eval_split: str = "validation",
     dump_modules: bool = True,
 ) -> dict[str, Any]:
     """Optimize the pipeline, evaluate on test, write the report, and return it.
 
+    ``eval_split`` is the GoEmotions split fed as AutoIntent's ``test`` (``validation`` for Phase-1
+    selection, ``test`` for Phase-2 reporting); it is recorded for provenance, not used for fitting.
     dump_modules persists fitted modules to disk for reuse; final test metrics are computed regardless
     (clear_ram is left False). Sweeps pass dump_modules=False to avoid writing a module dump per run.
     """
@@ -98,12 +101,17 @@ def run_experiment(
     context = pipeline.fit(dataset)
 
     metrics = dict(context.optimization_info.pipeline_metrics)
+    emb_cfg = pipeline.embedder_config.model_dump()
     report: dict[str, Any] = {
         "preset": preset,
         "exp_name": exp_name,
         "n_classes": dataset.n_classes,
         "fed_split_sizes": fed_split_sizes,
-        "eval_on": "ai-test (= GoEmotions validation); HPO-validation carved from train by AutoIntent",
+        "eval_split": eval_split,
+        "eval_on": f"ai-test (= GoEmotions {eval_split}); HPO-validation carved from train by AutoIntent",
+        "embedder": emb_cfg.get("model_name"),
+        "embedder_model_override": embedder_model,
+        "device": emb_cfg.get("device"),
         "target_metrics": {
             "scoring": scoring_metric or "preset-default",
             "decision": decision_metric or "preset-default",
