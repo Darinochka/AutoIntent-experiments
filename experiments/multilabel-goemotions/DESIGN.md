@@ -13,7 +13,7 @@ Two distinct questions, kept separate on purpose:
 
 - **Capability / scaling** — given *N* examples per class, how good is the fitted classifier? (primary)
 - **Best target metric** — which `target_metric` should drive scoring/decision module selection? (a
-  prerequisite knob, settled once in Phase 1, then frozen)
+  prerequisite knob, settled per balance in Phase 1 on `validation`, then frozen)
 
 ## 2. Dataset
 
@@ -21,23 +21,30 @@ Two distinct questions, kept separate on purpose:
 
 - **28 classes** (27 emotions + `neutral`), genuinely multilabel (an utterance can carry several labels).
 - Heavily **imbalanced**: `neutral` dominates; the rarest class `grief` has only ~77 train examples.
-- Splits used: GoEmotions `train` (43,410) and `validation` (5,426). GoEmotions `test` is **unused** (see
-  §3). All 28 classes appear in `validation`.
+- Splits used: GoEmotions `train` (43,410), `validation` (5,426), and `test` (5,427) — **all three** (see
+  §3): `train` for fitting, `validation` for Phase-1 target-metric selection, `test` for Phase-2 reporting.
+  All 28 classes appear in every split (rarest-class eval count: `validation` 13, `test` 6).
 
 ## 3. How data is fed to AutoIntent
 
-Implemented in `src/data.py` (`SPLIT_MAP`, `assemble_mapping`).
+Implemented in `src/data.py` (`assemble_mapping` / `prepare_mapping`); the eval source is selected per
+phase by `--eval-split` (`src/sweep.py`, `prepare_data.py`).
 
 | GoEmotions split | Fed to AutoIntent as | Role |
 |---|---|---|
 | `train` (subsampled) | `train` | model fitting **and** the source AutoIntent carves HPO-validation from |
-| `validation` (full, 5,426) | `test` | held-out evaluation set (fixed across every run) |
-| `test` | — | intentionally unused |
+| `validation` (full, 5,426) | `test`, when `--eval-split validation` | **Phase-1** selection eval (pick the target metric) |
+| `test` (full, 5,427) | `test`, when `--eval-split test` | **Phase-2** reporting eval (the headline numbers) |
 
 We give AutoIntent **only `train` + `test`** (no explicit validation split). AutoIntent then carves its
 own HPO-validation out of the (subsampled) `train` via `DataConfig.validation_size` (default 0.2). This is
 deliberate: the balance treatment shapes the **HPO-validation** too, so an imbalanced train yields an
 imbalanced model-selection signal — model selection is affected by balance, not just model fitting.
+
+**Two disjoint eval sets, on purpose.** The target-metric pair is *selected* on `validation` (Phase 1) and
+the capability curve is *reported* on `test` (Phase 2). The two splits never overlap, so the reporting set
+is never touched during any selection — `test` stays pristine for the headline numbers. `--eval-split`
+defaults to `validation`, so a casual sweep never spends `test`; you opt into `test` explicitly for Phase 2.
 
 **Consequence to remember:** at small N the carved HPO-val is tiny (e.g. classwise-10 → ~256 train →
 ~51 val ≈ 2/class), so model selection is noisy. This is real and is why seeds matter (§5.3).
@@ -87,7 +94,8 @@ reports `f1_mean ± f1_std` per cell.
 
 ### 5.4 Held fixed (do not vary in the capability study)
 
-- **Target metrics**: one `(scoring, decision)` pair, chosen in Phase 1 then frozen.
+- **Target metrics**: one `(scoring, decision)` pair **per balance mode**, chosen in Phase 1 (on
+  `validation`) then frozen across sizes — after checking the winner is stable across sizes (§6).
 - **Preset**: `classic-light` (KNN / linear / mlknn scorers; threshold / argmax / tunable / … deciders).
 - **Embedder**: the preset default `intfloat/multilingual-e5-large-instruct`.
 - **Device**: `mps`.
@@ -95,33 +103,41 @@ reports `f1_mean ± f1_std` per cell.
 
 ## 6. The two phases
 
-### Phase 1 — pick the target metrics (run once)
+### Phase 1 — pick the target metrics (on `validation`)
 
-Sweep the scoring × decision `target_metric` grid on a representative mid cell and pick the pair with the
-best mean macro-F1.
-
-```bash
-uv run sweep.py --device mps \
-  --sizes 50 --balances classwise \
-  --seeds 1 2 3          # default metric grid = 9 scoring x 4 decision = 36 combos x 3 seeds
-```
-
-Inspect `logs/sweep_summary.csv` / the "best per cell" log line. Freeze the winning `(scoring, decision)`.
-A sensible default if you skip Phase 1: `scoring_f1` + `decision_f1` (decision target aligned with the
-headline eval metric).
-
-### Phase 2 — capability & scaling study
-
-Fix the target metrics from Phase 1; vary size × balance × seed.
+Sweep the scoring × decision `target_metric` grid **per balance mode**, on two representative sizes, with
+the eval fed from `validation` (the default). Pick the pair with the best mean macro-F1 per balance, and
+confirm the winner is stable across the two sizes — so freezing it across the whole size ladder is
+evidence-backed, not assumed. We select once *per balance* (not once globally) because the target metric
+governs how model selection reacts to class structure, which the balance treatment changes far more than
+size does.
 
 ```bash
-uv run sweep.py --device mps \
-  --sizes 5 10 25 50 100 --balances classwise stratified \
-  --scoring-metrics scoring_f1 --decision-metrics decision_f1 \
-  --seeds 1 2 3
+# classwise, two sizes, full metric grid (9 scoring x 4 decision), 3 seeds; eval = validation (default)
+uv run sweep.py --device mps --balances classwise --sizes 25 50 --seeds 1 2 3
+# stratified, same
+uv run sweep.py --device mps --balances stratified --sizes 25 50 --seeds 1 2 3
 ```
 
-= 5 sizes × 2 balances × 1 × 1 × 3 seeds = **30 runs**. Read `f1_mean ± f1_std` vs size, per balance.
+Inspect `logs/sweep_summary_val.csv` / the "best per cell" log line. Freeze the winning `(scoring,
+decision)` per balance (it should agree across the two sizes; if not, prefer the larger size and note the
+instability). A sensible default if you skip Phase 1: `scoring_f1` + `decision_f1` (decision target aligned
+with the headline eval metric).
+
+### Phase 2 — capability & scaling study (on `test`)
+
+Fix the per-balance target metrics from Phase 1; vary size × seed; report on `test` via `--eval-split
+test`. Run each balance with its own frozen pair:
+
+```bash
+uv run sweep.py --device mps --eval-split test \
+  --balances classwise --sizes 5 10 25 50 100 \
+  --scoring-metrics scoring_f1 --decision-metrics decision_f1 --seeds 1 2 3
+# repeat for --balances stratified with its own Phase-1 winner
+```
+
+= 5 sizes × 1 balance × 1 × 1 × 3 seeds = **15 runs per balance**. Read `f1_mean ± f1_std` vs size from
+`logs/sweep_summary_test.csv`, per balance.
 
 ## 7. Reading the results
 
@@ -134,6 +150,20 @@ uv run sweep.py --device mps \
 
 ## 8. Threats to validity / confounds
 
+- **Selection vs. reporting are disjoint splits.** The target metric is picked on `validation` (Phase 1)
+  and the curve is reported on `test` (Phase 2), so the headline numbers are *not* selected-on. The only
+  thing transferred is one categorical knob (the `(scoring, decision)` pair); per-run HPO (module choice +
+  thresholds) is tuned on the carved HPO-val, never on `test`. An earlier design selected and reported both
+  on `validation` and was optimistically biased; this split removes that.
+- **Per-balance metric freeze is verified, not assumed.** We freeze the target metric across sizes *within*
+  a balance only after checking it's stable across two Phase-1 sizes (§6); across balances we don't freeze
+  at all (each gets its own pair). Residual assumption: stability is checked at two sizes, not all five.
+- **`test`'s long tail is thin.** `test`'s rarest class has only **6** examples (`validation`'s has 13), so
+  macro-F1 — which weights the rarest classes most — has high-variance per-class estimates there. Seeds
+  average *model* noise but cannot add eval examples; treat the very-rarest-class contribution as noisy.
+- **`test` is spent once, by design.** We deliberately never use `test` for any selection or tuning — it is
+  read exactly once, for Phase-2 reporting. A future report wanting a second independent reporting pass has
+  no untouched split left; budget for that up front.
 - **Size ≠ balance.** `classwise-N` and `stratified-N` have different totals, so "balanced beats imbalanced"
   can be a data-volume effect. The capability claim lives **within** each balance curve; cross-balance
   comparisons are directional only. A clean balance-only ablation would need size-matched sets (the
@@ -148,13 +178,14 @@ uv run sweep.py --device mps \
 
 ## 9. Outputs
 
-Per sweep (written to `logs/`, git-ignored):
+Per sweep (written to `logs/`, git-ignored). Output names carry the eval-split tag (`val` for Phase 1,
+`test` for Phase 2) so the two phases never clobber each other:
 
-- `sweep_runs.csv` — one row per (size, balance, scoring, decision, **seed**) run.
-- `sweep_summary.csv` — seed-aggregated: `f1_mean`, `f1_std`, mean precision/recall/accuracy, modal
-  scorer/decisioner.
-- `<exp>_metrics.json` — full per-run report (fed split sizes, target metrics, test metrics, selected
-  modules). Enables resume.
+- `sweep_runs_<tag>.csv` — one row per (size, balance, scoring, decision, **seed**) run.
+- `sweep_summary_<tag>.csv` — seed-aggregated: `f1_mean`, `f1_std` (sample std), mean
+  precision/recall/accuracy, modal scorer/decisioner.
+- `<exp>_metrics.json` (exp name ends in `-<tag>`) — full per-run report (fed split sizes, target metrics,
+  eval metrics, selected modules). Enables resume.
 
 Runs are **resumable** (existing `<exp>_metrics.json` is skipped; `--overwrite` forces) and **crash-safe**
 (each fit is isolated in try/except; a failed cell is recorded as `status=failed` and the sweep continues).
@@ -163,9 +194,9 @@ Runs are **resumable** (existing `<exp>_metrics.json` is skipped; `--overwrite` 
 
 | File | Purpose |
 |---|---|
-| `prepare_data.py` (`PrepareConfig`) | build one dataset JSON (classwise/stratified subsample) |
+| `prepare_data.py` (`PrepareConfig`) | build one dataset JSON (subsample + `--eval-split`) |
 | `run.py` (`RunConfig`) | optimize a single pipeline, dump metrics |
-| `sweep.py` (`src/sweep.py` `SweepConfig` / `run_sweep`) | the grid sweep (sizes × balances × metrics × seeds) |
+| `sweep.py` (`src/sweep.py` `SweepConfig` / `run_sweep`) | the grid sweep (sizes × balances × metrics × seeds × `--eval-split`) |
 | `src/data.py` | GoEmotions load, one-hot conversion, subsamplers, feeding scheme |
 | `src/pipeline.py` | build pipeline (preset + metric overrides), fit, report |
 

@@ -20,14 +20,6 @@ from loguru import logger
 DEFAULT_REPO = "google-research-datasets/go_emotions"
 DEFAULT_CONFIG = "simplified"
 
-# Feeding scheme: we give AutoIntent only train + test (no validation split), so AutoIntent carves its
-# own HPO-validation out of the (subsampled) train via DataConfig.validation_size. This makes the train
-# balance treatment shape the validation set too -- an imbalanced train yields an imbalanced HPO val, so
-# model selection is affected by balance, not just model fitting. GoEmotions' validation becomes the held-out
-# eval set (AutoIntent's test); GoEmotions' own test split is intentionally unused.
-# GoEmotions split name -> AutoIntent split name.
-SPLIT_MAP = {"train": "train", "validation": "test"}
-
 
 def load_goemotions(repo: str = DEFAULT_REPO, config: str = DEFAULT_CONFIG) -> tuple[Any, list[str]]:
     """Load the dataset and return it alongside the ordered emotion class names."""
@@ -170,27 +162,28 @@ def to_onehot_samples(rows: list[dict[str, Any]], n_classes: int) -> list[dict[s
 
 
 def prepare_mapping(
-    repo: str, config: str, min_per_class: int | None, balance: str, seed: int
+    repo: str, config: str, min_per_class: int | None, balance: str, seed: int, eval_split: str = "validation"
 ) -> dict[str, list[dict[str, Any]]]:
-    """Build the full AutoIntent dataset mapping (intents + splits) from GoEmotions."""
+    """Build the full AutoIntent dataset mapping (intents + splits) from GoEmotions.
+
+    GoEmotions ``train`` (optionally subsampled) becomes AutoIntent ``train`` (model fitting plus the
+    HPO-validation AutoIntent carves from it); ``eval_split`` becomes AutoIntent ``test``. Use
+    ``validation`` for Phase-1 target-metric selection and ``test`` for Phase-2 reporting, so the
+    reporting split is never touched during any selection.
+    """
     logger.info("Loading {} ({}) ...", repo, config)
     ds, names = load_goemotions(repo, config)
     n_classes = len(names)
     logger.info("{} emotion classes: {}", n_classes, ", ".join(names))
 
-    mapping: dict[str, list[dict[str, Any]]] = {"intents": [{"id": i, "name": name} for i, name in enumerate(names)]}
-    for src_split, ai_split in SPLIT_MAP.items():
-        if src_split not in ds:
-            continue
-        rows = list(ds[src_split])
-        if ai_split == "train":
-            rows = subsample_train(rows, n_classes, min_per_class, balance, seed)
-        samples = to_onehot_samples(rows, n_classes)
-        mapping[ai_split] = samples
-        dropped = len(rows) - len(samples)
-        logger.info(
-            "ai-{} (from source {}): {} samples (dropped {} label-less)", ai_split, src_split, len(samples), dropped
-        )
+    train_rows = subsample_train(list(ds["train"]), n_classes, min_per_class, balance, seed)
+    mapping = assemble_mapping(names, train_rows, list(ds[eval_split]))
+    logger.info(
+        "ai-train: {} samples; ai-test (from GoEmotions {}): {} samples",
+        len(mapping["train"]),
+        eval_split,
+        len(mapping["test"]),
+    )
     return mapping
 
 

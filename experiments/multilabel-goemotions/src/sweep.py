@@ -62,6 +62,11 @@ SUMMARY_FIELDS = [
 ]
 
 
+def _eval_tag(eval_split: str) -> str:
+    """Short filename/exp-name tag for the held-out eval split."""
+    return "val" if eval_split == "validation" else "test"
+
+
 @dataclass(frozen=True)
 class SweepConfig:
     """Configuration for the target-metric sweep (also usable directly from Python)."""
@@ -82,6 +87,10 @@ class SweepConfig:
         list[int], Parameter(help="Seeds; each cell runs once per seed and is averaged.", consume_multiple=True)
     ] = field(default_factory=lambda: [42])
     preset: Annotated[str, Parameter(help="AutoIntent search-space preset.")] = "classic-light"
+    eval_split: Annotated[
+        Literal["validation", "test"],
+        Parameter(help="GoEmotions split fed as held-out ai-test (Phase 1: validation; Phase 2: test)."),
+    ] = "validation"
     embedder_model: Annotated[str | None, Parameter(help="Override the preset's embedder.")] = None
     device: Annotated[Literal["cpu", "cuda", "mps"] | None, Parameter(help="Torch device for the embedder.")] = None
     logs_dir: Annotated[Path, Parameter(help="Directory for logs/metrics/summary.")] = EXP_DIR / "logs"
@@ -106,17 +115,18 @@ def subsample_for(
 
 
 def build_datasets(
-    sizes: list[int], balances: list[str], seeds: list[int], repo: str, config: str, data_dir: Path
+    sizes: list[int], balances: list[str], seeds: list[int], repo: str, config: str, data_dir: Path, eval_split: str
 ) -> dict[tuple[str, int, int], Path]:
     """Prepare one dataset JSON per (balance, size, seed). Skips cells missing a class."""
+    tag = _eval_tag(eval_split)
     cells = [(balance, n, seed) for n in sizes for balance in balances for seed in seeds]
-    candidate = {cell: data_dir / f"ge_{cell[0]}_{cell[1]}_s{cell[2]}.json" for cell in cells}
+    candidate = {cell: data_dir / f"ge_{cell[0]}_{cell[1]}_s{cell[2]}_{tag}.json" for cell in cells}
     if all(path.exists() for path in candidate.values()):
         return candidate
 
     ds, names = load_goemotions(repo, config)
     n_classes = len(names)
-    train_full, eval_rows = list(ds["train"]), list(ds["validation"])
+    train_full, eval_rows = list(ds["train"]), list(ds[eval_split])
 
     paths: dict[tuple[str, int, int], Path] = {}
     for cell in cells:
@@ -271,12 +281,13 @@ def _run_cell(
 
 
 def _print_plan(cfg: SweepConfig) -> None:
+    tag = _eval_tag(cfg.eval_split)
     for n in cfg.sizes:
         for balance in cfg.balances:
             for seed in cfg.seeds:
                 for scoring in cfg.scoring_metrics:
                     for decision in cfg.decision_metrics:
-                        logger.info("gm-{}-{}-s_{}-d_{}-seed{}", balance, n, scoring, decision, seed)
+                        logger.info("gm-{}-{}-s_{}-d_{}-seed{}-{}", balance, n, scoring, decision, seed, tag)
 
 
 def run_sweep(cfg: SweepConfig) -> list[dict[str, Any]]:
@@ -298,6 +309,7 @@ def run_sweep(cfg: SweepConfig) -> list[dict[str, Any]]:
         len(cfg.seeds),
         total,
     )
+    logger.info("Held-out eval fed as ai-test: GoEmotions '{}' split.", cfg.eval_split)
 
     if cfg.dry_run:
         _print_plan(cfg)
@@ -306,8 +318,9 @@ def run_sweep(cfg: SweepConfig) -> list[dict[str, Any]]:
 
     logs_dir.mkdir(parents=True, exist_ok=True)
     data_dir.mkdir(parents=True, exist_ok=True)
-    paths = build_datasets(cfg.sizes, cfg.balances, cfg.seeds, DEFAULT_REPO, DEFAULT_CONFIG, data_dir)
-    runs_csv, summary_csv = logs_dir / "sweep_runs.csv", logs_dir / "sweep_summary.csv"
+    tag = _eval_tag(cfg.eval_split)
+    paths = build_datasets(cfg.sizes, cfg.balances, cfg.seeds, DEFAULT_REPO, DEFAULT_CONFIG, data_dir, cfg.eval_split)
+    runs_csv, summary_csv = logs_dir / f"sweep_runs_{tag}.csv", logs_dir / f"sweep_summary_{tag}.csv"
 
     runs: list[dict[str, Any]] = []
     seen: dict[tuple[str, str, str, int], str] = {}  # (train_hash, scoring, decision, seed) -> exp_name
@@ -317,7 +330,7 @@ def run_sweep(cfg: SweepConfig) -> list[dict[str, Any]]:
         for scoring in cfg.scoring_metrics:
             for decision in cfg.decision_metrics:
                 done += 1
-                exp_name = f"gm-{balance}-{n}-s_{scoring}-d_{decision}-seed{seed}"
+                exp_name = f"gm-{balance}-{n}-s_{scoring}-d_{decision}-seed{seed}-{tag}"
                 dedup_key = (train_hash, scoring, decision, seed)
                 logger.info("[{}/{}] {}", done, total, exp_name)
                 report, status = _run_cell(cfg, exp_name, data_path, scoring, decision, seed, dedup_key, seen)

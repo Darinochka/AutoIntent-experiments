@@ -35,6 +35,10 @@ class PrepareConfig:
         Literal["stratified", "classwise"],
         Parameter(help="stratified=proportion-preserving; classwise=flatten the distribution."),
     ] = "stratified"
+    eval_split: Annotated[
+        Literal["validation", "test"],
+        Parameter(help="GoEmotions split fed as held-out ai-test (validation=Phase 1, test=Phase 2)."),
+    ] = "validation"
     seed: Annotated[int, Parameter(help="Random seed for subsampling.")] = 42
     overwrite: Annotated[bool, Parameter(help="Replace the output file if it already exists.")] = False
 
@@ -46,7 +50,7 @@ _DEFAULTS = PrepareConfig()
 def main(cfg: Annotated[PrepareConfig, Parameter(name="*")] = _DEFAULTS) -> None:
     """Build and save the dataset described by the flattened PrepareConfig options."""
     out = ensure_absent(cfg.out, cfg.overwrite, label="Dataset file")
-    mapping = prepare_mapping(cfg.repo, cfg.config, cfg.min_samples_per_class, cfg.balance, cfg.seed)
+    mapping = prepare_mapping(cfg.repo, cfg.config, cfg.min_samples_per_class, cfg.balance, cfg.seed, cfg.eval_split)
     save_mapping(mapping, out)
     logger.info("Wrote {}", out)
 
