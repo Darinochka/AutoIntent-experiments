@@ -18,6 +18,34 @@ if TYPE_CHECKING:
     from autointent.custom_types import SearchSpacePreset
 
 
+def _patch_embedder_offline_cache_key() -> None:
+    """Resolve the embedder's cache-key commit hash locally instead of via the Hugging Face API.
+
+    AutoIntent 0.3.0 calls ``huggingface_hub.model_info`` on every ``embed`` to key its embeddings
+    cache by the model's remote commit hash. Under a fast sweep this trips HF's 1000-req/5-min rate
+    limit (HTTP 429) and is fatal under ``HF_HUB_OFFLINE``. The hash only needs to be a stable
+    per-model identifier, so we read the cached ``refs/main`` commit (identical to the remote sha)
+    and fall back to the model name — no network, and the same cache key as the online path.
+    """
+    from autointent._wrappers.embedder import sentence_transformers as st
+
+    def _local_commit_hash(model_name: str) -> str:
+        if Path(model_name).exists():
+            return model_name
+        from huggingface_hub.constants import HF_HUB_CACHE
+
+        ref = Path(HF_HUB_CACHE) / f"models--{model_name.replace('/', '--')}" / "refs" / "main"
+        try:
+            return ref.read_text(encoding="utf-8").strip()
+        except OSError:
+            return model_name
+
+    st._get_latest_commit_hash = _local_commit_hash
+
+
+_patch_embedder_offline_cache_key()
+
+
 def validate_metrics(scoring_metric: str | None, decision_metric: str | None) -> None:
     """Reject unknown target-metric names with the valid multilabel options."""
     if scoring_metric and scoring_metric not in SCORING_METRICS_MULTILABEL:
