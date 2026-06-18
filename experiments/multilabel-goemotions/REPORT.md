@@ -92,7 +92,51 @@ Per-balance selection over the 9 scoring × 3 decision grid (`decision_accuracy`
 
 ---
 
-## 5. Threats to validity & honest caveats
+## 5. How these results compare to the GoEmotions literature
+
+Our headline (macro `decision_f1`) is directly comparable to the published GoEmotions macro-F1: **same
+28-class taxonomy, same held-out `test` split**. The difference is purely on the *training* side — published
+baselines **fully fine-tune a transformer on all ~43,410 training rows**, whereas AutoIntent here uses a
+**frozen e5 embedder + a shallow linear/KNN head on ≤2,475 balanced rows (~6% of the data)**.
+
+| Approach | Train | Fine-tuned | macro-F1 | micro-F1 |
+|---|---|:--:|:--:|:--:|
+| BiLSTM — original baseline [1] | full ~43k | — | 0.41 | — |
+| **BERT-base — original baseline [1]** | full ~43k | full | **0.46** | 0.51 |
+| RoBERTa + psycholinguistic features (as reported) [3,4] | full | full | ~0.59 | — |
+| PK-GAT (recent, as reported) [4] | full | full | 0.587 | 0.699 |
+| **AutoIntent `classic-light` (this run)** | **~2.5k balanced** | none (frozen e5) | **0.316** | n/a |
+
+(A "RoBERTa 0.85 macro-F1" figure circulates online but is **not** a credible 28-class macro number — likely
+accuracy or a coarse sentiment grouping. The real 28-class macro range is ~0.41–0.59.)
+
+**Verdict — good for what it is, not vs the leaderboard.** As an absolute number, 0.316 is ~0.15 below
+fine-tuned BERT and ~0.27 below SOTA. But it reaches **~69% of fine-tuned BERT's macro-F1 with ~6% of the
+data and zero fine-tuning**, and the curve had not plateaued at 100-shot — good sample efficiency from a
+no-GPU AutoML pipeline. AutoIntent is not built to win this leaderboard; it is built to produce a sensible
+classifier cheaply, which it does.
+
+**Do you need transformer fine-tuning?** To *maximize* macro-F1, yes — every number above 0.46 comes from a
+fine-tuned transformer, because fine-grained emotion is subtle and a frozen *retrieval* embedder (e5, tuned
+for semantic similarity) does not emphasize the emotion-discriminative features a shallow head could exploit.
+**However, this run cannot yet prove FT is *necessary*:** it conflates two effects (below) because we capped
+training at ~2.5k and never measured AutoIntent's frozen-embedding ceiling on the full data.
+
+**Where the 0.316 → 0.46 gap comes from (decomposed):**
+1. **Data starvation (largest, most certain).** ~6% of the training data; the curve is still rising.
+2. **Frozen, task-agnostic embeddings.** No task adaptation of the representation — the structural ceiling.
+3. **Macro-F1 on a brutal tail.** Rare classes (`grief` ~77 even in full data) score ~0 even for SOTA; our
+   test tail's rarest class has 6 examples → high-variance, drags the macro average down.
+4. **Multilabel thresholding.** Low precision (0.12–0.26) with higher recall → over-prediction across 28
+   classes; fine-tuned models with learned per-class thresholds handle this better.
+5. **Preset capacity.** `classic-light` is KNN/linear/mlknn only; `classic-medium/heavy` or an FT preset
+   has more headroom.
+
+Causes (1) and (2) dominate and are entangled; the runs in §8 are designed to separate them. Rough
+prediction: full-data frozen e5 + linear likely reaches ~**0.38–0.43** (closing most of the gap to BERT but
+stalling short), leaving the final ~0.05–0.15 up to SOTA as the part that genuinely needs fine-tuning.
+
+## 6. Threats to validity & honest caveats
 
 1. **Stratified is truncated at floor-25 (14k rows).** Floors 50 (28k) and 100 (full 43k) were excluded:
    a single 28k-row fit ran >17 min and risked the 17 GB machine. So there is **no "stratified full-data"
@@ -112,7 +156,7 @@ Per-balance selection over the 9 scoring × 3 decision grid (`decision_accuracy`
    selected-on — the one good-news caveat. Per-run HPO (module + thresholds) is tuned only on the
    HPO-validation AutoIntent carves from train.
 
-## 6. Operational finding (worth fixing upstream)
+## 7. Operational finding (worth fixing upstream)
 
 **AutoIntent 0.3.0 calls `huggingface_hub.model_info()` on every `embed()`** (to key its embeddings cache
 by the model's remote commit hash, `_wrappers/embedder/sentence_transformers.py:61`). Under a fast sweep
@@ -123,13 +167,38 @@ from the cached `refs/main` (identical to the remote sha, so the cache key is un
 the model name — no network. All sweeps then ran with `HF_HUB_OFFLINE=1`. Recommend upstreaming a local-
 first hash resolver to AutoIntent.
 
-## 7. Suggested next runs (not done tonight)
+## 8. Suggested next runs (not done tonight)
 
-- Complete the stratified curve at floors 50/100 (full data) on a higher-RAM/GPU box for a true
+To close the leaderboard gap and answer "is fine-tuning needed" (§5), in priority order:
+
+- **`classic-light` on the FULL 43k train (frozen, no subsample)** — measures AutoIntent's frozen-embedding
+  *ceiling* against the 0.46 fine-tuned BERT baseline. If it lands ~0.40–0.45, the gap was mostly data and
+  FT buys little; if it plateaus ~0.33–0.37, that is the frozen-embedding wall and FT is genuinely required.
+  Needs a GPU / high-RAM box — the 43k-row fit ran >17 min/cell on this 17 GB MPS machine.
+- **An AutoIntent fine-tuning preset** (cross-encoder / fine-tuned scoring node, if available) on full data —
+  directly quantifies the FT lift over frozen embeddings.
+- Complete the stratified curve at floors 50/100 (full data) on the same bigger box, for a true
   balance-vs-volume crossover.
 - Re-confirm the stratified frozen pair with more seeds / a cross-size stability check (it's within-noise).
 - A size-matched `natural` ablation (same total size as classwise-N, natural proportions) for a clean
   balance-only contrast at several points, not just the single ~2.7k overlap.
+
+## References
+
+1. Demszky, Movshovitz-Attias, Ko, Cowen, Nemade, Ravi. *GoEmotions: A Dataset of Fine-Grained Emotions.*
+   ACL 2020 — original 28-class taxonomy and the BERT / BiLSTM baselines (macro-F1 0.46 / 0.41).
+   https://aclanthology.org/2020.acl-main.372/
+2. *Uncovering the Limits of Text-based Emotion Detection.* arXiv 2109.01900 — analysis of the GoEmotions
+   ceiling and per-class limits. https://arxiv.org/pdf/2109.01900
+3. *Large Language Models on Fine-grained Emotion Detection Dataset with Data Augmentation and Transfer
+   Learning.* arXiv 2403.06108 — recent transfer-learning / augmentation results. https://arxiv.org/html/2403.06108v1
+4. *Improving Fine-Grained Emotion Detection in Text with BERT and GoEmotions: An Experimental Study.*
+   Premier Science — recent fine-tuned baselines and the ~0.59 / PK-GAT figures cited as reported.
+   https://premierscience.com/pjs-25-1204/
+5. GoEmotions dataset overview (secondary summary). https://www.emergentmind.com/topics/goemotions-dataset
+
+*Numbers above 0.46 are quoted as reported in the cited secondary/primary sources and were not independently
+re-run; treat them as the published landscape, not verified-by-us figures.*
 
 ---
 
