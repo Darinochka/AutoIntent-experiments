@@ -129,6 +129,65 @@ Synthesize: (1) classwise capability curve (primary), (2) realism gap (direction
 Monotonic, still rising at 100 (no plateau — most classes have >100 avail; only ~rarest cap ~77).
 Scorer switches mlknn→linear at N≥25. precision<recall throughout (over-predicts). cw5 did NOT fail.
 
+---
+
+# Phase 3 — Extended classwise capability curve (data-vs-imbalance limit)  (added 2026-06-18)
+
+**Question (from user):** how far can we raise the classwise cap before we (a) saturate the data or
+(b) make it "sufficiently imbalanced", and where does AutoIntent's macro-F1 plateau?
+
+**Core finding that frames the whole phase:** the classwise cap keeps a row while *any* of its labels
+is still under target, so the *balanced* property is hard-bounded by the rarest class — `grief`, 77
+train rows. Past cap=77 `grief` is pinned and every extra sample only buys imbalance. So "saturate"
+and "imbalanced" are not two endpoints: balance saturates at 77, *data* saturates only at the full
+43,410 rows (no cap), and imbalance grows continuously in between. There is also an irreducible ~2×
+imbalance even at cap=77 from multilabel co-occurrence (majority classes overshoot the cap).
+
+GoEmotions train tail (per-class counts): grief 77 · pride 111 · relief 153 · nervousness 164 ·
+embarrassment 303 · ... · median ~1,297 · admiration 4,130 · neutral 14,219. (28 classes, 16.4%
+multilabel, mean 1.18 labels/row.)
+
+## Realized size / imbalance / cost per cap (simulated classwise_subsample, seed 1)
+
+| cap | train rows | classes pinned (<cap) | max/min | CV | regime | est. 1-fit time |
+|----:|----:|:--:|--:|--:|---|---|
+| 77   | 1,918  | 0  | 2.0 | 0.19 | balance saturates (anchor)     | ~70 s |
+| 100  | 2,475  | 1  | 2.5 | 0.19 | controlled — ALREADY HAVE 0.316 | ~83 s |
+| 200  | 4,708  | 4  | 4.7 | 0.24 | controlled→tipping             | ~2.4 min |
+| 500  | 10,820 | 5  | 11.8| 0.37 | imbalance-dominant             | ~6 min |
+| 1000 | 19,286 | 10 | 22.5| 0.46 | heavy (>14k safety line)       | ~12 min |
+| full (cap 50000) | 43,410 | 27 | 185 | — | natural / data saturates | ~25–40 min ⚠ |
+
+Note: cap 50000 ≡ no cap — all class totals < 50000 so every labelled train row is kept (full natural
+distribution). Cost = linear fit to measured (2,475 rows→83 s; 28k→>17 min) ×1.3 above 10k rows.
+
+## Machine-safety note (binding constraint)
+Caps 1000 (19k) and full (43k) EXCEED the 14k-row line Phase-1/2 flagged as a memory/time risk (a 28k
+fit was aborted at >17 min). Mitigation: run ONE fit at a time, sequential tiers, resumable (finished
+cells skipped), monitor `memory_pressure` — pause new launches if free% < ~12%. At launch free was 38%.
+
+## Execution (frozen pair scoring_neg_coverage + decision_f1, eval=test, accumulates into sweep_*_test.csv)
+- TIER 1 (safe, <5k rows): `--sizes 77 200 --seeds 1 2 3`            (6 fits, ~11 min)
+- TIER 2 (mid, 10.8k/19k):  `--sizes 500 1000 --seeds 1 2`           (4 fits, ~36 min)
+- TIER 3 (full, 43k):       `--sizes 50000 --seeds 1`                (1 fit, ~25–40 min, run last)
+
+All prefixed `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 ... --device mps --balances classwise`.
+
+**Expected:** macro-F1 keeps rising from 0.316 (cap100) through the controlled zone, then the curve
+should bend as imbalance overtakes added data — the rare tail (pinned at 77) gets relatively starved,
+so macro-F1 (which weights rare classes equally) plateaus or dips while micro/precision keep climbing.
+Full-data number is the apples-to-apples vs published BERT 0.46 and the fine-tuning verdict: ~0.40+ ⇒
+frozen embedder is not the bottleneck; stall ~0.33 ⇒ frozen embedding is the ceiling, FT needed.
+Imbalance (max/min, #pinned) computed offline from the saved `ge_classwise_*_test.json` per point.
+
+### STATUS (Phase 3)
+- [ ] T1 caps 77, 200
+- [ ] T2 caps 500, 1000
+- [ ] T3 full (cap 50000)
+- [ ] REPORT.md extended-curve section
+
+---
+
 ## Live notes / results log
 - 2026-06-16 00:39 calibration: cw10=20s, cw100=83s, strat50(28k)>17min aborted. Embedder cached.
 - 2026-06-16 01:55 BLOCKER+FIX: AutoIntent 0.3.0 embedder calls huggingface_hub.model_info() per embed()
