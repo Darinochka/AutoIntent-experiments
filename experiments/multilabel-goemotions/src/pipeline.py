@@ -21,15 +21,18 @@ if TYPE_CHECKING:
 def _patch_embedder_offline_cache_key() -> None:
     """Resolve the embedder's cache-key commit hash locally instead of via the Hugging Face API.
 
-    AutoIntent 0.3.0 calls ``huggingface_hub.model_info`` on every ``embed`` to key its embeddings
+    AutoIntent 0.3.x calls ``huggingface_hub.model_info`` on every ``embed`` to key its embeddings
     cache by the model's remote commit hash. Under a fast sweep this trips HF's 1000-req/5-min rate
     limit (HTTP 429) and is fatal under ``HF_HUB_OFFLINE``. The hash only needs to be a stable
     per-model identifier, so we read the cached ``refs/main`` commit (identical to the remote sha)
     and fall back to the model name — no network, and the same cache key as the online path.
+
+    0.3.1 changed the call site to ``_get_latest_commit_hash(model_name, revision)`` (two positional
+    args), so the replacement must accept the optional ``revision`` or the call raises ``TypeError``.
     """
     from autointent._wrappers.embedder import sentence_transformers as st
 
-    def _local_commit_hash(model_name: str) -> str:
+    def _local_commit_hash(model_name: str, revision: str | None = None) -> str:
         if Path(model_name).exists():
             return model_name
         from huggingface_hub.constants import HF_HUB_CACHE
@@ -130,8 +133,11 @@ def run_experiment(
 
     metrics = dict(context.optimization_info.pipeline_metrics)
     emb_cfg = pipeline.embedder_config.model_dump()
+    from importlib.metadata import version
+
     report: dict[str, Any] = {
         "preset": preset,
+        "autointent_version": version("autointent"),
         "exp_name": exp_name,
         "n_classes": dataset.n_classes,
         "fed_split_sizes": fed_split_sizes,

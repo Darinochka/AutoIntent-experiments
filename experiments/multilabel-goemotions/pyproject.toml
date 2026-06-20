@@ -3,11 +3,13 @@ name = "autointent-multilabel-goemotions"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
-    "autointent[sentence-transformers]==0.3.0",
+    "accelerate>=1.14.0",
+    "autointent[sentence-transformers]==0.3.1",
     "cyclopts>=4.18.0",
     "datasets>=4.8.5",
     "iterative-stratification>=0.1.9",
     "loguru>=0.7.3",
+    "matplotlib>=3.11.0",
 ]
 
 [dependency-groups]

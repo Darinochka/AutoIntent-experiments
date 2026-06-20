@@ -180,11 +180,70 @@ Full-data number is the apples-to-apples vs published BERT 0.46 and the fine-tun
 frozen embedder is not the bottleneck; stall ~0.33 ⇒ frozen embedding is the ceiling, FT needed.
 Imbalance (max/min, #pinned) computed offline from the saved `ge_classwise_*_test.json` per point.
 
-### STATUS (Phase 3)
-- [ ] T1 caps 77, 200
-- [ ] T2 caps 500, 1000
-- [ ] T3 full (cap 50000)
-- [ ] REPORT.md extended-curve section
+### STATUS (Phase 3) — DONE 2026-06-19 (AutoIntent 0.3.1; version-controlled vs 0.3.0)
+- [x] T1 caps 77, 200 → 0.296±0.006 / 0.341±0.004 (3 seeds, all ok)
+- [x] T2 caps 500, 1000 → 0.347±0.002 / 0.350±0.005 (2 seeds, all ok)
+- [x] T3 full (cap 50000 = 43,410 rows) → **0.353 ± 0.002** (3 seeds; ~16 min/seed, mem >70% free)
+- [x] REPORT.md extended-curve section → §9 added; §1/§5/§7/§8 updated
+- KEY FINDING: macro-F1 plateaus ~0.35; 18× more data past cap-100 buys +0.04 → gap to BERT 0.46 is the
+  FROZEN EMBEDDING, not data → fine-tuning genuinely required. §5's 0.38–0.43 prediction falsified.
+- Version control: 0.3.1 reproduced 0.3.0 cap-100/seed-1 bit-for-bit (0.32409774762737037). Offline patch
+  needed a one-line fix (revision arg) for 0.3.1's changed signature.
+
+---
+
+# Phase 4 — Fine-tuning vs the frozen-embedding ceiling  (added 2026-06-19)
+
+**Question (from user):** Phase 3 showed `classic-light` (frozen e5) plateaus at macro-F1 ≈ 0.35 and that
+the gap to fine-tuned BERT (0.46) is the *representation*, not data. Phase 4 tests that head-on: does
+end-to-end **fine-tuning** a transformer at the same balanced caps (100, 300) close the gap?
+
+**Method.** AutoIntent `transformers-no-hpo` preset → `bert` scoring node (HF Trainer, problem_type=
+`multi_label_classification`, BCE loss, sigmoid outputs — verified proper multilabel FT). Overrides:
+- model → **bert-base-uncased** — cached locally (runs OFFLINE) AND the exact model of the published
+  GoEmotions baseline (0.46 macro-F1). So the comparison is apples-to-apples: same model + 28-class
+  taxonomy + test split; the only difference vs the literature is *our balanced subsample* vs their full
+  data. (deberta-v3-small, the preset default, is NOT cached → would need network; bert-base is better here.)
+- device → mps; epochs ≤ 15 with early stopping (preset default: patience 3 on scoring_f1, val_fraction 0.2);
+  batch_size 32 (MPS memory); lr 3e-5 (standard small-data BERT-FT recipe).
+- scoring target → scoring_f1; decision target → **decision_f1** (matches Phase-3 headline ⇒ directly comparable).
+- hpo n_trials small (5): the single scoring config trains the transformer ONCE; trials only tune the decision
+  threshold. (`transformers-light` HPO-searches bs×lr over 40 trials → up to 40 trainings → hours on MPS; the
+  no-hpo preset avoids that.)
+
+**Runner:** `run_finetune.py` (injects the overrides into the preset dict; writes a sweep-compatible metrics
+JSON with a `finetune` block). Caps: classwise 100 (have dataset, ~2,475 rows) and 300 (build via
+`sweep.py --sizes 300`, ~6.5k rows). Seed 1 (+ seed 2 at cap 100 if time permits, for variance).
+
+**Feasibility (smoke tests cap-10, mps):** bert-base FT runs offline on MPS (after `uv add accelerate` —
+HF Trainer needs accelerate≥0.26; the sentence-transformers extra omits it). **Cost ≈ ONE training per cap,
+independent of n_trials:** cap-10 wall time was 44s at n_trials=1 and 47s at n_trials=8 (+3s for 8× trials)
+→ the single fixed scoring config trains the transformer once; extra trials only re-tune the decision
+threshold on cached scores. Projected from the per-step rate: cap-100 ≈ 8–18 min, cap-300 ≈ 20–45 min
+(early stopping, patience 3, likely shortens both). Confirms the no-hpo preset is the right choice.
+
+**Machine safety:** bert-base (110M params) FT on MPS shares the 17 GB unified memory. ONE fit at a time,
+batch 32, watchdog on memory (<13% free → pause). Run offline: `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+PYTORCH_ENABLE_MPS_FALLBACK=1`.
+
+**Expected / decision rule:** FT should beat frozen-e5 at matched data; the question is by how much.
+- cap-100 FT ≫ 0.316 (say ≥ 0.40) ⇒ fine-tuning IS the lever Phase 3 predicted; representation was the wall.
+- cap-100 FT ≈ frozen-e5 (~0.32–0.35) ⇒ at a few-k rows bert-base can't yet exploit FT; the 0.46 baseline's
+  edge is mostly its full-data training, so "FT needs *data*" — nuances the Phase-3 verdict.
+Either way Phase 4 quantifies the FT lift at fixed small data and sharpens the §9 conclusion.
+
+### STATUS (Phase 4)
+- [x] Smoke test (cap 10) — offline/MPS OK; needed `uv add accelerate`; bert trains once (~11min full-15ep @cap100)
+- [x] `run_finetune.py` runner + PLAN section + recipe debugging (diag_ft.py / diag_ft_warmup.py)
+- [x] cap 100 FT → **0.170 ± 0.003** (2 seeds) ≪ frozen-e5 0.316 (FT data-starved, loses)
+- [x] cap 200 FT → **0.399** (seed 1) > frozen-e5 0.341 (crossover already passed)
+- [x] cap 300 FT → **0.407 ± 0.001** (2 seeds, ~31min/seed) ≫ frozen-e5's 0.353 full-data ceiling; ~88% of BERT 0.46
+- [x] exact frozen-e5 cap-300 (matched 6816-row dataset) = 0.340 → FT beats frozen by +0.067 at cap-300
+- [x] REPORT.md §10 + §1/§5/§7 updates + figure (plot_ft.py → figures/phase4_ft_vs_frozen.png)
+- VERDICT: **FT scales steeply with data and breaks the frozen ceiling.** cap-100: FT 0.173 < frozen 0.316
+  (FT data-starved, loses). cap-300: FT **0.408** > frozen's 0.353 asymptote, nearing BERT-full 0.46. The
+  crossover is between 100 and 300. CONFIRMS Phase-3 "FT needed to beat ~0.35" AND nuances it: FT needs a
+  data threshold (~few-k balanced rows); below it, frozen e5 + linear is the better choice.
 
 ---
 
@@ -195,3 +254,27 @@ Imbalance (max/min, #pinned) computed offline from the saved `ge_classwise_*_tes
   the IP; fatal under HF_HUB_OFFLINE. Fixed in src/pipeline.py `_patch_embedder_offline_cache_key`:
   resolve commit hash from local refs/main (== remote sha, so cache key unchanged). All sweeps now run
   with HF_HUB_OFFLINE=1. Phase 1 classwise (slow fits) was unaffected; freeze stands.
+- 2026-06-19 00:10 Phase 3 start. autointent upgraded 0.3.0->0.3.1 (pinned in pyproject). Pre-flight:
+  (a) FIXED offline patch — 0.3.1 calls `_get_latest_commit_hash(model_name, revision)` (2 args); old
+  1-arg patch would TypeError every fit. Added optional `revision` param. (b) Added `autointent_version`
+  to report JSON for per-point provenance. (c) Version control fit: cap-100/seed-1 on 0.3.1 == 0.3.0
+  bit-for-bit (0.32409774762737037, same modules) -> banked 0.3.0 caps 5-100 comparable to fresh 0.3.1.
+  (d) Backed up logs/ to logs_backup_v030_*. (e) Wrote analyze_imbalance.py (max/min, CV, #pinned per cap).
+- 2026-06-19 00:13-00:59 Tiers 1-3 ran sequentially (one fit-process at a time, watchdog on mem<13%/errors,
+  free% stayed 72-78%). All cells ok, 0 failures, 0 HF-429. Full-data (43k) fit = ~16 min.
+- 2026-06-19 01:00 RESULT: curve plateaus ~0.35 (full=0.353±0.002, 3 seeds). Imbalance climbs 2.0->185
+  (CV 0.19->1.41, pinned 0->28). prec rises 0.22->0.344, recall falls 0.51->0.394 as imbalance grows.
+  Verdict: gap to BERT 0.46 is the frozen representation, not data -> fine-tuning genuinely required.
+- 2026-06-19 02:30 Phase 4 (FT) setup: transformers-no-hpo preset -> bert scorer. Needed `uv add accelerate`
+  (HF Trainer dep, omitted by sentence-transformers extra). Use bert-base-uncased (cached/offline + ==
+  literature baseline). deberta-v3-small NOT cached.
+- 2026-06-19 02:50 BLOCKER: stock recipe (lr 3e-5) COLLAPSES at cap-100 -> degenerate all-positive after
+  thresholding, decision_f1=0.107 (< frozen-e5 0.316). Diagnosis (diag_ft.py, standalone bert + threshold
+  sweep): BCE plateaus at the base-rate floor ~0.17, sigmoid outputs near-constant across classes.
+  Recipe sweep (full epochs, no early stop): lr 1e-5 collapses (macro-F1 0.03), lr 3e-5 collapses,
+  **lr 2e-5 learns (macro-F1 0.224 @ thr 0.1, micro 0.31)** — 2e-5 is the sweet spot. Warmup 0.1 does NOT
+  help (0.178). Also: the preset early-stops on scoring_f1@0.5, which is ~0 for sparse multilabel (probs<0.5)
+  -> stops at step 1 and restores a near-random model; MUST disable (run_finetune.py disable_early_stopping).
+- 2026-06-19 03:15 FINAL recipe: bert-base, lr 2e-5, 15 epochs, no early stop, n_trials 5 (bert trains once;
+  trials tune decision only). KEY (pre-result): even tuned, FT @cap-100 ~0.22 << frozen-e5 0.316 -> at small
+  balanced data, fine-tuning bert-base from scratch LOSES to a linear head on frozen e5. FT needs more data.
