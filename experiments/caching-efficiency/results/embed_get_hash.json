@@ -1,0 +1,22 @@
+[
+  {
+    "case": "hf_name_first_call",
+    "seconds": 0.00012,
+    "note": "queries HF Hub for commit SHA"
+  },
+  {
+    "case": "hf_name_lru_cached",
+    "seconds": 7e-06,
+    "note": "subsequent calls hit lru_cache"
+  },
+  {
+    "case": "local_path_first_call",
+    "seconds": 0.19837,
+    "note": "pickles + hashes EVERY model parameter tensor"
+  },
+  {
+    "case": "local_path_repeat",
+    "seconds": 0.05292,
+    "note": "no memoization: re-hashes all params each call"
+  }
+]

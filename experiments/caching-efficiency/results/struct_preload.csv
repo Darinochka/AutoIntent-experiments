@@ -1,0 +1,5 @@
+entries_written,on_disk_dirs,on_disk_files,preloaded_into_memory,init_seconds,disk_hit_still_works
+0,0,0,0,1e-05,
+50,50,0,0,0.00015,True
+200,200,0,0,0.00063,True
+1000,1000,0,0,0.00286,True

@@ -1,0 +1,7 @@
+variant,expected_hit,observed_hit,correct,files_before,files_after,arrays_equal_to_first
+identical,True,True,True,1,1,True
+reordered,False,False,True,1,2,
+subset_drop_last,False,False,True,2,3,
+superset_add_one,False,False,True,3,4,
+one_char_edit,False,False,True,4,5,
+prompt_added,False,False,True,5,6,

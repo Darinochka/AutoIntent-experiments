@@ -1,0 +1,46 @@
+[
+  {
+    "pattern": "fixed_data_across_trials",
+    "description": "same train set embedded across 20 hyperparameter trials (ideal case)",
+    "n_calls": 20,
+    "hits": 19,
+    "misses": 1,
+    "hit_rate": 0.95,
+    "utterances_computed": 1000,
+    "utterances_ideal": 1000,
+    "redundancy_factor": 1.0
+  },
+  {
+    "pattern": "growing_dataset",
+    "description": "dataset grows by 100 utterances over 10 runs",
+    "n_calls": 10,
+    "hits": 0,
+    "misses": 10,
+    "hit_rate": 0.0,
+    "utterances_computed": 9500,
+    "utterances_ideal": 1400,
+    "redundancy_factor": 6.79
+  },
+  {
+    "pattern": "kfold_cv",
+    "description": "5-fold CV, each fold embeds its 800-utterance train split",
+    "n_calls": 5,
+    "hits": 0,
+    "misses": 5,
+    "hit_rate": 0.0,
+    "utterances_computed": 4000,
+    "utterances_ideal": 1000,
+    "redundancy_factor": 4.0
+  },
+  {
+    "pattern": "reshuffled_reruns",
+    "description": "same 1000 utterances re-embedded in 5 different orders",
+    "n_calls": 5,
+    "hits": 0,
+    "misses": 5,
+    "hit_rate": 0.0,
+    "utterances_computed": 5000,
+    "utterances_ideal": 1000,
+    "redundancy_factor": 5.0
+  }
+]

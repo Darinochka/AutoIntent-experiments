@@ -1,0 +1,16 @@
+[
+  {
+    "entries": 100,
+    "filesystem_inodes": 300,
+    "inodes_per_entry": 3.0,
+    "total_kb": 16.4,
+    "bytes_per_entry": 163.8
+  },
+  {
+    "entries": 1000,
+    "filesystem_inodes": 3000,
+    "inodes_per_entry": 3.0,
+    "total_kb": 164.8,
+    "bytes_per_entry": 164.8
+  }
+]

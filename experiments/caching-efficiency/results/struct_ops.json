@@ -1,0 +1,9 @@
+[
+  {
+    "set_median_ms": 0.2846,
+    "get_disk_median_ms": 0.1334,
+    "get_memory_median_ms": 0.07392,
+    "entries": 200,
+    "bytes_per_entry": 164.4
+  }
+]
