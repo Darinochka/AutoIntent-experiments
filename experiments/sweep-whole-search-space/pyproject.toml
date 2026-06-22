@@ -1,0 +1,37 @@
+[project]
+name = "AutoIntent-experiments"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "voorhs", email = "ilya_alekseev_2016@list.ru"},
+]
+dependencies = [
+    "ipykernel>=6.29.5",
+    "ipywidgets>=8.1.5",
+    "pandas>=2.2.3",
+    "autointent[codecarbon,wandb] @ git+ssh://git@github.com/DeepPavlov/AutoIntent.git@5d571d99fb413cde59e5a359059a7bcb3cc2eb8e",
+    "sentencepiece>=0.2.0",
+    "xformers>=0.0.30",
+    "torchvision>=0.22.0"
+]
+requires-python = "==3.12.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[project.optional-dependencies]
+fedot = [
+    "fedot>=0.7.5",
+]
+h2o = [
+    "h2o>=3.46.0.7",
+]
+lama = [
+    "torch<2.7.0",
+    "lightautoml[nlp]>=0.4.1",
+]
+gluon = [
+    "autogluon>=1.3.0",
+]
+[tool.pdm]
+distribution = false
