@@ -1,0 +1,59 @@
+[project]
+name = "autointent-multilabel-goemotions"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "accelerate>=1.14.0",
+    "autointent[sentence-transformers]==0.3.1",
+    "cyclopts>=4.18.0",
+    "datasets>=4.8.5",
+    "iterative-stratification>=0.1.9",
+    "loguru>=0.7.3",
+    "matplotlib>=3.11.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1,<1.20.0",
+    "ruff>=0.15.0,<0.15.1",
+]
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",     # trailing commas
+    "ERA001",     # commented code
+    "FBT",        # boolean trap
+    "D105",       # docstring in magic methods
+    "EM101",      # string literal in exception
+    "TRY003",     # strings in exceptions
+    "FIX", "TD"   # todos
+]
+
+[tool.ruff.lint.pylint]
+max-args = 11
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.14"
+warn_return_any = true
+warn_unused_ignores = true
+strict = true
+plugins = [
+    "pydantic.mypy",
+]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+
+[[tool.mypy.overrides]]
+module = ["datasets.*", "iterstrat.*"]
+ignore_missing_imports = true

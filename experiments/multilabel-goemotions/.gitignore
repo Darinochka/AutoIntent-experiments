@@ -1,0 +1,8 @@
+.venv/
+data/
+logs/
+runs/
+__pycache__/
+
+# editor workspace (not tracked)
+AutoIntent-experiments.code-workspace
