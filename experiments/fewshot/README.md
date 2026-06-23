@@ -10,6 +10,19 @@ catch up at 32–128 shots.
 The raw metrics were logged to public Weights & Biases projects by
 `samoed-roman`. These scripts pull them back down, merge them, and plot them.
 
+## Where the experiments were actually run
+
+This folder only **downloads and visualises** results. The code that *ran* the
+experiments lives in [`../sweep-whole-search-space/`](../sweep-whole-search-space/):
+
+- `automl_frameworks.py` — runs the baselines and logs them to the `AutoML-Eval`
+  W&B project (`evaluate_gluon` = AutoGluon, `evaluate_h2o` = H2O AutoML + Word2Vec,
+  `evaluate_lama` = LightAutoML, `evalute_fedot`, `evaluate_gama`).
+- `tune_bert.py`, `quality_*.py`, `scoring_*.py`, the seed-aggregation scripts — the
+  AutoIntent sweeps and analysis.
+- `plots/few_shot.ipynb` and `results_download/` — the original notebooks this
+  folder is a cleaned-up, scripted version of.
+
 ## Scripts
 
 | Script | Reads | Writes | Purpose |
