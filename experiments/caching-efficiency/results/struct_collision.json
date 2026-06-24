@@ -1,0 +1,16 @@
+[
+  {
+    "level": "cache",
+    "detail": "same messages/schema/params, two different models",
+    "key_identical_across_models": true,
+    "model_b_served_model_a_value": true,
+    "second_backend_call_made": null
+  },
+  {
+    "level": "generator",
+    "detail": "model-A then model-B with identical messages/params",
+    "key_identical_across_models": null,
+    "model_b_served_model_a_value": true,
+    "second_backend_call_made": false
+  }
+]

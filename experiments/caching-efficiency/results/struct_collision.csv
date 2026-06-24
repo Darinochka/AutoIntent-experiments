@@ -1,0 +1,3 @@
+level,detail,key_identical_across_models,model_b_served_model_a_value,second_backend_call_made
+cache,"same messages/schema/params, two different models",True,True,
+generator,model-A then model-B with identical messages/params,,True,False

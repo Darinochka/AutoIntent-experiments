@@ -1,0 +1,16 @@
+[
+  {
+    "cache": "embeddings",
+    "scenario": "truncated .npy then re-read",
+    "raised_on_next_read": true,
+    "error_type": "ValueError",
+    "auto_recovers_by_recompute": false
+  },
+  {
+    "cache": "structured_outputs",
+    "scenario": "entry dir missing model_dump.json then re-read",
+    "raised_on_next_read": true,
+    "error_type": "FileNotFoundError",
+    "auto_recovers_by_recompute": false
+  }
+]

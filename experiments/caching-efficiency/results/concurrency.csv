@@ -1,0 +1,3 @@
+cache,scenario,raised_on_next_read,error_type,auto_recovers_by_recompute
+embeddings,truncated .npy then re-read,True,ValueError,False
+structured_outputs,entry dir missing model_dump.json then re-read,True,FileNotFoundError,False

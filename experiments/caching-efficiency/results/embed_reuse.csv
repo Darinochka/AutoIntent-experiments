@@ -1,0 +1,5 @@
+pattern,description,n_calls,hits,misses,hit_rate,utterances_computed,utterances_ideal,redundancy_factor
+fixed_data_across_trials,same train set embedded across 20 hyperparameter trials (ideal case),20,19,1,0.95,1000,1000,1.0
+growing_dataset,dataset grows by 100 utterances over 10 runs,10,0,10,0.0,9500,1400,6.79
+kfold_cv,"5-fold CV, each fold embeds its 800-utterance train split",5,0,5,0.0,4000,1000,4.0
+reshuffled_reruns,same 1000 utterances re-embedded in 5 different orders,5,0,5,0.0,5000,1000,5.0

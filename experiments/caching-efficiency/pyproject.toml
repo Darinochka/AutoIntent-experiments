@@ -1,0 +1,62 @@
+[project]
+name = "caching-efficiency"
+version = "0.1.0"
+description = "Benchmarking the efficiency of AutoIntent 0.3.1's file-based caches (embeddings + LLM structured outputs)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "autointent[openai,sentence-transformers]==0.3.1",
+    "matplotlib>=3.11.0",
+    "pandas>=3.0.3",
+    "tabulate>=0.10.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pandas-stubs>=3.0.3.260530",
+    "ruff>=0.15.18",
+    "types-tabulate>=0.10.0.20260508",
+]
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",  # trailing comma (formatter handles it)
+    "ERA001",  # commented-out code
+    "FBT",     # boolean-trap
+    "EM101",   # raw string in exception
+    "EM102",   # f-string in exception
+    "TRY003",  # long messages in exceptions
+    "FIX",     # line contains TODO/FIXME
+    "TD",      # todo formatting
+    "T201",    # print is fine for a benchmark script
+    "S101",    # asserts are fine here
+    "PLR0913", # many args
+    "C901",    # complexity
+    "PLR0912", # too many branches
+    "PLR0915", # too many statements
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/scenarios/*.py" = ["SLF001"]  # benchmarks intentionally poke private cache internals
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+warn_unreachable = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["autointent.*"]
+ignore_missing_imports = true
