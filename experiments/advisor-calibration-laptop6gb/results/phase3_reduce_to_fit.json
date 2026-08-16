@@ -1,0 +1,147 @@
+{
+  "hardware": {
+    "accelerator": "cuda",
+    "device_name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+    "vram_gb": 5.67022705078125,
+    "ram_gb": 15.025211334228516,
+    "device_class": "low-gpu"
+  },
+  "dataset": {
+    "source": "DeepPavlov/banking77",
+    "n_samples": 2310,
+    "n_classes": 77
+  },
+  "A_strict_gate": {
+    "outcome": "PreflightError",
+    "raised_before_alloc": true,
+    "vram_peak_gb": 0.0,
+    "elapsed_s": 1.34,
+    "message": "Preflight check failed with 1 OVER finding(s):\n  [resource] VRAM ~15.7 GB vs available 5.7 GB"
+  },
+  "B_reduce_heavy": {
+    "scoring_modules_before": [
+      "bert"
+    ],
+    "outcome": "ReduceToFitError",
+    "message": "All scoring modules were pruned to fit the budget; the resulting pipeline would have nothing to run. Raise the budget or add cheaper scoring modules.",
+    "scoring_modules_after": [],
+    "last_report": {
+      "headroom": "over",
+      "is_feasible": false,
+      "vram_gb": 15.691,
+      "ram_gb": 7.367,
+      "time_hours": 39.813,
+      "low_confidence": true,
+      "findings": [
+        {
+          "severity": "tight",
+          "metric": null,
+          "message": "LOW CONFIDENCE - Hub metadata unavailable for 1 model(s); cost estimates use conservative large-model defaults (may over-predict small models): microsoft/deberta-v3-large"
+        },
+        {
+          "severity": "over",
+          "metric": "vram",
+          "message": "VRAM ~15.7 GB vs available 5.7 GB"
+        },
+        {
+          "severity": "ample",
+          "metric": "ram",
+          "message": "RAM ~7.4 GB vs available 15.0 GB"
+        },
+        {
+          "severity": "ample",
+          "metric": "disk",
+          "message": "Disk ~0.0 GB to download, 3.9 GB already cached vs 160 GB free"
+        },
+        {
+          "severity": "ample",
+          "metric": "time",
+          "message": "Time ~39.8 h (worst case, no HPO pruning)"
+        }
+      ]
+    },
+    "names_a_lighter_preset": false
+  },
+  "C_reduce_mixed": {
+    "scoring_modules_before": [
+      "bert",
+      "knn",
+      "linear"
+    ],
+    "report_before": {
+      "headroom": "over",
+      "is_feasible": false,
+      "vram_gb": 15.691,
+      "ram_gb": 14.668,
+      "time_hours": 1.05,
+      "low_confidence": true,
+      "findings": [
+        {
+          "severity": "tight",
+          "metric": null,
+          "message": "LOW CONFIDENCE - Hub metadata unavailable for 1 model(s); cost estimates use conservative large-model defaults (may over-predict small models): microsoft/deberta-v3-large"
+        },
+        {
+          "severity": "over",
+          "metric": "vram",
+          "message": "VRAM ~15.7 GB vs available 5.7 GB"
+        },
+        {
+          "severity": "tight",
+          "metric": "ram",
+          "message": "RAM ~14.7 GB vs available 15.0 GB"
+        },
+        {
+          "severity": "ample",
+          "metric": "disk",
+          "message": "Disk ~0.0 GB to download, 6.1 GB already cached, +0.01 GB embedding cache vs 160 GB free"
+        },
+        {
+          "severity": "ample",
+          "metric": "time",
+          "message": "Time ~1.1 h (worst case, no HPO pruning)"
+        }
+      ]
+    },
+    "outcome": "pruned-to-feasible",
+    "scoring_modules_after": [
+      "knn",
+      "linear"
+    ],
+    "report_after": {
+      "headroom": "ample",
+      "is_feasible": true,
+      "vram_gb": 1.826,
+      "ram_gb": 10.156,
+      "time_hours": 0.055,
+      "low_confidence": false,
+      "findings": [
+        {
+          "severity": "ample",
+          "metric": "vram",
+          "message": "VRAM ~1.8 GB vs available 5.7 GB"
+        },
+        {
+          "severity": "ample",
+          "metric": "ram",
+          "message": "RAM ~10.2 GB vs available 15.0 GB"
+        },
+        {
+          "severity": "ample",
+          "metric": "disk",
+          "message": "Disk ~0.0 GB to download, 3.2 GB already cached, +0.01 GB embedding cache vs 160 GB free"
+        },
+        {
+          "severity": "ample",
+          "metric": "time",
+          "message": "Time ~0.1 h (worst case, no HPO pruning)"
+        }
+      ]
+    },
+    "real_fit": {
+      "outcome": "ok",
+      "elapsed_s": 219.4,
+      "vram_peak_gb": 2.23
+    }
+  }
+}

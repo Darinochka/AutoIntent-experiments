@@ -1,0 +1,169 @@
+{
+  "hardware": {
+    "accelerator": "cuda",
+    "device_name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+    "vram_gb": 5.67022705078125,
+    "ram_gb": 15.025211334228516,
+    "free_disk_gb": 162.15912628173828
+  },
+  "datasets": [
+    {
+      "path": "hub:DeepPavlov/banking77|subsample-per-class=30",
+      "n_samples": 2310,
+      "n_classes": 77,
+      "avg_tokens": 11,
+      "multilabel": false
+    }
+  ],
+  "max_trials_override": 2,
+  "skip_fit": false,
+  "cache_policy": "cold",
+  "budget_vram_gb_override": null,
+  "subsample_per_class": 30,
+  "thread_caps": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "TOKENIZERS_PARALLELISM": "false"
+  },
+  "in_progress": false,
+  "rows": [
+    {
+      "preset": "transformers-no-hpo",
+      "predicted": {
+        "time_h": 1.9906560000000002,
+        "ram_gb": 7.367426879703999,
+        "vram_gb": 10.192361164093017,
+        "disk_download_gb": 0.0,
+        "disk_cached_gb": 1.7050977861508727,
+        "disk_embedding_cache_gb": 0.0
+      },
+      "actual": {},
+      "findings": 5,
+      "findings_over": 1,
+      "headroom": "over",
+      "is_feasible": false,
+      "severity_by_metric": {
+        "vram": "over",
+        "ram": "ample",
+        "disk": "ample",
+        "time": "ample"
+      },
+      "models": {
+        "scoring/bert": "microsoft/deberta-v3-small"
+      },
+      "modules": [],
+      "cache_policy": "cold",
+      "low_confidence": true,
+      "repeat_idx": 0,
+      "skipped": false,
+      "cli_smoke": {
+        "payload": {
+          "findings": [
+            {
+              "phase": "resource",
+              "severity": "tight",
+              "message": "LOW CONFIDENCE - Hub metadata unavailable for 1 model(s); cost estimates use conservative large-model defaults (may over-predict small models): microsoft/deberta-v3-small",
+              "metric": null
+            },
+            {
+              "phase": "resource",
+              "severity": "over",
+              "message": "VRAM ~10.2 GB vs available 5.7 GB",
+              "metric": "vram"
+            },
+            {
+              "phase": "resource",
+              "severity": "ample",
+              "message": "RAM ~7.4 GB vs available 15.0 GB",
+              "metric": "ram"
+            },
+            {
+              "phase": "resource",
+              "severity": "ample",
+              "message": "Disk ~0.0 GB to download, 1.7 GB already cached vs 162 GB free",
+              "metric": "disk"
+            },
+            {
+              "phase": "resource",
+              "severity": "ample",
+              "message": "Time ~39.8 h (worst case, no HPO pruning)",
+              "metric": "time"
+            },
+            {
+              "phase": "config",
+              "severity": "tight",
+              "message": "'bert' entry has 1 unique configurations but hpo_config.n_trials=40 \u2014 expect ~39 duplicate trials unless the sampler dedupes. Reduce n_trials or widen the search space.",
+              "metric": null
+            }
+          ],
+          "resource": {
+            "disk_download_gb": 0.0,
+            "disk_cached_gb": 1.7050977861508727,
+            "disk_dump_gb": 0.0,
+            "disk_embedding_cache_gb": 0.0,
+            "ram_gb": 7.367426879703999,
+            "vram_gb": 10.192361164093017,
+            "time_hours": 39.81312,
+            "parallel_factor": 1,
+            "drivers": [
+              {
+                "node_type": "scoring",
+                "module": "bert",
+                "model": "microsoft/deberta-v3-small",
+                "mode": "full-finetune",
+                "vram_gb": 9.19,
+                "ram_gb": 5.87,
+                "time_hours": 39.81,
+                "batch_size": 96,
+                "max_batch_size": 0,
+                "confidence": "heuristic"
+              }
+            ]
+          },
+          "hardware": {
+            "accelerator": "cuda",
+            "device_name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+            "vram_gb": 5.67,
+            "ram_gb": 15.03,
+            "free_disk_gb": 162.16,
+            "device_class": "low-gpu"
+          },
+          "dataset": {
+            "n_samples": 2310,
+            "n_classes": 77,
+            "avg_tokens": 11,
+            "p95_tokens": 27,
+            "multilabel": false,
+            "source": "placeholder"
+          },
+          "preset_name": "transformers-no-hpo",
+          "low_confidence": true,
+          "notes": [],
+          "headroom": "over",
+          "is_feasible": false
+        },
+        "rc": 1,
+        "error": null,
+        "divergence": {
+          "time_hours": 37.822464
+        },
+        "divergence_expected": true
+      },
+      "error": "fit failed: CUDA out of memory. Tried to allocate 26.00 MiB. GPU 0 has a total capacity of 5.67 GiB of which 5.94 MiB is free. Including non-PyTorch memory, this process has 5.64 GiB memory in use. Of the allocated memory 5.39 GiB is allocated by PyTorch, and 118.13 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)",
+      "notes": [
+        "dataset=hub:DeepPavlov/banking77|subsample-per-class=30",
+        "low-confidence (heuristic HF metadata fallback in use)",
+        "cli-smoke time differs (cli n_trials=40 vs --max-trials 2); expected, not a wrapper regression"
+      ],
+      "ratios": {
+        "time_h": null,
+        "ram_gb": null,
+        "vram_gb": null,
+        "disk_download_gb": null,
+        "disk_embedding_cache_gb": null
+      },
+      "time_by_role_s": {}
+    }
+  ]
+}
