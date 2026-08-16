@@ -104,26 +104,40 @@ a 6 GB card, always in the unsafe direction. Both signals are in the JSON as
 
 ### Reproducing
 
+Everything runs from [`reproduce.sh`](reproduce.sh) in this directory. It clones
+and pins `deeppavlov/AutoIntent`, builds an environment that can actually load
+the deberta presets (including the undocumented `protobuf` dependency), runs the
+phases, and collects the JSONs back into [`results/`](results/).
+
 ```bash
-# Phase 1 — advisor verdicts only, no training
-SKIP_FIT=1 REQUIRE_CUDA=1 RUN_NAME=laptop6gb_preflight \
-  scripts/run_calibration_banking77.sh
-
-# Phase 1b — what would the advisor say with CORRECT model metadata?
-CUDA_VISIBLE_DEVICES="" uv run --no-sync python \
-  scripts/phase1b_metadata_counterfactual.py --assume-hardware 5.67,15.03
-
-# Phase 2 — real fits, ONE PRESET PER PROCESS (see "measurement isolation")
-scripts/run_phase2_isolated.sh
-
-# Phase 3 — strict gate + reduce-to-fit
-uv run --no-sync python scripts/phase3_reduce_to_fit.py --subsample-per-class 30
-
-# Regenerate Tables 1 and 2 straight from the JSONs
-uv run --no-sync python scripts/render_issue39_tables.py \
-  --preflight <phase1>.json --fits <phase2>/*/*.json \
-  --counterfactual phase1b_counterfactual.json
+./reproduce.sh --check      # verify CUDA + report the detected profile, run nothing
+./reproduce.sh              # all phases (~2-3 h, almost entirely Phase 2)
+./reproduce.sh 1 1b 3       # the cheap phases only (~10 min, no training)
+./reproduce.sh tables       # re-render Tables 1 and 2 from the committed JSONs
 ```
+
+| phase | what it does | cost |
+| --- | --- | --- |
+| `1` | advisor verdicts across all 10 presets, no training | ~2 min |
+| `1b` | metadata counterfactual (CPU only, no CUDA context) | ~2 min |
+| `2` | real fits, one preset per process | ~1–2 h |
+| `3` | strict gate + reduce-to-fit + a real fit of the pruned config | ~6 min |
+| `tables` | re-render Tables 1 and 2 from the JSONs | instant |
+
+Overrides: `AUTOINTENT_DIR` (where to clone/find AutoIntent),
+`AUTOINTENT_REF` (default `feat/issue39-calibration-scripts`), `OUT_DIR`,
+`SKIP_SETUP=1` to reuse an existing checkout and venv.
+
+`./reproduce.sh tables` against the committed `results/` regenerates Tables 1
+and 2 below exactly — the tables in this README are not hand-transcribed.
+
+**The calibration harness itself lives in the AutoIntent repo**, not here
+(`scripts/calibrate_advisor.py`, `run_calibration_banking77.sh`, plus
+`run_phase2_isolated.sh`, `phase1b_metadata_counterfactual.py`,
+`phase3_reduce_to_fit.py` and `render_issue39_tables.py` added for this run —
+see [deeppavlov/AutoIntent#348](https://github.com/deeppavlov/AutoIntent/pull/348)).
+`reproduce.sh` is the entry point that ties them together; it does not duplicate
+them.
 
 Raw JSONs: [`results/`](results/).
 
