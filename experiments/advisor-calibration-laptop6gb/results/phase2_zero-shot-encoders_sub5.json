@@ -1,0 +1,210 @@
+{
+  "hardware": {
+    "accelerator": "cuda",
+    "device_name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+    "vram_gb": 5.67022705078125,
+    "ram_gb": 15.025211334228516,
+    "free_disk_gb": 160.26178359985352
+  },
+  "datasets": [
+    {
+      "path": "hub:DeepPavlov/banking77|subsample-per-class=5",
+      "n_samples": 385,
+      "n_classes": 77,
+      "avg_tokens": 11,
+      "multilabel": false
+    }
+  ],
+  "max_trials_override": 2,
+  "skip_fit": false,
+  "cache_policy": "cold",
+  "budget_vram_gb_override": null,
+  "subsample_per_class": 5,
+  "thread_caps": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "TOKENIZERS_PARALLELISM": "false"
+  },
+  "in_progress": false,
+  "rows": [
+    {
+      "preset": "zero-shot-encoders",
+      "predicted": {
+        "time_h": 0.008969892412854858,
+        "ram_gb": 11.652280198782682,
+        "vram_gb": 3.3589037757739426,
+        "disk_download_gb": 0.0,
+        "disk_cached_gb": 5.302856769412756,
+        "disk_embedding_cache_gb": 0.001468658447265625
+      },
+      "actual": {
+        "time_h": 0.47044635826450154,
+        "ram_gb": 4.492729187011719,
+        "vram_gb": 2.2611231803894043,
+        "disk_download_gb": 0.0,
+        "disk_embedding_cache_gb": 0.0017627477645874023,
+        "vram_gb_tracker": 2.2611231803894043,
+        "vram_gb_sampler": 2.2127928733825684
+      },
+      "findings": 4,
+      "findings_over": 0,
+      "headroom": "ample",
+      "is_feasible": true,
+      "severity_by_metric": {
+        "vram": "ample",
+        "ram": "ample",
+        "disk": "ample",
+        "time": "ample"
+      },
+      "models": {
+        "scoring/description_cross": "BAAI/bge-reranker-v2-m3"
+      },
+      "modules": [
+        {
+          "module": "description_cross",
+          "role": "scorer",
+          "num": 0,
+          "config": {
+            "multilabel": false
+          },
+          "duration_s": 1641.6737052672543,
+          "peak_vram_gb": 2.2611231803894043
+        },
+        {
+          "module": "description_bi",
+          "role": "scorer",
+          "num": 1,
+          "config": {
+            "multilabel": false
+          },
+          "duration_s": 18.813951543997973,
+          "peak_vram_gb": 2.1916232109069824
+        },
+        {
+          "module": "argmax",
+          "role": "decision",
+          "num": 0,
+          "config": {},
+          "duration_s": 0.013685761019587517,
+          "peak_vram_gb": 0.0089111328125
+        },
+        {
+          "module": "tunable",
+          "role": "decision",
+          "num": 1,
+          "config": {},
+          "duration_s": 27.75965778902173,
+          "peak_vram_gb": 0.0089111328125
+        }
+      ],
+      "cache_policy": "cold",
+      "low_confidence": false,
+      "repeat_idx": 0,
+      "skipped": false,
+      "cli_smoke": {
+        "payload": {
+          "findings": [
+            {
+              "phase": "resource",
+              "severity": "ample",
+              "message": "VRAM ~3.4 GB vs available 5.7 GB",
+              "metric": "vram"
+            },
+            {
+              "phase": "resource",
+              "severity": "ample",
+              "message": "RAM ~11.7 GB vs available 15.0 GB",
+              "metric": "ram"
+            },
+            {
+              "phase": "resource",
+              "severity": "ample",
+              "message": "Disk ~0.0 GB to download, 5.3 GB already cached, +0.00 GB embedding cache vs 160 GB free",
+              "metric": "disk"
+            },
+            {
+              "phase": "resource",
+              "severity": "ample",
+              "message": "Time ~0.1 h (worst case, no HPO pruning)",
+              "metric": "time"
+            },
+            {
+              "phase": "config",
+              "severity": "tight",
+              "message": "'description_bi' entry has 1 unique configurations but hpo_config.n_trials=30 \u2014 expect ~29 duplicate trials unless the sampler dedupes. Reduce n_trials or widen the search space.",
+              "metric": null
+            }
+          ],
+          "resource": {
+            "disk_download_gb": 0.0,
+            "disk_cached_gb": 5.302856769412756,
+            "disk_dump_gb": 0.0,
+            "disk_embedding_cache_gb": 0.001468658447265625,
+            "ram_gb": 11.652280198782682,
+            "vram_gb": 3.3589037757739426,
+            "time_hours": 0.13454838619282286,
+            "parallel_factor": 1,
+            "drivers": [
+              {
+                "node_type": "scoring",
+                "module": "description_cross",
+                "model": "BAAI/bge-reranker-v2-m3",
+                "mode": "inference",
+                "vram_gb": 3.06,
+                "ram_gb": 2.75,
+                "time_hours": 0.13,
+                "batch_size": 32,
+                "max_batch_size": 2048,
+                "confidence": "hub"
+              }
+            ]
+          },
+          "hardware": {
+            "accelerator": "cuda",
+            "device_name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+            "vram_gb": 5.67,
+            "ram_gb": 15.03,
+            "free_disk_gb": 160.26,
+            "device_class": "low-gpu"
+          },
+          "dataset": {
+            "n_samples": 385,
+            "n_classes": 77,
+            "avg_tokens": 11,
+            "p95_tokens": 27,
+            "multilabel": false,
+            "source": "placeholder"
+          },
+          "preset_name": "zero-shot-encoders",
+          "low_confidence": false,
+          "notes": [],
+          "headroom": "tight",
+          "is_feasible": true
+        },
+        "rc": 0,
+        "error": null,
+        "divergence": {
+          "time_hours": 0.125578493779968
+        },
+        "divergence_expected": true
+      },
+      "error": null,
+      "notes": [
+        "dataset=hub:DeepPavlov/banking77|subsample-per-class=5",
+        "cli-smoke time differs (cli n_trials=30 vs --max-trials 2); expected, not a wrapper regression"
+      ],
+      "ratios": {
+        "time_h": 52.44726877552058,
+        "ram_gb": 0.3855665252094672,
+        "vram_gb": 0.6731729550270927,
+        "disk_download_gb": null,
+        "disk_embedding_cache_gb": 1.2002435064935064
+      },
+      "time_by_role_s": {
+        "scorer": 1660.4876568112522,
+        "decision": 27.773343550041318
+      }
+    }
+  ]
+}

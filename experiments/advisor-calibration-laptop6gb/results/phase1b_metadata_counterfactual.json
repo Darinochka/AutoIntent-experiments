@@ -1,0 +1,76 @@
+{
+  "hardware": {
+    "vram_gb": 5.67
+  },
+  "rows": [
+    {
+      "preset": "transformers-heavy",
+      "model": "microsoft/deberta-v3-large",
+      "params_assumed_M": 350.0,
+      "params_true_M": 435.1,
+      "disk_assumed_gb": 2.97,
+      "disk_torch_only_gb": 0.82,
+      "as_run": {
+        "vram_gb": 15.69,
+        "headroom": "over",
+        "is_feasible": false,
+        "low_confidence": true,
+        "disk_download_gb": 0.0
+      },
+      "corrected": {
+        "vram_gb": 17.4,
+        "headroom": "over",
+        "is_feasible": false,
+        "low_confidence": false,
+        "disk_download_gb": 0.82
+      },
+      "vram_budget_gb": 5.67
+    },
+    {
+      "preset": "transformers-light",
+      "model": "microsoft/deberta-v3-small",
+      "params_assumed_M": 350.0,
+      "params_true_M": 142.0,
+      "disk_assumed_gb": 0.8,
+      "disk_torch_only_gb": 0.27,
+      "as_run": {
+        "vram_gb": 10.91,
+        "headroom": "over",
+        "is_feasible": false,
+        "low_confidence": true,
+        "disk_download_gb": 0.0
+      },
+      "corrected": {
+        "vram_gb": 6.72,
+        "headroom": "over",
+        "is_feasible": false,
+        "low_confidence": false,
+        "disk_download_gb": 0.27
+      },
+      "vram_budget_gb": 5.67
+    },
+    {
+      "preset": "transformers-no-hpo",
+      "model": "microsoft/deberta-v3-small",
+      "params_assumed_M": 350.0,
+      "params_true_M": 142.0,
+      "disk_assumed_gb": 0.8,
+      "disk_torch_only_gb": 0.27,
+      "as_run": {
+        "vram_gb": 10.19,
+        "headroom": "over",
+        "is_feasible": false,
+        "low_confidence": true,
+        "disk_download_gb": 0.0
+      },
+      "corrected": {
+        "vram_gb": 6.01,
+        "headroom": "over",
+        "is_feasible": false,
+        "low_confidence": false,
+        "disk_download_gb": 0.27
+      },
+      "vram_budget_gb": 5.67
+    }
+  ]
+}
