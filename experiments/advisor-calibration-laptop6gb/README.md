@@ -98,16 +98,18 @@ a 6 GB card, always in the unsafe direction. Both signals are in the JSON as
 
 | | |
 | --- | --- |
-| AutoIntent | `deeppavlov/AutoIntent` @ `feat/feasibility-check`, commit `85848f2` |
+| AutoIntent | `deeppavlov/AutoIntent` @ commit [`85848f2`](https://github.com/deeppavlov/AutoIntent/commit/85848f27), owned by [AutoIntent#291](https://github.com/deeppavlov/AutoIntent/pull/291) |
 | Python / torch / transformers | 3.14.4 / 2.11.0+cu130 / 4.57.6 |
 | Dataset | `DeepPavlov/banking77` — 10 003 train / 77 classes; Phase 2 subsampled |
 
 ### Reproducing
 
-Everything runs from [`reproduce.sh`](reproduce.sh) in this directory. It clones
-and pins `deeppavlov/AutoIntent`, builds an environment that can actually load
-the deberta presets (including the undocumented `protobuf` dependency), runs the
-phases, and collects the JSONs back into [`results/`](results/).
+Everything runs from [`reproduce.sh`](reproduce.sh) in this directory, against
+the harness in [`harness/`](harness/) — both live in this repo. It clones
+`deeppavlov/AutoIntent` for the advisor library alone, pinned to a commit,
+builds an environment that can actually load the deberta presets (including the
+undocumented `protobuf` dependency), runs the phases, and collects the JSONs
+back into [`results/`](results/).
 
 ```bash
 ./reproduce.sh --check      # verify CUDA + report the detected profile, run nothing
@@ -125,19 +127,27 @@ phases, and collects the JSONs back into [`results/`](results/).
 | `tables` | re-render Tables 1 and 2 from the JSONs | instant |
 
 Overrides: `AUTOINTENT_DIR` (where to clone/find AutoIntent),
-`AUTOINTENT_REF` (default `feat/issue39-calibration-scripts`), `OUT_DIR`,
+`AUTOINTENT_COMMIT` (default `b38f3c3a`), `AUTOINTENT_PR` (default `348` — the
+PR whose `refs/pull/<N>/head` keeps that commit fetchable), `OUT_DIR`,
 `SKIP_SETUP=1` to reuse an existing checkout and venv.
 
 `./reproduce.sh tables` against the committed `results/` regenerates Tables 1
 and 2 below exactly — the tables in this README are not hand-transcribed.
 
-**The calibration harness itself lives in the AutoIntent repo**, not here
-(`scripts/calibrate_advisor.py`, `run_calibration_banking77.sh`, plus
-`run_phase2_isolated.sh`, `phase1b_metadata_counterfactual.py`,
-`phase3_reduce_to_fit.py` and `render_issue39_tables.py` added for this run —
-see [deeppavlov/AutoIntent#348](https://github.com/deeppavlov/AutoIntent/pull/348)).
-`reproduce.sh` is the entry point that ties them together; it does not duplicate
-them.
+**The calibration harness lives in [`harness/`](harness/)**, in this repo. It
+was written in `deeppavlov/AutoIntent` under `scripts/` and removed from there
+while preparing [AutoIntent#291](https://github.com/deeppavlov/AutoIntent/pull/291)
+for merge; this directory is the copy of record, taken at commit `b38f3c3a`
+(head of the now-closed [AutoIntent#348](https://github.com/deeppavlov/AutoIntent/pull/348)).
+See [`harness/README.md`](harness/README.md) for what each file does and what
+changed in the move.
+
+Nothing here depends on an AutoIntent *branch*. The only dependency is the
+advisor library — which belongs in AutoIntent and nowhere else — pinned to one
+commit that stays fetchable via `refs/pull/348/head` no matter what happens to
+the branches that once held it. (The branch this experiment used to name,
+`feat/issue39-calibration-scripts`, has since been deleted; the commit is
+still there.)
 
 Raw JSONs: [`results/`](results/).
 
@@ -264,7 +274,7 @@ blaming the component that was right. Two changes came out of it:
 * `calibrate_advisor.py` now releases accelerator memory between presets and
   **annotates the row when memory survives collection**, so a contaminated sweep
   announces itself.
-* `scripts/run_phase2_isolated.sh` runs one preset per process — the only
+* `harness/run_phase2_isolated.sh` runs one preset per process — the only
   airtight fix, since the kernel reclaims the GPU on exit regardless of what the
   Python object graph still holds.
 
@@ -290,7 +300,7 @@ consistent with the `ample` verdict and with the 5-per-class run.
 
 ## Phase 3 — reduce-to-fit and the strict gate
 
-Run via `scripts/phase3_reduce_to_fit.py` against the live 5.67 GB profile. Full
+Run via `harness/phase3_reduce_to_fit.py` against the live 5.67 GB profile. Full
 output: [`results/phase3_reduce_to_fit.json`](results/phase3_reduce_to_fit.json).
 
 ### A. `Pipeline.fit(preflight="strict")` on `transformers-heavy` — PASS
@@ -486,8 +496,11 @@ advisor knew the answer in 1.3 s. Worth considering `strict` as the default on a
 
 ## Changes made to `deeppavlov/AutoIntent` during this run
 
-All in `scripts/`, uncommitted in the local clone at `~/repos/AutoIntent`
-(branch `feat/feasibility-check`):
+All in `scripts/`, made during this run and landed upstream as commit
+[`85848f2`](https://github.com/deeppavlov/AutoIntent/commit/85848f27) on
+[AutoIntent#291](https://github.com/deeppavlov/AutoIntent/pull/291). Those files
+have since been removed from AutoIntent and archived in
+[`harness/`](harness/) — see [`harness/README.md`](harness/README.md):
 
 | file | change |
 | --- | --- |
