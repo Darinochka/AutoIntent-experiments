@@ -5,9 +5,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Add scripts/ to sys.path so the test can import calibrate_advisor.
-_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
-sys.path.insert(0, str(_SCRIPTS_DIR))
+# calibrate_advisor.py is a sibling script here, not an installed module.
+# (In AutoIntent it lived in scripts/, two levels up from the test — that path
+# does not exist in this repo, which is why this line had to change.)
+_HARNESS_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(_HARNESS_DIR))
 
 from calibrate_advisor import (  # noqa: E402
     _ModuleTracker,

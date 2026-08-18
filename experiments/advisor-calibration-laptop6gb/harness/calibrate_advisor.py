@@ -9,7 +9,7 @@ The output is a JSON file with per-preset predicted vs. actual values plus
 ratios, and a side-by-side table on stdout for quick eyeballing.
 
 Usage:
-    python scripts/calibrate_advisor.py \\
+    python harness/calibrate_advisor.py \\
         --dataset tests/assets/data/clinc_subset.json \\
         --presets classic-light classic-medium \\
         --output calibration.json \\
@@ -173,7 +173,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Preset names to run (default: every preset in BUNDLED_PRESETS). "
             "Items ending in .yaml/.yml are treated as paths to a preset file — "
-            "used to run e.g. ``scripts/coverage_preset.yaml`` which packs "
+            "used to run e.g. ``harness/coverage_preset.yaml`` which packs "
             "lora/ptuning/dnnc/gcn/cross-encoder into one small run for module "
             "coverage without touching the shipped presets."
         ),
@@ -1247,7 +1247,7 @@ def main(argv: list[str] | None = None) -> int:
     if unknown:
         parser.error(
             f"Unknown preset(s): {', '.join(unknown)}. Known: {', '.join(BUNDLED_PRESETS)}, "
-            "or pass a path to a .yaml file (e.g. scripts/coverage_preset.yaml)."
+            "or pass a path to a .yaml file (e.g. harness/coverage_preset.yaml)."
         )
     for p in presets:
         if p.endswith((".yaml", ".yml")) and not Path(p).expanduser().exists():

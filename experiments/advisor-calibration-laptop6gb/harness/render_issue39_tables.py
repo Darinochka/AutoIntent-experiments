@@ -6,7 +6,7 @@ that fit. Reading both out of the JSON rather than transcribing by hand keeps
 the write-up honest.
 
 Usage:
-    uv run --no-sync python scripts/render_issue39_tables.py \
+    uv run --no-sync python harness/render_issue39_tables.py \
         --preflight calibration_runs/banking77_<ts>.json \
         --fits calibration_runs/phase2_isolated/*/banking77_*.json
 """

@@ -14,10 +14,15 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
+# See run_calibration_banking77.sh: the harness lives here, the venv lives in
+# the AutoIntent checkout named by AUTOINTENT_DIR. Pass it straight through.
+HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AUTOINTENT_DIR="${AUTOINTENT_DIR:-$(cd "$HARNESS_DIR/../../../.." && pwd)/AutoIntent}"
+[[ -d "$AUTOINTENT_DIR" ]] || { echo "AUTOINTENT_DIR '$AUTOINTENT_DIR' does not exist" >&2; exit 1; }
+AUTOINTENT_DIR="$(cd "$AUTOINTENT_DIR" && pwd)"
+export AUTOINTENT_DIR
 
-OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/calibration_runs/phase2_isolated}"
+OUTPUT_DIR="${OUTPUT_DIR:-$AUTOINTENT_DIR/calibration_runs/phase2_isolated}"
 mkdir -p "$OUTPUT_DIR"
 
 # Cheap/AMPLE presets first, the expected-OOM ones last.
@@ -30,7 +35,7 @@ for preset in $PRESETS; do
         SUBSAMPLE_PER_CLASS="${SUBSAMPLE_PER_CLASS:-30}" \
         PRESETS="$preset" RUN_NAME="${RUN_NAME:-laptop6gb_fit}" \
         OUTPUT_DIR="$OUTPUT_DIR/$preset" \
-        scripts/run_calibration_banking77.sh || echo "!!! $preset driver exited non-zero"
+        "$HARNESS_DIR/run_calibration_banking77.sh" || echo "!!! $preset driver exited non-zero"
     echo "############ $preset done; GPU after process exit:"
     nvidia-smi --query-gpu=memory.used --format=csv,noheader
 done

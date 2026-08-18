@@ -17,7 +17,7 @@ the preset. This script does three things on the live machine:
      on paper.
 
 Usage:
-    uv run --no-sync python scripts/phase3_reduce_to_fit.py \
+    uv run --no-sync python harness/phase3_reduce_to_fit.py \
         --dataset DeepPavlov/banking77 --subsample-per-class 30 \
         --output calibration_runs/phase3.json
 """

@@ -3,7 +3,7 @@
 # Bundled presets don't touch lora / ptuning / dnnc / gcn / a plain
 # cross-encoder scorer, so the advisor's estimates for those modules go
 # unvalidated. This preset packs one of each into a single small run so
-# `scripts/calibrate_advisor.py` can exercise them against a real fit.
+# `harness/calibrate_advisor.py` can exercise them against a real fit.
 #
 # Intentionally cheap (n_trials: 1 per scorer, single decision module) —
 # the point is coverage, not tuning quality. Skip cleanly when the peft

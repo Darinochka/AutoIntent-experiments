@@ -7,6 +7,10 @@
 # ``hpo_config.n_trials``.
 #
 # Environment overrides:
+#   AUTOINTENT_DIR   Checkout of deeppavlov/AutoIntent supplying the advisor
+#                    library and the uv venv. This harness is NOT run from inside
+#                    that checkout — only the environment comes from it.
+#                    (default: the AutoIntent sibling of this experiments repo)
 #   DATASET          HF Hub repo id (default: DeepPavlov/banking77)
 #   DATASETS         Space-separated list of dataset ids (default: unset -> use
 #                    DATASET). Every preset runs against every dataset — useful
@@ -19,9 +23,10 @@
 #                    mean ± stdev of actual measurements across repeats so
 #                    small ratio gaps become judgeable. Default: 1.
 #   PRESETS          Space-separated preset names OR paths (default: every bundled preset).
-#                    Items ending in .yaml/.yml are treated as file paths — use
-#                    scripts/coverage_preset.yaml to exercise lora/ptuning/dnnc/gcn/
-#                    cross-encoder in one small run without touching bundled presets.
+#                    Items ending in .yaml/.yml are treated as file paths, resolved
+#                    against this harness directory first — use coverage_preset.yaml
+#                    to exercise lora/ptuning/dnnc/gcn/cross-encoder in one small run
+#                    without touching bundled presets.
 #   MAX_TRIALS       Cap for hpo_config.n_trials (default: unset -> preset default)
 #   WANDB            If non-empty, pass --wandb so system metrics land in wandb.ai
 #   RUN_NAME         Suffix appended to each preset's LoggingConfig.run_name — the
@@ -43,23 +48,28 @@
 #                    CPU-fallback caused by CUDA-driver / torch-wheel mismatch).
 #
 # Examples:
-#   scripts/run_calibration_banking77.sh                           # full sweep, serial
-#   MAX_TRIALS=3 scripts/run_calibration_banking77.sh              # quick sweep
-#   PRESETS="classic-light nn-medium" scripts/run_calibration_banking77.sh
-#   WANDB=1 MAX_TRIALS=5 scripts/run_calibration_banking77.sh
-#   RUN_NAME=calib_2026_07 WANDB=1 scripts/run_calibration_banking77.sh
-#   THREADS_PER_JOB=4 scripts/run_calibration_banking77.sh         # 4-thread BLAS
-#   SUBSAMPLE_PER_CLASS=5 scripts/run_calibration_banking77.sh     # small-dataset shape
-#   DATASETS="DeepPavlov/banking77 DeepPavlov/clinc150" scripts/run_calibration_banking77.sh
-#   REPEATS=3 MAX_TRIALS=3 scripts/run_calibration_banking77.sh    # variance bars
-#   PRESETS="scripts/coverage_preset.yaml" MAX_TRIALS=1 scripts/run_calibration_banking77.sh
+#   harness/run_calibration_banking77.sh                           # full sweep, serial
+#   MAX_TRIALS=3 harness/run_calibration_banking77.sh              # quick sweep
+#   PRESETS="classic-light nn-medium" harness/run_calibration_banking77.sh
+#   WANDB=1 MAX_TRIALS=5 harness/run_calibration_banking77.sh
+#   RUN_NAME=calib_2026_07 WANDB=1 harness/run_calibration_banking77.sh
+#   THREADS_PER_JOB=4 harness/run_calibration_banking77.sh         # 4-thread BLAS
+#   SUBSAMPLE_PER_CLASS=5 harness/run_calibration_banking77.sh     # small-dataset shape
+#   DATASETS="DeepPavlov/banking77 DeepPavlov/clinc150" harness/run_calibration_banking77.sh
+#   REPEATS=3 MAX_TRIALS=3 harness/run_calibration_banking77.sh    # variance bars
+#   PRESETS="coverage_preset.yaml" MAX_TRIALS=1 harness/run_calibration_banking77.sh
 #       # exercise lora/ptuning/dnnc/gcn/description_cross — modules no bundled preset touches
 
 set -euo pipefail
 
-# Resolve repo root even when the script is called from anywhere.
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
+# This script lives in the experiments repo and may be run from anywhere; the
+# venv it needs lives in a separate AutoIntent checkout. Keep the two apart.
+HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AUTOINTENT_DIR="${AUTOINTENT_DIR:-$(cd "$HARNESS_DIR/../../../.." && pwd)/AutoIntent}"
+[[ -d "$AUTOINTENT_DIR" ]] || { echo "AUTOINTENT_DIR '$AUTOINTENT_DIR' does not exist" >&2; exit 1; }
+AUTOINTENT_DIR="$(cd "$AUTOINTENT_DIR" && pwd)"
+# `uv run --no-sync` resolves the project venv from the cwd, so run from there.
+cd "$AUTOINTENT_DIR"
 
 DATASET="${DATASET:-DeepPavlov/banking77}"
 # DATASETS overrides DATASET when set; enables multi-dataset sweeps.
@@ -69,7 +79,7 @@ if [[ -n "${DATASETS:-}" ]]; then
 else
     DATASET_ARR=("$DATASET")
 fi
-OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/calibration_runs}"
+OUTPUT_DIR="${OUTPUT_DIR:-$AUTOINTENT_DIR/calibration_runs}"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 OUTPUT_JSON="$OUTPUT_DIR/banking77_$TIMESTAMP.json"
 LOG_FILE="$OUTPUT_DIR/banking77_$TIMESTAMP.log"
@@ -129,6 +139,16 @@ fi
 if [[ -n "${PRESETS:-}" ]]; then
     # shellcheck disable=SC2206  # intentional word-split from env
     PRESET_ARR=($PRESETS)
+    # cwd is the AutoIntent checkout, so a relative preset path would resolve
+    # against the wrong tree. Prefer this harness dir when it holds the file.
+    for i in "${!PRESET_ARR[@]}"; do
+        preset_path="${PRESET_ARR[$i]}"
+        if [[ "$preset_path" == *.yaml || "$preset_path" == *.yml ]] \
+            && [[ "$preset_path" != /* ]] \
+            && [[ -f "$HARNESS_DIR/$(basename "$preset_path")" ]]; then
+            PRESET_ARR[$i]="$HARNESS_DIR/$(basename "$preset_path")"
+        fi
+    done
 else
     PRESET_ARR=()
     while IFS= read -r preset; do
@@ -144,7 +164,8 @@ PY
     )
 fi
 
-echo "Repo:            $REPO_ROOT"
+echo "Harness:         $HARNESS_DIR"
+echo "AutoIntent:      $AUTOINTENT_DIR ($(git -C "$AUTOINTENT_DIR" rev-parse --short HEAD 2>/dev/null || echo 'not a git checkout'))"
 echo "Datasets:        ${DATASET_ARR[*]}"
 echo "Presets:         ${PRESET_ARR[*]}"
 echo "Output:          $OUTPUT_JSON"
@@ -153,7 +174,7 @@ echo "Flags:           ${EXTRA_FLAGS[*]:-<none>}"
 echo "Threads per job: $THREADS_PER_JOB (OMP/MKL/OpenBLAS/torch)"
 echo
 
-uv run --no-sync python scripts/calibrate_advisor.py \
+uv run --no-sync python "$HARNESS_DIR/calibrate_advisor.py" \
     --dataset "${DATASET_ARR[@]}" \
     --presets "${PRESET_ARR[@]}" \
     --output "$OUTPUT_JSON" \
