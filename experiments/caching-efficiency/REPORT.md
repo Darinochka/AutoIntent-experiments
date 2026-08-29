@@ -19,6 +19,25 @@ temp dir, so the user's real cache was never touched.
 
 ---
 
+## Upstream status (as of AutoIntent v0.4.0, August 2026)
+
+Everything below describes **AutoIntent 0.3.1**, the version this experiment measured. Since then,
+three of the four bugs in §4 have been fixed upstream, and this experiment's efficiency proposals
+(§6.2/§6.3) turned into an upstream PR:
+
+| Bug | Status upstream |
+|---|---|
+| B1 (structured-output key ignores model identity) | **Fixed** — [deeppavlov/AutoIntent#336](https://github.com/deeppavlov/AutoIntent/pull/336): the key now includes `model_name` and `base_url`. |
+| B2 (embedding cache cross-model collision offline) | **Fixed** — [deeppavlov/AutoIntent#337](https://github.com/deeppavlov/AutoIntent/pull/337): `get_hash()` now always hashes the model name, and the offline path resolves the SHA from the local HF cache ref file. |
+| B3 (non-atomic writes poison entries) | **Still open.** The embedding half is addressed by [deeppavlov/AutoIntent#340](https://github.com/deeppavlov/AutoIntent/pull/340) (SQLite per-utterance cache, unmerged at time of writing); the structured-output cache still writes its JSON files non-atomically with no torn-entry recovery. |
+| B4 (eager preload loads nothing) | **Fixed** — [deeppavlov/AutoIntent#331](https://github.com/deeppavlov/AutoIntent/pull/331): the preload now filters on `is_dir()`. |
+
+The whole-list-keying efficiency limit (§3.1) and the `.npy`-file-per-call storage model are also
+addressed by [deeppavlov/AutoIntent#340](https://github.com/deeppavlov/AutoIntent/pull/340), which
+implements the per-utterance SQLite design proposed in §6.
+
+---
+
 ## 1. What the cache does (one paragraph each)
 
 **Embeddings cache** (`use_cache=True` by default). On `embed(list_of_utterances)` it builds a key
