@@ -1,0 +1,57 @@
+[
+  {
+    "n_utterances": 100,
+    "cold_s": 0.13505,
+    "warm_s": 9.5e-05,
+    "speedup_cold_over_warm": 1424.7,
+    "key_build_s": 5e-06,
+    "get_hash_cached_s": 5e-06,
+    "np_load_s": 4.3e-05,
+    "file_mb": 0.154,
+    "bytes_per_utterance": 1537.3
+  },
+  {
+    "n_utterances": 500,
+    "cold_s": 0.348,
+    "warm_s": 0.000132,
+    "speedup_cold_over_warm": 2633.9,
+    "key_build_s": 1.8e-05,
+    "get_hash_cached_s": 6e-06,
+    "np_load_s": 5.6e-05,
+    "file_mb": 0.768,
+    "bytes_per_utterance": 1536.3
+  },
+  {
+    "n_utterances": 1000,
+    "cold_s": 0.62265,
+    "warm_s": 0.000183,
+    "speedup_cold_over_warm": 3396.3,
+    "key_build_s": 3.8e-05,
+    "get_hash_cached_s": 6e-06,
+    "np_load_s": 7.8e-05,
+    "file_mb": 1.536,
+    "bytes_per_utterance": 1536.1
+  },
+  {
+    "n_utterances": 5000,
+    "cold_s": 2.90466,
+    "warm_s": 0.001868,
+    "speedup_cold_over_warm": 1555.3,
+    "key_build_s": 0.000196,
+    "get_hash_cached_s": 7e-06,
+    "np_load_s": 0.000864,
+    "file_mb": 7.68,
+    "bytes_per_utterance": 1536.0
+  },
+  {
+    "n_utterances": 10000,
+    "cold_s": 6.01663,
+    "warm_s": 0.00311,
+    "speedup_cold_over_warm": 1934.8,
+    "key_build_s": 0.00047,
+    "get_hash_cached_s": 6e-06,
+    "np_load_s": 0.002219,
+    "file_mb": 15.36,
+    "bytes_per_utterance": 1536.0
+  }
+]

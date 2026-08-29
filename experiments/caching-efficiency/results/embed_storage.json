@@ -1,0 +1,38 @@
+[
+  {
+    "pattern": "fixed_data_across_trials",
+    "files_on_disk": 1,
+    "stored_utterance_vectors": 1000,
+    "unique_utterance_vectors": 1000,
+    "duplication_factor": 1.0,
+    "disk_mb": 1.54,
+    "ideal_mb": 1.54
+  },
+  {
+    "pattern": "growing_dataset",
+    "files_on_disk": 10,
+    "stored_utterance_vectors": 9500,
+    "unique_utterance_vectors": 1400,
+    "duplication_factor": 6.79,
+    "disk_mb": 14.59,
+    "ideal_mb": 2.15
+  },
+  {
+    "pattern": "kfold_cv",
+    "files_on_disk": 5,
+    "stored_utterance_vectors": 4000,
+    "unique_utterance_vectors": 1000,
+    "duplication_factor": 4.0,
+    "disk_mb": 6.14,
+    "ideal_mb": 1.54
+  },
+  {
+    "pattern": "reshuffled_reruns",
+    "files_on_disk": 5,
+    "stored_utterance_vectors": 5000,
+    "unique_utterance_vectors": 1000,
+    "duplication_factor": 5.0,
+    "disk_mb": 7.68,
+    "ideal_mb": 1.54
+  }
+]

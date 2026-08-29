@@ -1,0 +1,56 @@
+[
+  {
+    "variant": "identical",
+    "expected_hit": true,
+    "observed_hit": true,
+    "correct": true,
+    "files_before": 1,
+    "files_after": 1,
+    "arrays_equal_to_first": true
+  },
+  {
+    "variant": "reordered",
+    "expected_hit": false,
+    "observed_hit": false,
+    "correct": true,
+    "files_before": 1,
+    "files_after": 2,
+    "arrays_equal_to_first": null
+  },
+  {
+    "variant": "subset_drop_last",
+    "expected_hit": false,
+    "observed_hit": false,
+    "correct": true,
+    "files_before": 2,
+    "files_after": 3,
+    "arrays_equal_to_first": null
+  },
+  {
+    "variant": "superset_add_one",
+    "expected_hit": false,
+    "observed_hit": false,
+    "correct": true,
+    "files_before": 3,
+    "files_after": 4,
+    "arrays_equal_to_first": null
+  },
+  {
+    "variant": "one_char_edit",
+    "expected_hit": false,
+    "observed_hit": false,
+    "correct": true,
+    "files_before": 4,
+    "files_after": 5,
+    "arrays_equal_to_first": null
+  },
+  {
+    "variant": "prompt_added",
+    "expected_hit": false,
+    "observed_hit": false,
+    "correct": true,
+    "files_before": 5,
+    "files_after": 6,
+    "arrays_equal_to_first": null
+  }
+]

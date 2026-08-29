@@ -1,0 +1,34 @@
+[
+  {
+    "entries_written": 0,
+    "on_disk_dirs": 0,
+    "on_disk_files": 0,
+    "preloaded_into_memory": 0,
+    "init_seconds": 1e-05,
+    "disk_hit_still_works": null
+  },
+  {
+    "entries_written": 50,
+    "on_disk_dirs": 50,
+    "on_disk_files": 0,
+    "preloaded_into_memory": 0,
+    "init_seconds": 0.00015,
+    "disk_hit_still_works": true
+  },
+  {
+    "entries_written": 200,
+    "on_disk_dirs": 200,
+    "on_disk_files": 0,
+    "preloaded_into_memory": 0,
+    "init_seconds": 0.00063,
+    "disk_hit_still_works": true
+  },
+  {
+    "entries_written": 1000,
+    "on_disk_dirs": 1000,
+    "on_disk_files": 0,
+    "preloaded_into_memory": 0,
+    "init_seconds": 0.00286,
+    "disk_hit_still_works": true
+  }
+]

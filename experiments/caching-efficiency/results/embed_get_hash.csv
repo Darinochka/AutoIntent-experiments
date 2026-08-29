@@ -1,0 +1,5 @@
+case,seconds,note
+hf_name_first_call,0.00012,queries HF Hub for commit SHA
+hf_name_lru_cached,7e-06,subsequent calls hit lru_cache
+local_path_first_call,0.19837,pickles + hashes EVERY model parameter tensor
+local_path_repeat,0.05292,no memoization: re-hashes all params each call
