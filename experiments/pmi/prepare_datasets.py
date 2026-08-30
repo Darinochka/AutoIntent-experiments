@@ -16,11 +16,23 @@ Dataset.from_dict, а sha перечитывается после выгрузк
 Запуск:
     uv run python experiments/pmi/prepare_datasets.py --out datasets \
         --manifest runs/datasets_manifest.json
+
+Атомарность записи. Манифест — доказательство приёмки прогона, поэтому "семь
+валидных файлов зеркала рядом с обрезанным манифестом" должно быть невозможно,
+а не просто маловероятно. Каждый файл (и файл зеркала, и манифест) сначала
+пишется во временный файл в том же каталоге, что и итоговый путь (иначе
+os.replace не атомарен — атомарность гарантирована только в пределах одной
+файловой системы), а затем атомарно переименовывается на место через
+os.replace. При сбое между записью и переименованием временный файл удаляется,
+а итоговый путь остаётся нетронутым (прежним файлом или отсутствующим).
 """
 
 import argparse
 import json
+import os
+import tempfile
 from pathlib import Path
+from typing import Callable
 
 from autointent import Dataset
 from datasets import get_dataset_config_names, load_dataset
@@ -38,6 +50,24 @@ REPOS = [
     "DeepPavlov/clinc150",
     "DeepPavlov/clinc150_subset",
 ]
+
+
+def atomic_write(path: Path, writer: Callable[[Path], None]) -> None:
+    """Записывает файл атомарно: writer пишет во временный путь, затем — os.replace на место.
+
+    Временный файл создаётся в том же каталоге, что и path, чтобы переименование было
+    атомарным (это гарантировано только в пределах одной файловой системы). При сбое
+    во время writer временный файл удаляется, а path остаётся нетронутым.
+    """
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        writer(tmp_path)
+        os.replace(tmp_path, path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def load_pinned(repo: str, revision: str) -> Dataset:
@@ -80,7 +110,7 @@ def main() -> None:
             raise SystemExit(msg)
         args.out.mkdir(parents=True, exist_ok=True)
         path = args.out / f"{name}.json"
-        dataset.to_json(path)
+        atomic_write(path, dataset.to_json)
         entries.append(
             {
                 "repo": repo,
@@ -95,7 +125,8 @@ def main() -> None:
         return
 
     args.manifest.parent.mkdir(parents=True, exist_ok=True)
-    args.manifest.write_text(json.dumps({"datasets": entries}, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_text = json.dumps({"datasets": entries}, ensure_ascii=False, indent=2)
+    atomic_write(args.manifest, lambda tmp_path: tmp_path.write_text(manifest_text, encoding="utf-8"))
     print(f"манифест: {args.manifest}")
     print("PREPARE OK")
 
