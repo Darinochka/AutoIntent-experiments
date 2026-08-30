@@ -31,6 +31,20 @@ if [[ -n "$PMI_CHECK_ONLY" ]]; then
 fi
 
 pmi_log "создание рабочей копии дерева"
+# MATRIX_DIR переопределим переменной окружения, и эта строка — шаблон для
+# копируемых pmi-сценариев, поэтому перед rm -rf проверяем, что путь безопасен:
+# непустой, абсолютный, и не совпадает с $AUTOINTENT_DIR/$PMI_ROOT и не является
+# их родительским каталогом (иначе rm -rf снёс бы предъявленное дерево или весь
+# рабочий каталог испытаний).
+[[ -n "$MATRIX_DIR" ]] || pmi_die "MATRIX_DIR пуст — rm -rf отменён"
+[[ "$MATRIX_DIR" = /* ]] || pmi_die "MATRIX_DIR='$MATRIX_DIR' не является абсолютным путём — rm -rf отменён"
+for guarded_dir in "$AUTOINTENT_DIR" "$PMI_ROOT"; do
+    guarded_dir="${guarded_dir%/}"
+    target_dir="${MATRIX_DIR%/}"
+    if [[ "$target_dir" == "$guarded_dir" || "$guarded_dir" == "$target_dir"/* ]]; then
+        pmi_die "MATRIX_DIR='$MATRIX_DIR' совпадает с '$guarded_dir' или является его родительским каталогом — rm -rf отменён"
+    fi
+done
 rm -rf "$MATRIX_DIR"
 git clone --quiet --no-local "$AUTOINTENT_DIR" "$MATRIX_DIR"
 git -C "$MATRIX_DIR" checkout --quiet "$PMI_SAMPLE_TAG"
