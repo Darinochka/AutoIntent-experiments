@@ -25,8 +25,20 @@ def main() -> None:
     results: dict[str, dict[str, list[float]]] = {}
     for preset in PRESETS:
         for name in DATASETS:
-            dataset = Dataset.from_json(args.datasets_dir / f"{name}.json")
             for seed in SEEDS:
+                # Набор перечитывается на каждом запуске намеренно, а не один раз на
+                # (пресет, набор). Pipeline.fit передаёт объект в DataHandler, который
+                # присваивает его без копирования (context/data_handler/_data_handler.py:51)
+                # и делит на месте: при scheme="ho" (умолчание, в пресетах нет data_config)
+                # строка 298 выполняет
+                # `self.dataset[TRAIN], self.dataset[VALIDATION] = split_dataset(...)`.
+                # Перед этим строка 216 вычисляет has_validation_split, и на строках 229—230
+                # деление пропускается, если валидационный сплит уже есть. Общий объект дал бы
+                # деление только на seed=0, а seed=1 и seed=2 обучались бы на его сплите —
+                # три запуска перестали бы быть независимыми, а усреднение по ним потеряло бы
+                # смысл. Перечитывание даёт каждому сиду нетронутый набор и верно независимо
+                # от того, есть ли в зеркале готовый валидационный сплит.
+                dataset = Dataset.from_json(args.datasets_dir / f"{name}.json")
                 pipeline = Pipeline.from_preset(preset, seed=seed)
                 pipeline.fit(dataset)
                 preds = pipeline.predict(dataset["test"]["utterance"])
