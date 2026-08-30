@@ -11,6 +11,15 @@
 # Векторные представления вычисляются через OpenAI API (--emb-backend openai);
 # для обоих прогонов, включая kNN, требуется OPENAI_API_KEY.
 #
+# --selection-target-size 90 задаётся явно: справочные значения таблицы 8 ПМИ
+# взяты из опубликованного прогона (mcp-exps/README.md, раздел "offline metrics"),
+# командная строка которого передаёт 90, тогда как offline_eval.py по умолчанию
+# берёт 100 (OfflineEvalCommonArgs.selection_target_size). Остальные параметры
+# опубликованной команды (--min-samples-per-tool 4, --max-oos 0.2, --no-multilabel,
+# --topk-metric 5, --task-key case_name, --knn-neighbors 5, --knn-aggregation
+# weighted) совпадают с умолчаниями и не дублируются. Для kNN параметр не влияет
+# на результат: отбор примеров выполняет только ветвь autointent.
+#
 # Каталог эксперимента самостоятельный (не входит в предъявленное дерево образца):
 # сценарий сам переходит в него и не касается $AUTOINTENT_DIR.
 # Аргументы: --check (только проверка предусловий), --help.
@@ -45,6 +54,7 @@ for suggester in autointent knn; do
         --emb-backend openai \
         --emb-model text-embedding-3-small \
         --formatter-max-len 4096 \
+        --selection-target-size 90 \
         --json-out "$PMI_RUN_DIR/$suggester.json" \
         2>&1 | tee "$PMI_RUN_DIR/offline_eval_$suggester.log"
 done

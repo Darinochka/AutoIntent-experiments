@@ -13,7 +13,9 @@
 #
 # Фазы 1, 2, 3, tables идут в копии дерева AutoIntent-advisor/ на закреплённом
 # коммите b38f3c3a; verdicts снимает вердикты с ПРЕДЪЯВЛЕННОЙ ревизии (действия
-# 2—4 таблицы 12 ПМИ); prepare только пересоздаёт копию.
+# 2—4 таблицы 12 ПМИ); prepare только пересоздаёт копию. При --phase all порядок
+# тот же, что в таблице 12: сначала verdicts (действия 2—4), затем фазы 1, 2, 3
+# и tables.
 # Журналы, копии JSON и манифест sha256 — в $RUNS_DIR/6.11/. Сценарий
 # воспроизведения пишет JSON в advisor-calibration-laptop6gb/results/ (действия
 # 5, 7, 11 таблицы 12), ПЕРЕЗАПИСЫВАЯ закоммиченный эталонный набор; вернуть его:
@@ -225,12 +227,40 @@ pmi_capture_results() {
     pmi_log "свидетельства фазы $phase (код возврата $phase_rc): $count файлов скопировано в $dest, манифест $manifest, метка $marker"
 }
 
+# Фаза verdicts — действия 2—4 таблицы 12 ПМИ. Вердикты снимаются с ПРЕДЪЯВЛЕННОГО
+# дерева, а не с копии: в $ADVISOR_COMMIT подсистема размещена в пакете
+# autointent._advisor, импорта autointent.advisor там нет, а проверке подлежит
+# подсистема в составе предъявленного образца. В каталоге эксперимента нет
+# pyproject.toml, поэтому рабочий каталог для uv задаётся явно.
+pmi_run_verdicts() {
+    pmi_log "отдельные вердикты на предъявленной ревизии $PMI_SAMPLE_TAG"
+    ( cd "$PMI_SAMPLE_TREE" && uv run python -c 'from autointent.advisor import detect_hardware; print(detect_hardware())' ) \
+        2>&1 | tee "$PMI_RUN_DIR/sample-hardware.log"
+    # Код возврата inspect не подменяется собственным: он и есть вердикт (0 —
+    # выполнимо, ненулевой — бюджет превышен) и печатается в вывод сценария.
+    local preset rc
+    for preset in classic-light transformers-heavy; do
+        rc=0
+        ( cd "$PMI_SAMPLE_TREE" && uv run autointent-advisor inspect "$preset" \
+            --dataset DeepPavlov/banking77 --json ) \
+            > "$PMI_RUN_DIR/inspect-$preset.json" 2> "$PMI_RUN_DIR/inspect-$preset.log" || rc=$?
+        pmi_log "inspect $preset: код возврата $rc (ожидается 0 для classic-light, ненулевой для transformers-heavy)"
+    done
+}
+
 cd "$EXP_DIR"
 
 if [[ -n "$PMI_CHECK_ONLY" ]]; then
     ./reproduce.sh --check 2>&1 | tee "$PMI_RUN_DIR/check.log"
     pmi_log "CHECK OK: копия дерева создана заново, коммит ${ADVISOR_COMMIT_SHA:0:8} в ней есть, окружение и вычислительная установка проверены"
     exit 0
+fi
+
+# Вердикты снимаются ДО фаз: в таблице 12 ПМИ это действия 2—4, а фазы 1—3 идут
+# действиями 5—13, и порядок «--phase all» обязан совпадать с порядком документа —
+# иначе журнал прогона не сверить с таблицей.
+if [[ "$PMI_VERDICTS" == yes ]]; then
+    pmi_run_verdicts
 fi
 
 # Код возврата фазы переживает tee: set -o pipefail включён в common.sh.
@@ -262,26 +292,6 @@ for phase in ${PMI_PHASES[@]+"${PMI_PHASES[@]}"}; do
         exit "$phase_rc"
     fi
 done
-
-# Фаза verdicts — действия 2—4 таблицы 12 ПМИ. Вердикты снимаются с ПРЕДЪЯВЛЕННОГО
-# дерева, а не с копии: в $ADVISOR_COMMIT подсистема размещена в пакете
-# autointent._advisor, импорта autointent.advisor там нет, а проверке подлежит
-# подсистема в составе предъявленного образца. В каталоге эксперимента нет
-# pyproject.toml, поэтому рабочий каталог для uv задаётся явно.
-if [[ "$PMI_VERDICTS" == yes ]]; then
-    pmi_log "отдельные вердикты на предъявленной ревизии $PMI_SAMPLE_TAG"
-    ( cd "$PMI_SAMPLE_TREE" && uv run python -c 'from autointent.advisor import detect_hardware; print(detect_hardware())' ) \
-        2>&1 | tee "$PMI_RUN_DIR/sample-hardware.log"
-    # Код возврата inspect не подменяется собственным: он и есть вердикт (0 —
-    # выполнимо, ненулевой — бюджет превышен) и печатается в вывод сценария.
-    for preset in classic-light transformers-heavy; do
-        rc=0
-        ( cd "$PMI_SAMPLE_TREE" && uv run autointent-advisor inspect "$preset" \
-            --dataset DeepPavlov/banking77 --json ) \
-            > "$PMI_RUN_DIR/inspect-$preset.json" 2> "$PMI_RUN_DIR/inspect-$preset.log" || rc=$?
-        pmi_log "inspect $preset: код возврата $rc (ожидается 0 для classic-light, ненулевой для transformers-heavy)"
-    done
-fi
 
 pmi_log "проверка неприкосновенности предъявленного дерева"
 pmi_assert_tree_untouched "$PMI_SAMPLE_TREE"
