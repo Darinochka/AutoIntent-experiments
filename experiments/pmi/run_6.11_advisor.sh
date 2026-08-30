@@ -172,28 +172,57 @@ pmi_file_mtime() {
     stat -f '%Sm' -t '%Y-%m-%dT%H:%M:%S%z' "$1" 2>/dev/null || stat -c '%y' "$1"
 }
 
+# pmi_capture_results <фаза> <код возврата фазы>
+# Вызывается и при успехе, и при падении фазы: посмертное состояние results/ —
+# ровно то свидетельство, которое нужно оценщику, когда фаза оборвалась.
 pmi_capture_results() {
-    local phase="$1" dest manifest f count=0
+    local phase="$1" phase_rc="$2" dest manifest marker verdict stamp f copy count=0
     dest="$PMI_RUN_DIR/results"
     manifest="$PMI_RUN_DIR/results-manifest-$phase.txt"
+    marker="$dest/_snapshot.txt"
+    stamp="$(date '+%Y-%m-%dT%H:%M:%S%z')"
+    # однострочно: шапка манифеста разбирается как «строки на # — шапка, остальные — данные»
+    if [[ "$phase_rc" -eq 0 ]]; then
+        verdict="фаза завершилась успешно"
+    else
+        verdict="ФАЗА ЗАВЕРШИЛАСЬ ОШИБКОЙ (код возврата $phase_rc) — содержимое results/ могло остаться от предыдущего прогона или быть закоммиченным эталонным набором; за результат текущей проверки не принимать"
+    fi
     mkdir -p "$dest"
     {
-        printf '# фаза %s; снято %s\n' "$phase" "$(date '+%Y-%m-%dT%H:%M:%S%z')"
+        printf '# фаза %s; снято %s\n' "$phase" "$stamp"
+        printf '# итог: %s\n' "$verdict"
         printf '# источник: %s/results\n' "$EXP_DIR"
+        printf '# суммы сняты с КОПИЙ в %s\n' "$dest"
         printf '# sha256  время изменения  имя файла\n'
     } > "$manifest"
     # nullglob: при пустом каталоге цикл не должен получить сам шаблон
     shopt -s nullglob
     for f in "$EXP_DIR/results"/*.json; do
-        cp -p "$f" "$dest/"
+        copy="$dest/$(basename "$f")"
+        cp -p "$f" "$copy"
+        # сумма и время читаются с КОПИИ, а не с источника: манифест удостоверяет
+        # именно содержимое каталога артефактов (cp -p делает их равными, но
+        # утверждение о копии проверяемо без обращения к источнику)
         printf '%s  %s  %s\n' \
-            "$("${PMI_SHA256[@]}" "$f" | cut -d' ' -f1)" \
-            "$(pmi_file_mtime "$f")" \
-            "$(basename "$f")" >> "$manifest"
+            "$("${PMI_SHA256[@]}" "$copy" | cut -d' ' -f1)" \
+            "$(pmi_file_mtime "$copy")" \
+            "$(basename "$copy")" >> "$manifest"
         count=$((count + 1))
     done
     shopt -u nullglob
-    pmi_log "свидетельства фазы $phase: $count файлов скопировано в $dest, манифест $manifest"
+    # Метка в самом каталоге снимка: оценщик, открывший $PMI_RUN_DIR/results/,
+    # должен видеть, после успешной или после упавшей фазы он снят, не сверяясь
+    # с журналами.
+    {
+        printf 'фаза: %s\n' "$phase"
+        printf 'код возврата фазы: %s\n' "$phase_rc"
+        printf 'итог: %s\n' "$verdict"
+        printf 'снято: %s\n' "$stamp"
+        printf 'файлов в снимке: %s\n' "$count"
+        printf 'манифест: %s\n' "$manifest"
+        printf 'журнал фазы: %s\n' "$PMI_RUN_DIR/phase-$phase.log"
+    } > "$marker"
+    pmi_log "свидетельства фазы $phase (код возврата $phase_rc): $count файлов скопировано в $dest, манифест $manifest, метка $marker"
 }
 
 cd "$EXP_DIR"
@@ -217,8 +246,21 @@ for phase in ${PMI_PHASES[@]+"${PMI_PHASES[@]}"}; do
     phase_args=("$phase")
     [[ "$phase" == 1 ]] && phase_args=(1 1b)
     pmi_log "фаза $phase (${phase_args[*]})"
-    ./reproduce.sh "${phase_args[@]}" 2>&1 | tee "$PMI_RUN_DIR/phase-$phase.log"
-    pmi_capture_results "$phase"
+    # Код возврата снимается в переменную, а не отдаётся на откуп set -e: снятие
+    # свидетельств обязано отработать ИМЕННО на упавшей фазе — ради этого случая
+    # оно и заведено. `|| phase_rc=$?` отменяет действие set -e для этого конвейера;
+    # сам код возврата берётся с учётом pipefail (включён в common.sh), то есть
+    # падение ./reproduce.sh не теряется в tee.
+    phase_rc=0
+    ./reproduce.sh "${phase_args[@]}" 2>&1 | tee "$PMI_RUN_DIR/phase-$phase.log" || phase_rc=$?
+    pmi_capture_results "$phase" "$phase_rc"
+    if [[ "$phase_rc" -ne 0 ]]; then
+        # выходим кодом самой фазы: успешное снятие свидетельств не должно
+        # превращать упавшую проверку в успешную
+        printf 'ОШИБКА: фаза %s завершилась с кодом возврата %s; журнал %s, снимок results/ и манифест сняты\n' \
+            "$phase" "$phase_rc" "$PMI_RUN_DIR/phase-$phase.log" >&2
+        exit "$phase_rc"
+    fi
 done
 
 # Фаза verdicts — действия 2—4 таблицы 12 ПМИ. Вердикты снимаются с ПРЕДЪЯВЛЕННОГО
