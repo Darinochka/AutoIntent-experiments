@@ -11,13 +11,13 @@
 #              ./reproduce.sh --check (окружение и вычислительная установка)
 #   --help     эта справка
 #
-# Фазы 1, 2, 3 и tables — фазы сценария воспроизведения
-# advisor-calibration-laptop6gb/reproduce.sh; они идут в копии дерева
-# AutoIntent-advisor/ на закреплённом коммите b38f3c3a. Фаза verdicts снимает
-# отдельные вердикты выполнимости с ПРЕДЪЯВЛЕННОЙ ревизии (действия 2—4
-# таблицы 12 ПМИ). Фаза prepare только пересоздаёт копию дерева.
-# Журналы — в $RUNS_DIR/6.11/; JSON фаз сценарий воспроизведения складывает
-# в advisor-calibration-laptop6gb/results/ (действия 5, 7, 11 таблицы 12).
+# Фазы 1, 2, 3, tables идут в копии дерева AutoIntent-advisor/ на закреплённом
+# коммите b38f3c3a; verdicts снимает вердикты с ПРЕДЪЯВЛЕННОЙ ревизии (действия
+# 2—4 таблицы 12 ПМИ); prepare только пересоздаёт копию.
+# Журналы, копии JSON и манифест sha256 — в $RUNS_DIR/6.11/. Сценарий
+# воспроизведения пишет JSON в advisor-calibration-laptop6gb/results/ (действия
+# 5, 7, 11 таблицы 12), ПЕРЕЗАПИСЫВАЯ закоммиченный эталонный набор; вернуть его:
+#   git -C AutoIntent-experiments restore experiments/advisor-calibration-laptop6gb/results
 #
 # --- подробности (в справку не попадают) ------------------------------------
 #
@@ -95,7 +95,12 @@ EXP_DIR="$(cd "$PMI_DIR/../advisor-calibration-laptop6gb" && pwd)"
     || pmi_die "не найден $EXP_DIR/harness/calibrate_advisor.py — каталог эксперимента неполон"
 
 ADVISOR_COMMIT_SHA="$(git -C "$PMI_SAMPLE_TREE" rev-parse --verify --quiet "$ADVISOR_COMMIT^{commit}")" \
-    || pmi_die "в $PMI_SAMPLE_TREE нет коммита $ADVISOR_COMMIT, на котором закреплён сценарий воспроизведения; выполните git fetch --all в предъявленном дереве"
+    || pmi_die "в $PMI_SAMPLE_TREE нет коммита $ADVISOR_COMMIT, на котором закреплён сценарий воспроизведения.
+Ветка, которой он принадлежал (feat/issue39-calibration-scripts), в репозитории образца удалена
+вместе с закрытием запроса на слияние #348, поэтому \`git fetch --all\` его НЕ добудет. Долговечный
+путь — ссылка запроса на слияние (её же использует сам сценарий воспроизведения, refs/pull/348/head):
+    git -C \"$PMI_SAMPLE_TREE\" fetch origin refs/pull/348/head
+После этого повторите запуск. Шаг требует доступа к репозиторию образца."
 
 # Копия пересоздаётся на --check и на фазах prepare и all, а также если её нет, — так же,
 # как в п. 6.10. Каталог, оставшийся от прошлого прогона, протаскивает в испытание чужое
@@ -127,6 +132,10 @@ if [[ -n "$PMI_CHECK_ONLY" || "$PMI_PHASE" == all || "$PMI_PHASE" == prepare || 
     # точечно и форсированно (+): массовый refspec 'refs/remotes/origin/*:...' без
     # ведущего + отвергается как non-fast-forward, и set -e убил бы скрипт до проверки
     # ниже. Источник — локальный путь предъявленного дерева, обращения в сеть нет.
+    #
+    # Ссылка-приёмник refs/pmi/advisor обязательна и удалению не подлежит: без неё
+    # добранный объект удерживался бы только FETCH_HEAD и стал бы кандидатом на сборку
+    # мусора между запуском `--check`/`--phase prepare` и запуском фазы часами позже.
     git -C "$ADVISOR_TREE" fetch --quiet "$PMI_SAMPLE_TREE" "+$ADVISOR_COMMIT_SHA:refs/pmi/advisor"
 fi
 # Проверка идёт и на готовой копии: она ловит копию, оставшуюся от другого коммита.
@@ -135,6 +144,57 @@ git -C "$ADVISOR_TREE" rev-parse --verify --quiet "$ADVISOR_COMMIT_SHA^{commit}"
 
 export AUTOINTENT_DIR="$ADVISOR_TREE"
 export AUTOINTENT_COMMIT="$ADVISOR_COMMIT_SHA"
+
+# --- снятие собственных свидетельств прогона ---------------------------------
+# Сценарий воспроизведения складывает JSON фаз в $EXP_DIR/results/ (OUT_DIR по
+# умолчанию) — туда же, где лежит закоммиченный эталонный набор из восьми файлов,
+# и его же перезаписывает. Само по себе это не опасно (файлы восстанавливаются
+# `git restore`), но делает результат прогона неотличимым от эталона: `collect`
+# сценария воспроизведения при промахе шаблона печатает «nothing matched» и НЕ
+# завершается ошибкой, а страж фазы tables считает файлы `phase2_*.json`, которые
+# в каталоге есть всегда. Оборвавшаяся фаза 2 оставила бы эталонные файлы на месте,
+# и последующая фаза tables свела бы эталонные числа с кодом возврата 0 — ровно тот
+# исход, который действие 14 таблицы 12 предписывает принять.
+# Поэтому после каждой фазы содержимое results/ копируется в $PMI_RUN_DIR/results/
+# вместе с манифестом (sha256 и время изменения каждого файла): утверждение «эти
+# числа получены этим прогоном» становится проверяемым.
+if command -v sha256sum > /dev/null 2>&1; then
+    PMI_SHA256=(sha256sum)
+elif command -v shasum > /dev/null 2>&1; then
+    PMI_SHA256=(shasum -a 256)
+else
+    pmi_die "не найдено средство подсчёта sha256 (sha256sum или shasum) — снять свидетельства прогона нечем"
+fi
+
+# BSD stat (macOS) и GNU stat (Linux) несовместимы по флагам; второй вызов —
+# запасной путь, отсюда `|| stat -c`.
+pmi_file_mtime() {
+    stat -f '%Sm' -t '%Y-%m-%dT%H:%M:%S%z' "$1" 2>/dev/null || stat -c '%y' "$1"
+}
+
+pmi_capture_results() {
+    local phase="$1" dest manifest f count=0
+    dest="$PMI_RUN_DIR/results"
+    manifest="$PMI_RUN_DIR/results-manifest-$phase.txt"
+    mkdir -p "$dest"
+    {
+        printf '# фаза %s; снято %s\n' "$phase" "$(date '+%Y-%m-%dT%H:%M:%S%z')"
+        printf '# источник: %s/results\n' "$EXP_DIR"
+        printf '# sha256  время изменения  имя файла\n'
+    } > "$manifest"
+    # nullglob: при пустом каталоге цикл не должен получить сам шаблон
+    shopt -s nullglob
+    for f in "$EXP_DIR/results"/*.json; do
+        cp -p "$f" "$dest/"
+        printf '%s  %s  %s\n' \
+            "$("${PMI_SHA256[@]}" "$f" | cut -d' ' -f1)" \
+            "$(pmi_file_mtime "$f")" \
+            "$(basename "$f")" >> "$manifest"
+        count=$((count + 1))
+    done
+    shopt -u nullglob
+    pmi_log "свидетельства фазы $phase: $count файлов скопировано в $dest, манифест $manifest"
+}
 
 cd "$EXP_DIR"
 
@@ -146,8 +206,19 @@ fi
 
 # Код возврата фазы переживает tee: set -o pipefail включён в common.sh.
 for phase in ${PMI_PHASES[@]+"${PMI_PHASES[@]}"}; do
-    pmi_log "фаза $phase"
-    ./reproduce.sh "$phase" 2>&1 | tee "$PMI_RUN_DIR/phase-$phase.log"
+    # Фаза 1 документа запускает у сценария воспроизведения ДВЕ фазы: 1 и 1b.
+    # Фаза 1b (метаданный контрфактуал, ~2 мин, только CPU) в перечне --phase
+    # документа не значится, но её результат нужен фазе tables: рендерер вызывается
+    # с --counterfactual "$OUT_DIR/phase1b_metadata_counterfactual.json" безусловно.
+    # Без запуска 1b фаза tables читала бы файл, закоммиченный в каталоге эксперимента,
+    # то есть подмешивала бы в отчёт чужие числа. Сценарий воспроизведения принимает
+    # несколько фаз одним вызовом (разбор аргументов накапливает их в PHASES,
+    # строки 59—67 reproduce.sh; его собственная справка приводит `./reproduce.sh 1 1b 3`).
+    phase_args=("$phase")
+    [[ "$phase" == 1 ]] && phase_args=(1 1b)
+    pmi_log "фаза $phase (${phase_args[*]})"
+    ./reproduce.sh "${phase_args[@]}" 2>&1 | tee "$PMI_RUN_DIR/phase-$phase.log"
+    pmi_capture_results "$phase"
 done
 
 # Фаза verdicts — действия 2—4 таблицы 12 ПМИ. Вердикты снимаются с ПРЕДЪЯВЛЕННОГО
